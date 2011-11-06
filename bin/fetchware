@@ -1,0 +1,133 @@
+use strict;
+use warnings;
+
+# Enable Perl 6 knockoffs.
+use 5.010;
+
+# Use Getopt::Long for options parsing beyond fetchware's simple commands such
+# as install, new, uninstall, help, and so on.
+use Getopt::Long;
+
+Getopt::Long::Configure qw(bundling pass_through);
+
+my $verbose;
+
+GetOptions(
+	'version|V' => sub { say "Fetchware version $VERSION"; exit 1},
+	'help|h|?' => \&help,
+	'verbose|v' => \$verbose,
+	'quiet|q' => sub { $verbose = 0 },
+);
+
+
+# Getopt::Long is *only* used to determine dash and double dash style options
+# such as -v, --verbose, --help, -h, -?, etc....
+#
+# Below the first argument to fetchware is used to determine what fetchware
+# does.  If nothing is specified then help is printed.
+given ($ARGV[0]) {
+	when('install') {
+		install();
+	} when('uninstall') {
+		uninstall();
+	} when('new') {
+		new();
+	} when('upgrade') {
+		upgrade();
+	} when('upgrade-all') {
+		upgrade_all();
+	} when('help') {
+		help();
+	} default {
+		help();
+	}
+}
+
+
+=head1 SUBROUTINES
+
+=over
+
+=cut
+
+=item install()
+
+
+
+=cut
+
+sub install {
+
+}
+
+
+=item uninstall()
+
+
+
+=cut
+
+sub uninstall {
+
+}
+
+
+
+=item new()
+
+
+
+=cut
+
+sub new {
+
+}
+
+
+=item upgrade()
+
+
+
+=cut
+
+sub upgrade {
+
+}
+
+
+=item upgrade_all()
+
+
+
+=cut
+
+sub upgrade_all {
+
+}
+
+
+=item help()
+
+Prints a help message to C<STDOUT> listing usage, all command options, and examples.
+
+And then C<exit()> with an exit status of 1.
+
+UNIMPLIMENTED
+
+=cut
+
+
+sub help {
+	# Print help message however I'm going to Pod::Usage or something else.
+	say <<HELP;
+fetchware:
+HELP
+	exit 1;
+}
+
+# Ends =head1 SUBROUTINES
+
+=back
+
+1;
+
