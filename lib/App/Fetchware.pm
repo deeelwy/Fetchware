@@ -341,7 +341,6 @@ EOD
             #be seen at compile time. Is "eval time" considered compile time?
             my $eval = <<'EOE'; 
 sub $name ($) {
-###BUGALERT### DEBUG WEIRD BACKSLASH ESCAPTING!!!!!
     my $value = shift;
     
     die <<EOD if defined $FW{$name};
