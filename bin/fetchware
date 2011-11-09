@@ -6,14 +6,16 @@ use 5.010;
 
 # Use Getopt::Long for options parsing beyond fetchware's simple commands such
 # as install, new, uninstall, help, and so on.
-use Getopt::Long;
-
-Getopt::Long::Configure qw(bundling pass_through);
+use Getopt::Long qw(:config bundling pass_through);
 
 my $verbose;
 
+
 GetOptions(
-	'version|V' => sub { say "Fetchware version $VERSION"; exit 1},
+	# $VERSION is managed by dzil; therefore, I use eval to access it at
+	# run time instead of compile time, so that I can test fetchware without
+	# running dzil test.
+	'version|V' => sub { eval 'say "Fetchware version $VERSION"; '; exit 1},
 	'help|h|?' => \&help,
 	'verbose|v' => \$verbose,
 	'quiet|q' => sub { $verbose = 0 },
@@ -46,88 +48,116 @@ given ($ARGV[0]) {
 
 =head1 SUBROUTINES
 
-=over
 
-=cut
-
-=item install()
+=head2 install()
 
 
 
 =cut
 
 sub install {
+	say "INSTALL";
 
 }
 
 
-=item uninstall()
+=head2 uninstall()
 
 
 
 =cut
 
 sub uninstall {
+	say "UNINSTALL";
 
 }
 
 
 
-=item new()
+=head2 new()
 
 
 
 =cut
 
 sub new {
+	say "NEW";
 
 }
 
 
-=item upgrade()
+=head2 upgrade()
 
 
 
 =cut
 
 sub upgrade {
+	say "UPGRADE";
 
 }
 
 
-=item upgrade_all()
+=head2 upgrade_all()
 
 
 
 =cut
 
 sub upgrade_all {
+	say "UPGRADE-ALL";
 
 }
 
 
-=item help()
+=head2 help()
 
 Prints a help message to C<STDOUT> listing usage, all command options, and examples.
 
 And then C<exit()> with an exit status of 1.
 
-UNIMPLIMENTED
-
 =cut
 
 
 sub help {
-	# Print help message however I'm going to Pod::Usage or something else.
-	say <<HELP;
-fetchware:
+	say <<'HELP';
+
+fetchware is a package manager for source code distributions. It gives you the
+ability to install, uninstall , and even upgrade your source code distributions
+just like you can with your binary packages such as yum, apt-get, or slackpkg.
+
+To create a new package just use fetchware's "new" command such as:
+	$ fetchware new
+And then answer the questions as best you can while fetchware takes your
+answers and creates a Fetchwarefile for you. If your program's needs seem to
+exceed the ability of fetchware's q&a configuration see perldoc App::Fetchware
+for instructions on further customization.
+
+USAGE:
+###BUGALERT### Double check man page formatting standards!!!!!
+	fetchware install|uninstall|upgrade|upgrade-all|help
+		[--help|-h|-?|--version|-V|--verbose|-v|--quiet|-q]
+		package-name
+###BUGALERT### Double check man page formatting standards!!!!!
+COMMANDS:
+	install - installs a fetchware package, which is a .tar.gz ending with
+		.fpkg, which includes the source code distribution unmodified,
+		but with an included Fetchwarefile. See perldoc fetchware.
+	uninstall - uninstalls a fetchware package.
+	upgrade - upgrades a fetchware package if a newer version is available.
+	upgrade-all - upgrades *all* installed fetchware packages.
+	help - prints this help message
+OPTIONS:
+	--help|-h|-? - prints this help message.
+	--version|-V - prints a version message.
+	--verbose|-v - prints additional logging information.
+	--quiet|-q - prints *no* logging invormation. Determine success or
+		failure with fetchware's exit status.
+
+For more information see perldoc fetchware and perldoc App::Fetchware.
 HELP
 	exit 1;
 }
 
-# Ends =head1 SUBROUTINES
-
-=back
 
 1;
-
