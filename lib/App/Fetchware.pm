@@ -2,6 +2,16 @@ use strict;
 use warnings;
 package App::Fetchware;
 
+# CPAN modules making Fetchwarefile better.
+use File::Temp 'tempdir';
+use File::Spec::Functions qw(catfile splitpath updir);
+use Data::Dumper;
+use Net::FTP;
+use HTTP::Tiny;
+use HTML::TreeBuilder;
+use Scalar::Util 'blessed';
+use Test::More; # some utility subroutines need it.
+
 # Enable Perl 6 knockoffs.
 use 5.010;
 
@@ -10,16 +20,16 @@ use 5.010;
 # as you need.
 use Exporter qw( import );
 # By default fetchware exports its configuration file like subroutines and
-# fetchware(). override() is exported only when one of the :OVERRIDE_* export
-# tags is also specified.
+# fetchware().
 #
-# These days it's considered bad to import stuff without be asked to do so, but
-# App::Fetchware is meant to be a configuration file that is both human
-# readable, and most importantly flexible enough to allow customization. This is
-# done by making the configuration file a perl source code file called a
+# These days popular dogma considers it bad to import stuff without be asked to
+# do so, but App::Fetchware is meant to be a configuration file that is both
+# human readable, and most importantly flexible enough to allow customization.
+# This is done by making the configuration file a perl source code file called a
 # Fetchwarefile that fetchware simply executes. The magic is in the fetchware()
 # and override() subroutines.
 our @EXPORT = qw(
+    filter
     temp_dir
     user
     prefix
@@ -35,33 +45,59 @@ our @EXPORT = qw(
     verify_failure_ok
     mirror
     fetchware
-);
-# *All* @EXPORT_TAGS must also be @EXPORT_OK, or else they can't be exported.
-our @EXPORT_OK = qw(
-    OVERRIDE_LOOKUP
-    OVERRIDE_DOWNLOAD
-    OVERRIDE_VERIFY
-    OVERRIDE_UNARCHIVE
-    OVERRIDE_BUILD
-    OVERRIDE_INSTALL
-    OVERRIDE_ALL
+    override
 );
 # These tags go with the override() subroutine, and together allow you to
 # replace some or all of fetchware's default behavior to install unusual
 # software.
-our @EXPORT_TAGS = (
-    OVERRIDE_LOOKUP => qw(),
-    OVERRIDE_DOWNLOAD => qw(),
-    OVERRIDE_VERIFY => qw(),
-    OVERRIDE_UNARCHIVE => qw(),
-    OVERRIDE_BUILD => qw(),
-    OVERRIDE_INSTALL => qw(),
-    OVERRIDE_ALL => qw(), # list *all* subs that are in any OVERRIDE_* tag.
+our %EXPORT_TAGS = (
+    OVERRIDE_LOOKUP => [qw(
+        check_lookup_config
+        determine_download_type    
+        download_directory_listing
+        parse_directory_listing
+        determine_download_url
+        ftp_download_dirlist
+        http_download_dirlist
+        ftp_parse_filelist
+        http_parse_filelist
+        lookup_by_timestamp
+        lookup_by_versionstring
+        lookup_determine_downloadurl
+    )],
+    # No OVERRIDE_START OVERRIDE_END because start() does *not* use any helper
+    # subs that could be beneficial to override()rs.
+    OVERRIDE_DOWNLOAD => [qw(
+        download_ftp_url
+        download_http_url
+        determine_package_path
+    )],
+    OVERRIDE_VERIFY => [qw()],
+    OVERRIDE_UNARCHIVE => [qw()],
+    OVERRIDE_BUILD => [qw()],
+    OVERRIDE_INSTALL => [qw()],
+    # Testing also imports lookup(), download(), etc, so that test scripts don't
+    # need to add them.
+    TESTING => [qw(
+        eval_ok
+        skip_all_unless_release_testing
+        clear_FW
+        start
+        lookup
+        download
+        verify
+        unarchive
+        build
+        install
+        end
+    )],
 );
+# OVERRIDE_ALL is simply all other tags combined.
+@{$EXPORT_TAGS{OVERRIDE_ALL}} = map {@{$_}} values %EXPORT_TAGS;
+# *All* entries in @EXPORT_TAGS must also be in @EXPORT_OK.
+our @EXPORT_OK = @{$EXPORT_TAGS{OVERRIDE_ALL}};
 
-###BUGALERT### I may need to forward declare the subs make_config_sub()'s
-#generates.
-#sub fetchware (@);
+
 
 # Hash of configuration variables Fetchwarefiles may use to configure
 # fetchware's default behavior using a simple obvious Moose-like declarative
@@ -70,6 +106,7 @@ our @EXPORT_TAGS = (
 my %FW;
 # Give fetchware's test suite access to an otherwise private variable. Note the
 # double underscores, which make it *extra* private instead of just private.
+# Note: this subroutine is *not* exported on purpose to make abusing it harder.
 sub __FW {
     return \%FW;
 }
@@ -91,6 +128,7 @@ subroutines as Fetchwarefile configuration syntax.
 =item 'ONE' Fetchwarefile API Subroutines.
 
 =over
+=item filter $value;
 =item temp_dir $value;
 =item user $value;
 =item no_install $value;
@@ -132,13 +170,18 @@ false values.  True or false work the same way they work in perl with the
 special case of /false/i and /off/i also being false.
 
 If you set no_install to true, its default is false, then fetchware will only
-skip the part where it installs your programs. At exit it will print out
-information regarding where your programs are, so that you can install them
-yourself.
+skip the part where it installs your programs. Instead it will build a Fetchware
+package ending in '.fpkg' that can be installed with 'fetchware install <package>'.
+Do this to build your software as a user, and then install it as root system
+wide later on. However, this is no longer necessary as fetchware will drop privs
+does everything but install your software as a non-root user.
 
 If you set verify_failure_ok to true, its default is false too, then fetchware
 will print a warning if fetchware fails to verify the gpg signature instead of
 die()ing printing an error message.
+
+###BUGALERT### Add a --force option to fetchware to be able to do the above on
+#the command line too.
 
 =item fetchware;
 
@@ -148,18 +191,15 @@ the Fetchwarefile is incomplete, and will not actually do anything. The only
 time to leave C<fetchware> out of a Fetchwarefile is if you want to customize
 fetchware's behavior using App::Fetchware's API.
 
-This API isn't written yet, but will probably just be subroutines that you'll
-have to ask to import like C<use App::Fetchware :customize;>, and the
-customization subroutines will be imported.
+To customize your fetchware file, if fetchware's defaults or its configuration
+subroutines are not enough, then you can use override() to override any of the
+subroutines that fetchware() would normally call. For example, you could
+override the lookup() subroutine, or you could just override one of the
+subroutines lookup() calls. It's very flexible and reusable. See
+L<CUSTOMIZING YOUR FETCHWAREFILE> below for the details.
 
 It's not fancy on purpose, because it is meant to be dead simple, and easy to
 implement and pragmatic.  
-
-###BUGALERT### Actually implement App::Fetchware's API.  Design it!!!
-
-See L<CUSTOMIZING YOUR FETCHWAREFILE> below for fetchware implementation
-details, and how you can extend fetchware or change its behavior to suit unusual
-program installations.
 
 =back
 
@@ -220,6 +260,8 @@ Fetchwarefile steps you would like to override, and the values are a coderef to
 a subroutine that implements that steps behavior. See perldoc App::Fetchware.
 EOD
 
+    ###BUGALERT### update to support all of the subs that lookup() and etc...
+    #call. Update pod above accordingly.
     defined $opts{lookup} ? $opts{lookup}->() : lookup();
     defined $opts{download} ? $opts{download}->() : download();
     defined $opts{verify} ? $opts{verify}->() : verify();
@@ -235,42 +277,36 @@ EOD
 
 =cut
 
-my @api_functions = (
-    [ temp_dir => 'ONE' ],
-    [ user => 'ONE' ],
-    [ prefix => 'ONE' ],
-    [ configure_options=> 'ONE' ],
-    [ make_options => 'ONE' ],
-    [ build_commands => 'ONE' ],
-    [ install_commands => 'ONE' ],
-    [ lookup_url => 'ONE' ],
-    [ lookup_method => 'ONE' ],
-    [ gpg_key_url => 'ONE' ],
-    [ verify_method => 'ONE' ],
-    [ mirror => 'MANY' ],
-    [ no_install => 'BOOLEAN' ],
-    [ verify_failure_ok => 'BOOLEAN' ],
-);
 
 
-# Loop over the list of options needed by make_config_sub() to generated the
-# needed API functions for Fetchwarefile.
-###BUGALERT### Does this need to be done in a BEGIN block?
-for my $api_function (@api_functions) {
-    make_config_sub(@{$api_function});
-}
+=head1 App::Fetchware API SUBROUTINES
 
+These subroutines constitute App::Fetchware's API that C<Fetchwarefile>'s may
+use to customize fetchware's default behavior using C<override> instead of
+C<fetchware>
 
-=head1 INTERNAL SUBROUTINES
+Below is a API Reference, for instructions on how to customize your
+Fetchwarefile beyond fetchware's configuration subroutines allow please see
+L<CUSTOMIZING YOUR FETCHWAREFILE>.
 
 =over
 
 =item make_config_sub($name, $one_or_many_values)
 
 A function factory that builds many functions that are the exact same, but have
-different names. It supports two types of functions determined by
-make_config_sub()'s second parameter.  It's first parameter is the function it
-creates name.
+different names. It supports three types of functions determined by
+make_config_sub()'s second parameter.  It's first parameter is the name of that
+function. This is the subroutine that builds all of Fetchwarefile's
+configuration subroutines such as lookupurl, mirror, fetchware, etc....
+
+=over
+=item LIMITATION
+
+make_config_sub() creates subroutines that have prototypes, but in order for
+perl to honor those prototypes perl B<must> know about them at compile-time;
+therefore, that is why make_config_sub() must be called inside a C<BEGIN> block.
+
+=back
 
 =over
 
@@ -311,35 +347,61 @@ mutated into a Perl accepted false value (they're turned into zeros.).
 =back
 
 All API subroutines fetchware provides to Fetchwarefile's are generated by
-make_config_sub() except for fetchware().
+make_config_sub() except for fetchware() and override().
 
 =cut
 
-sub make_config_sub {
-    my ($name, $one_or_many_values) = @_;
+BEGIN { # BEGIN BLOCK due to api subs needing prototypes.
+    my @api_functions = (
+        [ filter => 'ONE' ],
+        [ temp_dir => 'ONE' ],
+        [ user => 'ONE' ],
+        [ prefix => 'ONE' ],
+        [ configure_options=> 'ONE' ],
+        [ make_options => 'ONE' ],
+        [ build_commands => 'ONE' ],
+        [ install_commands => 'ONE' ],
+        [ lookup_url => 'ONE' ],
+        [ lookup_method => 'ONE' ],
+        [ gpg_key_url => 'ONE' ],
+        [ verify_method => 'ONE' ],
+        [ mirror => 'MANY' ],
+        [ no_install => 'BOOLEAN' ],
+        [ verify_failure_ok => 'BOOLEAN' ],
+    );
 
-    die <<EOD unless defined $name;
+
+# Loop over the list of options needed by make_config_sub() to generated the
+# needed API functions for Fetchwarefile.
+    for my $api_function (@api_functions) {
+        make_config_sub(@{$api_function});
+    }
+
+    sub make_config_sub {
+        my ($name, $one_or_many_values) = @_;
+
+        die <<EOD unless defined $name;
 App-Fetchware: internal syntax error: make_config_sub() was called without a
 name. It must receive a name parameter as its first paramter. See perldoc
 App::Fetchware.
 EOD
-    use Test::More;
-    unless ($one_or_many_values eq 'ONE'
-            or $one_or_many_values eq 'MANY'
-            or $one_or_many_values eq 'BOOLEAN') {
-        die <<EOD;
+        use Test::More;
+        unless ($one_or_many_values eq 'ONE'
+                or $one_or_many_values eq 'MANY'
+                or $one_or_many_values eq 'BOOLEAN') {
+            die <<EOD;
 App-Fetchware: internal syntax error: make_config_sub() was called without a
 one_or_many_values parameter as its second parameter. Or the parameter it was
 called with was invalid. Only 'ONE', 'MANY', and 'BOOLEAN' are acceptable
 values. See perldoc App::Fetchware.
 EOD
-    }
+        }
 
-    given($one_or_many_values) {
-        when('ONE') {
-            ###BUGALERT### the ($) sub prototype needed for ditching parens must
-            #be seen at compile time. Is "eval time" considered compile time?
-            my $eval = <<'EOE'; 
+        given($one_or_many_values) {
+            when('ONE') {
+                ###BUGALERT### the ($) sub prototype needed for ditching parens must
+                #be seen at compile time. Is "eval time" considered compile time?
+                my $eval = <<'EOE'; 
 sub $name ($) {
     my $value = shift;
     
@@ -353,13 +415,13 @@ EOD
 }
 1; # return true from eval
 EOE
-            $eval =~ s/\$name/$name/g;
-            eval $eval or die <<EOD;
+                $eval =~ s/\$name/$name/g;
+                eval $eval or die <<EOD;
 App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [$@]. See perldoc App::Fetchware.
 EOD
-        } when('MANY') {
-            my $eval = <<'EOE';
+            } when('MANY') {
+                my $eval = <<'EOE';
 sub $name ($) {
     my $value = shift;
 
@@ -375,13 +437,13 @@ EOD
 }
 1; # return true from eval
 EOE
-            $eval =~ s/\$name/$name/g;
-            eval $eval or die <<EOD;
+                $eval =~ s/\$name/$name/g;
+                eval $eval or die <<EOD;
 App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [\$@]. See perldoc App::Fetchware.
 EOD
-        } when('BOOLEAN') {
-            my $eval = <<'EOE';
+            } when('BOOLEAN') {
+                my $eval = <<'EOE';
 sub $name ($) {
     my $value = shift;
 
@@ -403,18 +465,982 @@ EOD
 }
 1; # return true from eval
 EOE
-            $eval =~ s/\$name/$name/g;
-            eval $eval or die <<EOD;
+                $eval =~ s/\$name/$name/g;
+                eval $eval or die <<EOD;
 App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [\$@]. See perldoc App::Fetchware.
+EOD
+            }
+        }
+    }
+
+} # End BEGIN BLOCK.
+
+=item start()
+
+=over
+=item Configuration subroutines used:
+=over
+=item none
+=back
+=back
+
+Creates a temp directory using File::Temp, and sets that directory up so that it
+will be deleted by File::Temp when fetchware closes.
+
+=cut
+
+sub start {
+    # Ask for better security.
+    File::Temp->safe_level( File::Temp::HIGH );
+
+    # Create the temp dir in the portable locations as returned by
+    # File::Spec->tempdir() using the specified template (the weird $$ is this
+    # processes process id), and cleaning up at program exit.
+    ###BUGALERT### WTF is returned by tempdir???
+    my $exception;
+    eval {
+        $FW{TempDir} = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+        $exception = $@;
+        1; # return true unless an exception is thrown.
+    } or die <<EOD;
+App-Fetchware: run-time error. Fetchware tried to use File::Temp's tempdir()
+subroutine to create a temporary file, but tempdir() threw an exception. That
+exception was [$exception]. See perldoc App::Fetchware.
+EOD
+
+    # Change directory to $FW{TempDir} to make unarchiving and building happen
+    # in a temporary directory, and to allow for multiple concurrent fetchware
+    # runs at the same time.
+    chdir $FW{TempDir} or die <<EOD;
+App-Fetchware: run-time error. Fetchware failed to change its directory to the
+temporary directory that it successfully created. This just shouldn't happen,
+and is weird, and may be a bug. See perldoc App::Fetchware.
+EOD
+}
+
+
+
+
+=item lookup()
+
+=over
+=item Configuration subroutines used:
+=over
+=item lookup_url
+=item lookup_method
+=back
+=back
+
+Accesses C<lookup_url> as a http/ftp directory listing, and uses C<lookup_method>
+to determine what the newest version of the software is available, which it
+combines with the C<lookup_url> and stores in C<$FW{DownloadURL}>
+
+=over
+=item LIMITATIONS
+C<lookup_url> is a web browser like URL such as C<http://host.com/a/b/c/path>,
+and it B<must> be a directory listing B<not> a actual file. This directory
+listing must be a listing of all of the available versions of the program this
+Fetchwarefile belongs to.
+=back
+
+C<lookup_method> can be either C<'timestamp'> or C<'versionstring'>, any other
+values will result in fetchware die()ing with an error message.
+
+=cut
+
+sub lookup {
+    # die if lookup_url wasn't specified.
+    # die if lookup_method was specified wrong.
+    check_lookup_config();
+    # parse out the ftp or http part.
+    determine_download_type();
+    # obtain directory listing for ftp or http. (a sub for each.)
+    download_directory_listing();
+    # parse the directory listing's format based on ftp or http.
+    # ftp: just use Net::Ftp's dir command to get a "long" listing.
+    # http: use regex hackery or *html:linkextractor*.
+    parse_directory_listing();
+    # Run those listings through lookup_by_timestamp() and/or
+        # lookup_by_versionstring() based on lookup_method, or first by timestamp,
+        # and then by versionstring if timestamp can't figure out the latest
+        # version (normally because everything in the directory listing has the
+        # same timestamp.
+    # Set $FW{DownloadURL} to lookup_url . <latest version archive>
+    determine_download_url();
+}
+
+
+
+=head1 lookup() API REFERENCE
+
+The subroutines below are used by lookup() to provide the lookup functionality
+for fetchware. If you have overridden the lookup() handler, you may want to use
+some of these subroutines so that you don't have to copy and paste anything from
+lookup.
+
+App::Fetchware is B<not> object-oriented; therefore, you B<can not> subclass
+App::Fetchware to extend it! 
+
+###BUGALERT### App::Fetchware *not* subclassable; how will I impl the web app
+#support and wall paper support?!!?
+
+=cut
+
+=item check_lookup_config()
+
+Verifies the configurations parameters lookup() uses are correct. These are
+C<lookup_url> and C<lookup_method>. If they are wrong die() is called. If they
+are right it does nothing, but return.
+
+=cut
+
+sub check_lookup_config {
+    if (not defined $FW{lookup_url}) {
+        die <<EOD;
+App-Fetchware: run-time syntax error: your Fetchwarefile did not specify a
+lookup_url. lookup_url is a required configuration option, and must be
+specified, because fetchware uses it to located new versions of your program to
+download. See perldoc App::Fetchware
+EOD
+    }
+
+    # Only test lookup_method if it has been defined.
+    if (defined $FW{lookup_method}) {
+        given ($FW{lookup_method}) {
+            when ('timestamp') {
+                # Do nothing
+            } when ('versionstring') {
+                # Do nothing
+            } default {
+                die <<EOD;
+App-Fetchware: run-time syntax error: your Fetchwarefile specified a incorrect
+option to lookup_method. lookup_method only supports the options 'timestamp' and
+'versionstring'. All others are wrong. See man App::Fetchware.
+EOD
+            }
+        }
+    }
+}
+
+
+=item determine_download_type()
+
+Uses simple regex's to determine the download type. Only FTP and HTTP are
+currently supported. The download type is B<not> returned; instead, it is stored
+in $FW as C<$FW{DownloadType}>.
+
+=over
+=item SIDE EFFECTS
+determine_download_type() sets $FW{DownloadType} to either 'ftp' or 'http' based
+on the URL provided in C<lookup_url>.
+=back
+
+=cut
+
+sub determine_download_type {
+    given ($FW{lookup_url}) {
+        when (m!^ftp://.*$!) {
+            $FW{DownloadType} = 'ftp';
+        } when (m!^http://.*$!) {
+            $FW{DownloadType} = 'http';
+        } default {
+            die <<EOD;
+App-Fetchware: run-time syntax error: the lookup_url directive your provided in
+your Fetchwarefile [$FW{lookup_url}] does not have a supported URL scheme (the
+http:// or ftp:// part). The only supported download types, schemes, are FTP and
+HTTP. See perldoc App::Fetchware.
 EOD
         }
     }
 }
 
 
+=item download_directory_listing()
+
+Downloads a directory listing that lookup() uses to determine what the latest
+version of your program is. It is B<not> returned, but instead placed in
+C<$FW{DirectoryListing}>.
+
+=over
+=item SIDE EFFECTS
+determine_directory_listing() sets $FW{DirectoryListing} to a SCALAR REF of the
+output of HTTP::Tiny or a ARRAY REF for Net::Ftp downloading that listing.
+Note: the output is different for each download type. Type 'http' will have HTML
+crap in it, and type 'ftp' will be the output of Net::Ftp's dir() method.
+=back
+
+=cut
+
+sub download_directory_listing {
+    given ($FW{DownloadType}) {
+        when ('ftp') {
+            my $dir_listing = ftp_download_dirlist($FW{lookup_url});
+            use Test::More;
+            diag("ftp dir listing");
+            diag explain $dir_listing;
+            $FW{DirectoryListing} = $dir_listing;
+        } when ('http') {
+            my $dir_listing = http_download_dirlist($FW{lookup_url});
+            use Test::More;
+            diag("http dir listing");
+            diag explain $dir_listing;
+            $FW{DirectoryListing} = $dir_listing;
+        }
+    }
+}
 
 
+=item parse_directory_listing();
+
+Based on C<$FW{DownloadType}> of C<'http'> or C<'ftp'>,
+parse_directory_listing() will call either ftp_parse_filelist() or
+http_parse_filelist(). Those subroutines do the heavy lifting, and the results
+are stored by parse_directory_listing() in C<$FW{FilenameListing}>.
+
+=over
+=item SIDE EFFECTS
+parse_directory_listing() sets $FW{FilenameListing} to a array of arrays of the
+filenames  and timestamps that make up the directory listing.
+=back
+
+=cut
+
+sub parse_directory_listing {
+    given ($FW{DownloadType}) {
+        when ('ftp') {
+            my $filename_listing = ftp_parse_filelist($FW{DirectoryListing});
+            $FW{FilenameListing} = $filename_listing;
+        } when ('http') {
+            my $filename_listing = http_parse_filelist($FW{DirectoryListing});
+            $FW{FilenameListing} = $filename_listing;
+        }
+    }
+}
+
+
+=item determine_download_url()
+
+Runs the C<lookup_method> to determine what the lastest filename is, and that
+one is then concatenated with C<lookup_url> to determine and set the
+C<FW{DownloadURL}>.
+
+=over
+=item SIDE EFFECTS
+determine_download_url(); sets $FW{DownloadURL} to the URL that download() will
+use to download the archive of your program.
+=back
+
+=cut
+
+sub determine_download_url {
+    # Base lookup algorithm on lookup_method configuration sub if it was
+    # specified.
+    given ($FW{lookup_method}) {
+        when ('timestamp') {
+            $FW{DownloadURL} =  lookup_by_timestamp($FW{FilenameListing});
+        } when ('versionstring') {
+            $FW{DownloadURL} =  lookup_by_versionstring($FW{FilenameListing});
+        # Default is to just use timestamp although timestamp will call
+        # versionstring if it can't figure it out, because all of the timestamps
+        # are the same.
+        } default {
+            $FW{DownloadURL} = lookup_by_timestamp($FW{FilenameListing});
+        }
+    }
+}
+
+
+=item ftp_download_dirlist
+
+Uses Net::Ftp's dir() method to obtain a I<long> directory listing. lookup()
+needs it in I<long> format, so that the timestamp algorithm has access to each
+file's timestamp.
+
+Returns an array ref of the directory listing.
+
+=cut
+
+sub ftp_download_dirlist {
+    my $ftp_url = shift;
+    use Test::More;
+    diag("ftp_url[$ftp_url]");
+    $ftp_url =~ m!^ftp://([-a-z,A-Z,0-9,\.]+)(/.*)?!;
+    my $site = $1;
+    my $path = $2;
+    use Test::More;
+    diag("site[$site]path[$path]");
+
+    # Add debugging later based on fetchware commandline args.
+    # for debugging: $ftp = Net::FTP->new('$site','Debug' => 10);
+    # open a connection and log in!
+    my $ftp;
+    $ftp = Net::FTP->new($site)
+        or die <<EOD;
+App-Fetchware: run-time error. fetchware failed to connect to the ftp server at
+domain [$site]. The system error was [$@].
+See man App::Fetchware.
+EOD
+
+    $ftp->login("anonymous",'-anonymous@')
+        or die <<EOD;
+App-Fetchware: run-time error. fetchware failed to log in to the ftp server at
+domain [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
+EOD
+
+
+    my @dir_listing = $ftp->dir($path)
+        or die <<EOD;
+App-Fetchware: run-time error. fetchware failed to get a long directory listing
+of [$path] on server [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
+EOD
+
+    $ftp->quit();
+
+    return \@dir_listing;
+}
+
+
+=item http_download_dirlist
+
+Uses HTTP::Tiny to download a HTML directory listing from a HTTP Web server.
+
+Returns an scalar of the HTML ladden directory listing.
+
+=cut
+
+sub http_download_dirlist {
+    my $http_url = shift;
+
+    my $response = HTTP::Tiny->new->get($http_url);
+
+    die <<EOD unless $response->{success};
+App-Fetchware: run-time error. HTTP::Tiny failed to download a directory listing
+of your provided lookup_url. HTTP status code [$response->{status} $response->{reason}]
+HTTP headers [@{[Data::Dumper::Dumper($response->{headers})]}].
+See man App::Fetchware.
+EOD
+
+    use Test::More;
+    diag("$response->{status} $response->{reason}\n");
+
+    while (my ($k, $v) = each %{$response->{headers}}) {
+        for (ref $v eq 'ARRAY' ? @$v : $v) {
+            diag("$k: $_\n");
+        }
+    }
+
+    diag($response->{content}) if length $response->{content};
+    die <<EOD unless length $response->{content};
+App-Fetchware: run-time error. The lookup_url you provided downloaded nothing.
+HTTP status code [$response->{status} $response->{reason}]
+HTTP headers [@{[Data::Dumper::Dumper($response)]}].
+See man App::Fetchware.
+EOD
+    diag explain $response;
+    return $response->{content};
+}
+
+
+
+=item ftp_parse_filelist($ftp_listing)
+
+Takes an array ref as its first parameter, and parses out the filenames and
+timstamps of what is assumed to be C<Net::FTP->dir()> I<long> directory listing
+output.
+
+Returns a array of arrays of filenames and timestamps.
+
+=cut
+
+
+{ # Bare block for holding %month {ftp,http}_parse_filelist() need.
+    my %month = (
+        Jan => '01',
+        Feb => '02',
+        Mar => '03',
+        Apr => '04',
+        May => '05',
+        Jun => '06',
+        Jul => '07',
+        Aug => '08',
+        Sep => '09',
+        Oct => '10',
+        Nov => '11',
+        Dec => '12',
+    );
+
+    sub  ftp_parse_filelist {
+        my $ftp_listing = shift;
+
+        my ($filename, $timestamp, @filename_listing);
+
+        for my $listing (@$ftp_listing) {
+            # Example Net::FTP->dir() output.
+            #drwxrwsr-x   49 200      200          4096 Oct 05 14:27 patches
+            my @fields = split /\s+/, $listing;
+            # Test & try it???  Probaby won't work.
+            #my ($month, $day, $year_or_time, $filename) = ( split /\s+/, $listing )[-4--1];
+            $filename = $fields[-1];
+            #month       #day        #year
+            #"$fields[-4] $fields[-3] $fields[-2]";
+            my $month = $fields[-4];
+            my $day = $fields[-3];
+            my $year_or_time = $fields[-2];
+
+            # Normalize timestamp format.
+            given ($year_or_time) {
+                # It's a time.
+                when (/\d\d:\d\d/) {
+                    # the $month{} hash access replaces text months with numerical
+                    # ones.
+                    $year_or_time =~ s/://; # Make 12:00 1200 for numerical sort.
+                    #DELME$fl->[1] = "9999$month{$timestamp[0]}$timestamp[1]$timestamp[2]";
+                    $timestamp = "9999$month{$month}$day$year_or_time";
+                    # It's a year.
+                } when (/\d\d\d\d/) {
+                    # the $month{} hash access replaces text months with numerical
+                    # ones.
+                    #DELME$fl->[1] = "$timestamp[2]$month{$timestamp[0]}$timestamp[1]0000";
+                    $timestamp = "$year_or_time$month{$month}${day}0000";
+                }
+            }
+            push @filename_listing, [$filename, $timestamp];
+        }
+
+        return \@filename_listing;
+    }
+
+
+
+=item http_parse_filelist
+
+Takes an scalar of downloaded HTML output, and parses it using
+HTML::Linkextractor to build and return an array of arrays of filenames and
+timestamps.
+
+=cut
+
+    sub  http_parse_filelist {
+        my $http_listing = shift;
+
+        # Use HTML::TreeBuilder to parse the scalar of html into a tree of tags.
+        my $tree = HTML::TreeBuilder->new_from_content($http_listing);
+
+        my @filename_listing;
+        my @matching_links = $tree->look_down(
+            _tag => 'a',
+            sub {
+                my $h = shift;
+
+                #parse out archive name.
+                my $link = $h->as_text();
+                if ($link =~ /\.(tar\.(gz|bz2|xz)|(tgz|tbz2|txz))$/) {
+                    # Should I strip out dirs just to be safe?
+                    my $filename = $link;
+                    # Obtain the tag to the right of the archive link to find the
+                    # timestamp.
+                    if (my $rh = $h->right()) {
+                        my $listing_line;
+                        if (blessed($rh)) {
+                            $listing_line = $rh->as_text();
+                        } else {
+                            $listing_line = $rh;
+                        }
+                        my @fields = split ' ', $listing_line;
+                        # day-month-year   time
+                        # $fields[0]      $fields[1]
+                        # Normalize format for lookup algorithms .
+                        my ($day, $month, $year) = split /-/, $fields[0];
+                        # Ditch the ':' in the time.
+                        $fields[1] =~ s/://;
+                        push @filename_listing, [$filename, "$year$month{$month}$day$fields[1]"];
+                    } else {
+###BUGALERT### Add support for other http servers such as lighttpd, nginx,
+#cherokee, starman?, AND use the Server: header to determine which algorithm to
+#use.
+                        die <<EOD;
+App-Fetchware: run-time error. A hardcoded algorithm to parse HTML directory
+listings has failed! Fetchware currently only supports parseing Apache HTML
+directory listings. This is a huge limitation, but surprisingly pretty much
+everyone who runs a mirror uses apache for http support. This is a bug so
+please report it. Also, if you want to try a possible workaround, just use a ftp
+mirror instead of a http one, because ftp directory listings are a easy to
+parse. See perldoc App::Fetchware.
+EOD
+                    }
+                }
+            }
+        );
+
+
+        # Delete the $tree, so perl can garbage collect it.
+        $tree = $tree->delete;
+
+        return \@filename_listing;
+    }
+
+} # end bare block for %month.
+
+
+=item lookup_by_timestamp($FW{FileListing})
+
+Implements the 'timestamp' lookup algorithm. It takes the timestamps placed in
+C<@$FW{FileListing}>, normalizes them into a standard descending format
+(YYYYMMDDHHMM), and then cleverly uses sort to determine the latest
+filename.
+
+=cut
+
+sub  lookup_by_timestamp {
+    my $file_listing = shift;
+    
+    # Sort the timstamps to determine the latest one. The one with the higher
+    # numbers, and put $b before $a to put the "bigger", later versions before
+    # the "lower" older versions.
+    # Sort based on timestamp, which is $file_listing->[0..whatever][1].
+    @$file_listing = sort { $b->[1] <=> $a->[1] } @$file_listing;
+
+    # Manage duplicate timestamps apropriately including .md5, .asc, .txt files.
+    # And support some hacks to make lookup() more robust.
+    return lookup_determine_downloadurl($file_listing);
+}
+
+
+=item lookup_by_versionstring($FW{FileListing})
+
+Determines the C<$FW{DownloadURL}> by cleverly C<split>ing the filenames on
+C</\D+/>, which will return a list of version numbers. Then they're just sorted
+normally. And lookup_determine_downloadurl() is used to take the sorted
+$file_listing, and determine the actual C<$FW{DownloadURL}>.
+
+=cut
+
+sub  lookup_by_versionstring {
+    my $file_listing = shift;
+
+    # Implement versionstring algorithm.
+    for my $fl (@$file_listing) {
+        my @split_fl = split /\D+/, $fl->[0];
+        $fl->[2] = join '', @split_fl;
+    }
+
+    # Sort $file_listing by the versionstring, and but $b in front of $a to get
+    # a reverse sort, which will put the "bigger", later version numbers before
+    # the "lower", older ones.
+    @$file_listing = sort { $b->[2] <=> $a->[2] } @$file_listing;
+    
+
+    # Manage duplicate timestamps apropriately including .md5, .asc, .txt files.
+    # And support some hacks to make lookup() more robust.
+    return lookup_determine_downloadurl($file_listing);
+}
+
+
+
+=item lookup_determine_downloadurl($file_listing)
+
+Given a $file_listing of files with the same timestamp or versionstring,
+determine which one is a downloadable archive, a tarball or zip file. And
+support some backs to make fetchware more robust. These are the C<filter>
+configuration subroutine, ignoring "win32" on non-Windows systems, and
+supporting Apache's CURRENT_IS_ver_num and Linux's LATEST_IS_ver_num helper
+files.
+
+=cut
+
+sub lookup_determine_downloadurl {
+    my $file_listing = shift;
+
+    # First grep @$file_listing for $FW{filter} if $FW{filter} is defined.
+    # This is done, because some distributions have multiple versions of the
+    # same program in one directory, so sorting by version numbers or
+    # timestamps, and then by filetype like below is not enough to determine,
+    # which file to download, so filter was invented to fix this problem by
+    # letting Fetchwarefile's specify which version of the software to download.
+    if (defined $FW{filter}) {
+        @$file_listing = grep { $_->[0] =~ /$FW{filter}/ } @$file_listing;
+    }
+
+    # Skip any filenames with win32 in them on non-Windows systems.
+    # Windows systems who may need to download the win32 version can just use
+    # filter 'win32' for that or maybe 'win32|http-2.2' if they need the other
+    # functionality of filter.
+    if ($^O ne 'MSWin32') { # $^O is what os I'm on, MSWin32, Linux, darwin, etc
+        @$file_listing = grep { $_->[0] !~ m/win32/i } @$file_listing;
+    }
+
+    # Support 'LATEST{_,-}IS' and 'CURRENT{_,-}IS', which indicate what the
+    # latest version is.  These files come from each software distributions
+    # mirror scripts, so they should be more accurate than either of my lookup
+    # algorithms. Both Apache and the Linux kernel maintain these files.
+    $_->[0] =~ /^(:?latest|current)[_-]is(.*)$/i for @$file_listing;
+    my $latest_version = $1;
+    diag("latestver[$latest_version]");
+    @$file_listing = grep { $_->[0] =~ /$latest_version/ } @$file_listing;
+
+    # Determine the $FW{DownloadURL} based on the sorted @$file_listing by
+    # finding a downloadable file (a tarball or zip archive).
+    # Furthermore, choose them based on best compression to worst to save some
+    # bandwidth.
+    for my $fl (@$file_listing) {
+        given ($fl->[0]) {
+            when (/\.tar\.xz$/) {
+                return catfile($FW{lookup_url}, $fl->[0]);
+            } when (/\.txz$/) {
+                return catfile($FW{lookup_url}, $fl->[0]);
+            } when (/\.tar\.bz2$/) {
+                return catfile($FW{lookup_url}, $fl->[0]);
+            } when (/\.tbz$/) {
+                return catfile($FW{lookup_url}, $fl->[0]);
+            } when (/\.tar\.gz$/) {
+                return catfile($FW{lookup_url}, $fl->[0]);
+            } when (/\.tgz$/) {
+                return catfile($FW{lookup_url}, $fl->[0]);
+            } when (/\.zip$/) {
+                return catfile($FW{lookup_url}, $fl->[0]);
+            }
+        }
+    }
+    die <<EOD;
+App-Fetchware: run-time error. Fetchware failed to determine what URL it should
+use to download your software. This URL is based on the lookup_url you
+specified. See perldoc App::Fetchware.
+EOD
+}
+
+
+
+
+=item download()
+
+=over
+=item Configuration subroutines used:
+=over
+=item none
+=back
+=back
+
+Downloads C<$FW{DownloadURL}> to C<tempdir 'whatever/you/specify';> or to
+whatever File::Spec's tempdir() method tries. Supports ftp and http URLs.
+
+Also, sets C<$FW{PackagePath}>, which is used by unarchive() as the path to the
+archive for unarchive() to untar or unzip.
+
+=over
+=item LIMITATIONS
+Uses Net::FTP and HTTP::Tiny to download ftp and http files. No other types of
+downloading ar supported, and fetchware is stuck with whatever limitations or
+bugs Net::FTP or HTTP::Tiny impose.
+=back
+
+=cut
+
+sub download {
+    my $filename;
+    given ($FW{DownloadType}) {
+        when ('ftp') {
+            $filename = download_ftp_url($FW{DownloadURL});
+        } when ('http') {
+            $filename = download_http_url($FW{DownloadURL});
+        } default {
+
+        }
+    }
+    use Test::More;
+    $FW{PackagePath} = determine_package_path($FW{TempDir}, $filename);
+}
+
+
+
+=head1 download() API REFERENCE
+
+The subroutines below are used by download() to provide the download
+functionality for fetchware. If you have overridden the download() handler, you
+may want to use some of these subroutines so that you don't have to copy and
+paste anything from download.
+
+App::Fetchware is B<not> object-oriented; therefore, you B<can not> subclass
+App::Fetchware to extend it! 
+
+###BUGALERT### App::Fetchware *not* subclassable; how will I impl the web app
+#support and wall paper support?!!?
+
+=cut
+
+
+=item download_ftp_url($url);
+
+Uses Net::FTP to download the specified FTP URL using binary mode.
+
+=cut
+
+
+sub download_ftp_url {
+    my $ftp_url = shift;
+
+    use Test::More;
+    diag("ftp_url[$ftp_url]");
+    $ftp_url =~ m!^ftp://([-a-z,A-Z,0-9,\.]+)(/.*)?!;
+    my $site = $1;
+    my $path = $2;
+    use Test::More;
+    diag("FIRSTpath[$path]");
+    my ($volume, $directories, $file) = splitpath($path);
+    diag("site[$site]path[$path]dirs[$directories]file[$file]");
+
+    # for debugging: $ftp = Net::FTP->new('site','Debug',10);
+    # open a connection and log in!
+
+    my $ftp = Net::FTP->new($site)
+        or die <<EOD;
+App-Fetchware: run-time error. fetchware failed to connect to the ftp server at
+domain [$site]. The system error was [$@].
+See man App::Fetchware.
+EOD
+    
+    $ftp->login("anonymous",'-anonymous@')
+        or die <<EOD;
+App-Fetchware: run-time error. fetchware failed to log in to the ftp server at
+domain [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
+EOD
+
+    # set transfer mode to binary
+    $ftp->binary()
+        or die <<EOD;
+App-Fetchware: run-time error. fetchware failed to swtich to binary mode while
+trying to download a the file [$path] from site [$site]. The ftp error was
+[@{[$ftp->message]}]. See perldoc App::Fetchware.
+EOD
+
+    # change the directory on the ftp site
+    $ftp->cwd($directories)
+        or die <<EOD;
+App-Fetchware: run-time error. fetchware failed to cwd() to [$path] on site
+[$site]. The ftp error was [@{[$ftp->message]}]. See perldoc App::Fetchware.
+EOD
+
+
+    # Download the file to the current directory. The start() subroutine should
+    # have cd()d to a tempdir for fetchware to use.
+    $ftp->get($file)
+        or die <<EOD;
+App-Fetchware: run-time error. fetchware failed to download the file [$file]
+from path [$path] on server [$site]. The ftp error message was
+[@{[$ftp->message]}]. See perldoc App::Fetchware.
+EOD
+
+    # ftp done!
+    $ftp->quit;
+
+    # The caller needs the $filename to determine the $FW{PackagePath} later.
+    diag("FILE[$file]");
+    return $file;
+}
+
+
+=item download_http_url($url);
+
+Uses HTTP::Tiny to download the specified URL.
+
+=cut
+
+
+=item download_http_url($url);
+
+Uses HTTP::Tiny to download the specified HTTP URL.
+
+=cut
+
+sub download_http_url {
+    my $http_url = shift;
+
+    my $response = HTTP::Tiny->new->get($http_url);
+
+    die <<EOD unless $response->{success};
+App-Fetchware: run-time error. HTTP::Tiny failed to download a directory listing
+of your provided lookup_url. HTTP status code [$response->{status} $response->{reason}]
+HTTP headers [@{[Data::Dumper::Dumper($response->{headers})]}].
+See man App::Fetchware.
+EOD
+
+    use Test::More;
+    diag("$response->{status} $response->{reason}\n");
+
+    while (my ($k, $v) = each %{$response->{headers}}) {
+        for (ref $v eq 'ARRAY' ? @$v : $v) {
+            diag("$k: $_\n");
+        }
+    }
+
+    # In this case the content is binary, so it will mess up your terminal.
+    #diag($response->{content}) if length $response->{content};
+    die <<EOD unless length $response->{content};
+App-Fetchware: run-time error. The lookup_url you provided downloaded nothing.
+HTTP status code [$response->{status} $response->{reason}]
+HTTP headers [@{[Data::Dumper::Dumper($response)]}].
+See man App::Fetchware.
+EOD
+    # Contains $response->{content}, which may be binary terminal killing
+    # garbage.
+    #diag explain $response;
+
+    # Must convert the worthless $response->{content} variable into a real file
+    # on the filesystem. Note: start() should have cd()d us into a suitable
+    # tempdir.
+    my $path = $http_url;
+    $path =~ s!^http://!!;
+    diag("path[$path]");
+    # Determine filename from the $path.
+    my ($volume, $directories, $filename) = splitpath($path);
+    diag("filename[$filename]");
+    ###BUGALERT### Need binmode() on Windows???
+    open(my $fh, '>', $filename) or die <<EOD;
+App-Fetchware: run-time error. Fetchware failed to open a file necessary for
+fetchware to store HTTP::Tiny's output. Os error [$!]. See perldoc
+App::Fetchware.
+EOD
+    # Write HTTP::Tiny's downloaded file to a real file on the filesystem.
+    print $fh $response->{content};
+    close $fh
+        or die <<EOS;
+App-Fetchware: run-time error. Fetchware failed to close the file it created to
+save the content it downloaded from HTTP::Tiny. This file was [$filename]. OS
+error [$!]. See perldoc App::Fetchware.
+EOS
+
+    # The caller needs the $filename to determine the $FW{PackagePath} later.
+    diag("httpFILE[$filename]");
+    return $filename;
+}
+
+
+=item determine_package_path($tempdir, $filename)
+
+Determines what C<$FW{PackagePath}> is based on the provided $tempdir and
+$filename. C<$FW{PackagePath}> is the path used by unarchive() to unarchive the
+software distribution download() downloads.
+
+=cut
+
+sub determine_package_path {
+    my ($tempdir, $filename) = @_;
+
+    # Save the $FW{PackagePath}, which stores the full path of where the file
+    # HTTP::Tiny downloaded.
+    return catfile($tempdir, $filename)
+}
+
+# New hooks here!!!!!
+
+
+=item end()
+
+=over
+=item Configuration subroutines used:
+=over
+=item none
+=back
+=back
+
+end() is called after all of the other main fetchware subroutines such as
+lookup() are called. It's job is to cleanup after everything else. It just
+calls C<File::Temp>'s internalish File::Temp::cleanup() subroutine.
+
+=cut
+
+sub end {
+    # chdir to our home directory, so File::Temp can delete the tempdir. This is
+    # necessary, because operating systems do not allow you to delete a
+    # directory that a running program has as its cwd.
+    # Determines where to chdir() to so File::Temp can delete fetchware's temp
+    # directior $FW{TempDir}.
+    my $home = $ENV{HOME} // updir();
+
+    my $error = <<EOS;
+App-Fetchware: run-time error. Fetchware failed to chdir() to [$home]. See
+perldoc App::Fetchware.
+EOS
+
+    chdir($home) or die $error;
+
+    # Call File::Temp's cleanup subrouttine to delete fetchware's temp
+    # directory.
+    File::Temp::cleanup();
+}
+
+
+
+=head1 UTILITY SUBROUTINES
+
+These subroutines provide utility functions that may also be helpful for anyone
+who's writing a custom Fetchwarefile to provide easier testing.
+
+=cut 
+
+=over
+
+=item eval_ok($code, $expected_exception_text_or_regex, $test_name)
+
+Executes the $code coderef, and compares its thrown exception, C<$@>, to
+$expected_exception_text_or_regex, and uses $test_name as the name for the test if
+provided.
+
+If $expected_exception_text_or_regex is a string then Test::More's is() is used,
+and if $expected_exception_text_or_regex is a C<'Regexp'> according to ref(),
+then like() is used, which will treat $expected_exception_text_or_regex as a
+regex instead of as just a string.
+
+=cut
+
+sub eval_ok {
+    my ($code, $expected_exception_text_or_regex, $test_name) = @_;
+    eval {$code->()};
+    # Test if an exception was actually thrown.
+    if (not defined $@) {
+        BAIL_OUT("[$test_name]'s provided code did not actually throw an exception");
+    }
+    
+    # Support regexing the thrown exception's test if needed.
+    if (ref $expected_exception_text_or_regex ne 'Regexp') {
+        is($@, $expected_exception_text_or_regex, $test_name);
+    } elsif (ref $expected_exception_text_or_regex eq 'Regexp') {
+        like($@, qr/$expected_exception_text_or_regex/, $test_name);
+    }
+
+}
+
+=item skip_all_unless_release_testing()
+
+Skips all tests in your test file or subtest() if fetchware's testing
+environment variable, C<FETCHWARE_RELEASE_TESTING>, is set to its proper value.
+
+=cut
+
+sub skip_all_unless_release_testing {
+    plan skip_all => 'Not testing for release.'
+        if $ENV{FETCHWARE_RELEASE_TESTING}
+            ne '***setting this will install software on your computer!!!!!!!***';
+}
+
+
+=item clear_FW()
+
+Clears App::Fetchware's internal %FW globalish (file scoped lexical) variable.
+This subroutine should never actually be executed in a Fetchwarefile, because
+its sole purpose is to clear %FW between tests being run in Fetchware's test
+suite.
+
+=cut
+
+sub clear_FW {
+    %FW = ();
+}
+
+# End UTILITY SUBROUTINES =over.
+=back
+
+=cut
 
 
 1;
