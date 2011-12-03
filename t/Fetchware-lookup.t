@@ -117,7 +117,7 @@ See man App::Fetchware.
 EOS
 
 ##HOWTOTEST##    eval_ok(sub {ftp_download_dirlist('whatftpserverdoesntsupportanonymous&ispublic?');,
-##HOWTOTEST##        <<EOS, 'checked http_download_dirlist() empty content failure');
+##HOWTOTEST##        <<EOS, 'checked ftp_download_dirlist() anonymous loginfailure');
 ##HOWTOTEST##App-Fetchware: run-time error. fetchware failed to log in to the ftp server at
 ##HOWTOTEST##domain [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
 ##HOWTOTEST##EOS
