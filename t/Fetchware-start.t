@@ -6,7 +6,8 @@ use warnings;
 use diagnostics;
 use 5.010;
 
-use Test::More tests => '2'; #Update if this changes.
+# Test::More version 0.98 is needed for proper subtest support.
+use Test::More 0.98 tests => '2'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile);
 use URI::Split 'uri_split';
@@ -42,6 +43,7 @@ subtest 'test start()' => sub {
     
     # chdir() so File::Temp can delete the tempdir.
     chdir();
+
 };
 
 

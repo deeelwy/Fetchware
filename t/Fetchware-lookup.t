@@ -6,7 +6,8 @@ use warnings;
 use diagnostics;
 use 5.010;
 
-use Test::More tests => '15'; #Update if this changes.
+# Test::More version 0.98 is needed for proper subtest support.
+use Test::More 0.98 tests => '12'; #Update if this changes.
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -30,12 +31,9 @@ my $FW = App::Fetchware::__FW();
 subtest 'OVERRIDE_LOOKUP exports what it should' => sub {
     my @expected_overide_lookup_exports = qw(
         check_lookup_config
-        determine_download_type    
         download_directory_listing
         parse_directory_listing
         determine_download_url
-        ftp_download_dirlist
-        http_download_dirlist
         ftp_parse_filelist
         http_parse_filelist
         lookup_by_timestamp
@@ -48,6 +46,7 @@ subtest 'OVERRIDE_LOOKUP exports what it should' => sub {
     ok(@expected_overide_lookup_exports ~~ @sorted_lookup_tag, 
         'checked for correct OVERRIDE_LOOKUP @EXPORT_TAG');
 };
+
 
 
 
@@ -83,80 +82,6 @@ EOS
 };
 
 
-subtest 'test determine_download_type()' => sub {
-    $FW->{lookup_url} = 'invalidscheme://fake.url';
-    eval_ok(sub {determine_download_type()}, <<EOS, 'checked determine_download_type() invalid url scheme');
-App-Fetchware: run-time syntax error: the lookup_url directive your provided in
-your Fetchwarefile [$FW->{lookup_url}] does not have a supported URL scheme (the
-http:// or ftp:// part). The only supported download types, schemes, are FTP and
-HTTP. See perldoc App::Fetchware.
-EOS
-    $FW->{lookup_url} = 'ftp://fake.url';
-    determine_download_type();
-    is($FW->{DownloadType}, 'ftp', 'checked determine_download_type() ftp success');
-    $FW->{lookup_url} = 'http://fake.url';
-    determine_download_type();
-    is($FW->{DownloadType}, 'http', 'checked determine_download_type() http success');
-};
-
-
-subtest 'test ftp_download_dirlist()' => sub {
-    skip_all_unless_release_testing();
-
-    # Test its success.
-    # Note link below may change. If it does just find a another anonymous ftp
-    # mirror.
-    ok(ftp_download_dirlist( $ENV{FETCHWARE_FTP_LOOKUP_URL},),
-        'check ftp_download_dirlist() success');
-
-    eval_ok(sub {ftp_download_dirlist('ftp://doesntexist.ever')},
-        <<EOS, 'checked determine_download_url() connect failure');
-App-Fetchware: run-time error. fetchware failed to connect to the ftp server at
-domain [doesntexist.ever]. The system error was [Net::FTP: Bad hostname 'doesntexist.ever'].
-See man App::Fetchware.
-EOS
-
-##HOWTOTEST##    eval_ok(sub {ftp_download_dirlist('whatftpserverdoesntsupportanonymous&ispublic?');,
-##HOWTOTEST##        <<EOS, 'checked ftp_download_dirlist() anonymous loginfailure');
-##HOWTOTEST##App-Fetchware: run-time error. fetchware failed to log in to the ftp server at
-##HOWTOTEST##domain [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
-##HOWTOTEST##EOS
-
-    $ENV{FETCHWARE_FTP_LOOKUP_URL} =~ m!^(ftp://[-a-z,A-Z,0-9,\.]+)(/.*)?!;
-    my $site = $1;
-    eval_ok(sub {ftp_download_dirlist( "$site/doesntexist.ever")},
-        <<'EOS', 'check ftp_download_dirlist() Net::FTP->dir($path) failure');
-App-Fetchware: run-time error. fetchware failed to get a long directory listing
-of [/doesntexist.ever] on server [carroll.cac.psu.edu]. The ftp error was [Here comes the directory listing.
- Directory send OK.
-]. See man App::Fetchware.
-EOS
-
-};
-
-
-subtest 'test http_download_dirlist()' => sub {
-    skip_all_unless_release_testing();
-
-    # Test success.
-    ok(http_download_dirlist($ENV{FETCHWARE_HTTP_LOOKUP_URL}),
-        'checked http_download_dirlist() success');
-
-    eval_ok(sub {http_download_dirlist('http://meanttofail.fake/gonna/fail');},
-        qr/.*?HTTP::Tiny failed to download.*?/,
-        'checked http_download_dirlist() download failure');
-
-##HOWTOTEST##    eval_ok(sub {http_download_dirlist('whatshouldthisbe??????');,
-##HOWTOTEST##        <<EOS, 'checked http_download_dirlist() empty content failure');
-##HOWTOTEST##App-Fetchware: run-time error. The lookup_url you provided downloaded nothing.
-##HOWTOTEST##HTTP status code [$response->{status} $response->{reason}]
-##HOWTOTEST##HTTP headers [@{[Data::Dumper::Dumper($response)]}].
-##HOWTOTEST##See man App::Fetchware.
-##HOWTOTEST##EOS
-
-};
-
-
 subtest 'test download_directory_listing()' => sub {
     skip_all_unless_release_testing();
 
@@ -172,7 +97,6 @@ subtest 'test download_directory_listing()' => sub {
 
         # Do needed operations before I can test download_directory_listing().
         check_lookup_config();
-        determine_download_type();
 
         # Test download_directory_listing().
         $lookup_url =~ m!^(ftp|http)(:?://.*)?!;
@@ -280,6 +204,7 @@ subtest 'test ftp_parse_filelist()' => sub {
     is_deeply($filename_listing, test_filename_listing(),
         'checked ftp_parse_listing() success');
     pass('fixin it');
+
 };
 
 
@@ -301,6 +226,7 @@ subtest 'test http_parse_filelist()' => sub {
 
     is_deeply($filename_listing, $expected_filename_listing,
         'checked http_parse_listing() success');
+
 };
 
 
@@ -316,16 +242,14 @@ subtest 'test parse_directory_listing()' => sub {
 
     # Do the stuff parse_directory_listing() depends on.
     check_lookup_config();
-    determine_download_type();
     download_directory_listing();
-
-
     parse_directory_listing();
 
     ###BUGALERT### NOTE THIS TEST IS BRITLE, BUT IT WILL ONLY BE RUN WHEN I
     #RELEASE A NEW VERSION OF FETCHWARE. FIX WITH SUB::OVERRIDE??
     is_deeply($FW->{FilenameListing}, test_filename_listing(),
         'checked parse_directory_listing() ftp success.');
+
 };
 
 
@@ -343,7 +267,7 @@ subtest 'test lookup_determine_downloadurl()' => sub {
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
 
     # Select one of the different apache versions 'httpd-2.{0,2,3}'.
-    program 'httpd-2.2';
+    filter 'httpd-2.2';
 
     # Test lookup_determine_downloadurl() with 'CURRENT_IS_VER_NO' in the
     # file listing.
@@ -378,6 +302,7 @@ App-Fetchware: run-time error. Fetchware failed to determine what URL it should
 use to download your software. This URL is based on the lookup_url you
 specified. See perldoc App::Fetchware.
 EOS
+
 };
 
 
@@ -387,6 +312,7 @@ subtest 'test lookup_by_timestamp()' => sub {
     is(lookup_by_timestamp(test_filename_listing('no current')),
         'ftp:/carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'check lookup_by_timestamp() success.');
+
 };
 
 
@@ -396,6 +322,7 @@ subtest 'test lookup_by_versionstring()' => sub {
     is(lookup_by_versionstring(test_filename_listing('no current')),
         'ftp:/carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'check lookup_by_versionstring() success.');
+
 }; 
 
 subtest 'test determine_download_url()' => sub {
@@ -406,13 +333,12 @@ subtest 'test determine_download_url()' => sub {
     clear_FW();
 
     # This must be set for lookup() to work on Apache's mirror format.
-    program 'httpd-2.2';
+    filter 'httpd-2.2';
 
     # Set needed config variables.
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
 
     check_lookup_config();
-    determine_download_type();
     download_directory_listing();
     parse_directory_listing();
     determine_download_url();
@@ -426,7 +352,7 @@ subtest 'test determine_download_url()' => sub {
     clear_FW();
 
     # This must be set for lookup() to work on Apache's mirror format.
-    program 'httpd-2.2';
+    filter 'httpd-2.2';
 
     # Set needed config variables.
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
@@ -434,7 +360,6 @@ subtest 'test determine_download_url()' => sub {
     lookup_method 'versionstring';
 
     check_lookup_config();
-    determine_download_type();
     download_directory_listing();
     parse_directory_listing();
     determine_download_url();
@@ -442,6 +367,7 @@ subtest 'test determine_download_url()' => sub {
     is($FW->{DownloadURL},
         'ftp:/carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
+
 };
 
 
@@ -453,7 +379,7 @@ subtest 'test lookup()' => sub {
     clear_FW();
 
     # This must be set for lookup() to work on Apache's mirror format.
-    program 'httpd-2.2';
+    filter 'httpd-2.2';
 
     # Set needed config variables.
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
@@ -463,6 +389,7 @@ subtest 'test lookup()' => sub {
     is($FW->{DownloadURL},
         'ftp:/carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
+
 };
 
 

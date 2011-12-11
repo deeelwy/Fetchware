@@ -53,12 +53,9 @@ our @EXPORT = qw(
 our %EXPORT_TAGS = (
     OVERRIDE_LOOKUP => [qw(
         check_lookup_config
-        determine_download_type    
         download_directory_listing
         parse_directory_listing
         determine_download_url
-        ftp_download_dirlist
-        http_download_dirlist
         ftp_parse_filelist
         http_parse_filelist
         lookup_by_timestamp
@@ -90,6 +87,14 @@ our %EXPORT_TAGS = (
         build
         install
         end
+    )],
+    UTIL => [qw(
+        download_dirlist
+        ftp_download_dirlist
+        http_download_dirlist
+        download_file
+        download_ftp_url
+        download_http_url
     )],
 );
 # OVERRIDE_ALL is simply all other tags combined.
@@ -500,7 +505,9 @@ sub start {
     ###BUGALERT### WTF is returned by tempdir???
     my $exception;
     eval {
-        $FW{TempDir} = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+        $FW{TempDir} = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1,);# CLEANUP => 1);
+        use Test::More;
+        diag("tempdir[$FW{TempDir}]");
         $exception = $@;
         1; # return true unless an exception is thrown.
     } or die <<EOD;
@@ -509,6 +516,8 @@ subroutine to create a temporary file, but tempdir() threw an exception. That
 exception was [$exception]. See perldoc App::Fetchware.
 EOD
 
+    use Cwd;
+    diag("cwd[@{[cwd()]}]");
     # Change directory to $FW{TempDir} to make unarchiving and building happen
     # in a temporary directory, and to allow for multiple concurrent fetchware
     # runs at the same time.
@@ -517,6 +526,7 @@ App-Fetchware: run-time error. Fetchware failed to change its directory to the
 temporary directory that it successfully created. This just shouldn't happen,
 and is weird, and may be a bug. See perldoc App::Fetchware.
 EOD
+    diag("cwd[@{[cwd()]}]");
 }
 
 
@@ -553,8 +563,6 @@ sub lookup {
     # die if lookup_url wasn't specified.
     # die if lookup_method was specified wrong.
     check_lookup_config();
-    # parse out the ftp or http part.
-    determine_download_type();
     # obtain directory listing for ftp or http. (a sub for each.)
     download_directory_listing();
     # parse the directory listing's format based on ftp or http.
@@ -624,38 +632,6 @@ EOD
 }
 
 
-=item determine_download_type()
-
-Uses simple regex's to determine the download type. Only FTP and HTTP are
-currently supported. The download type is B<not> returned; instead, it is stored
-in $FW as C<$FW{DownloadType}>.
-
-=over
-=item SIDE EFFECTS
-determine_download_type() sets $FW{DownloadType} to either 'ftp' or 'http' based
-on the URL provided in C<lookup_url>.
-=back
-
-=cut
-
-sub determine_download_type {
-    given ($FW{lookup_url}) {
-        when (m!^ftp://.*$!) {
-            $FW{DownloadType} = 'ftp';
-        } when (m!^http://.*$!) {
-            $FW{DownloadType} = 'http';
-        } default {
-            die <<EOD;
-App-Fetchware: run-time syntax error: the lookup_url directive your provided in
-your Fetchwarefile [$FW{lookup_url}] does not have a supported URL scheme (the
-http:// or ftp:// part). The only supported download types, schemes, are FTP and
-HTTP. See perldoc App::Fetchware.
-EOD
-        }
-    }
-}
-
-
 =item download_directory_listing()
 
 Downloads a directory listing that lookup() uses to determine what the latest
@@ -673,21 +649,7 @@ crap in it, and type 'ftp' will be the output of Net::Ftp's dir() method.
 =cut
 
 sub download_directory_listing {
-    given ($FW{DownloadType}) {
-        when ('ftp') {
-            my $dir_listing = ftp_download_dirlist($FW{lookup_url});
-            use Test::More;
-            diag("ftp dir listing");
-            diag explain $dir_listing;
-            $FW{DirectoryListing} = $dir_listing;
-        } when ('http') {
-            my $dir_listing = http_download_dirlist($FW{lookup_url});
-            use Test::More;
-            diag("http dir listing");
-            diag explain $dir_listing;
-            $FW{DirectoryListing} = $dir_listing;
-        }
-    }
+    $FW{DirectoryListing} = download_dirlist($FW{lookup_url});
 }
 
 
@@ -707,11 +669,11 @@ filenames  and timestamps that make up the directory listing.
 =cut
 
 sub parse_directory_listing {
-    given ($FW{DownloadType}) {
-        when ('ftp') {
+    given ($FW{lookup_url}) {
+        when (m!^ftp://!) {
             my $filename_listing = ftp_parse_filelist($FW{DirectoryListing});
             $FW{FilenameListing} = $filename_listing;
-        } when ('http') {
+        } when (m!^http://!) {
             my $filename_listing = http_parse_filelist($FW{DirectoryListing});
             $FW{FilenameListing} = $filename_listing;
         }
@@ -749,98 +711,6 @@ sub determine_download_url {
         }
     }
 }
-
-
-=item ftp_download_dirlist
-
-Uses Net::Ftp's dir() method to obtain a I<long> directory listing. lookup()
-needs it in I<long> format, so that the timestamp algorithm has access to each
-file's timestamp.
-
-Returns an array ref of the directory listing.
-
-=cut
-
-sub ftp_download_dirlist {
-    my $ftp_url = shift;
-    use Test::More;
-    diag("ftp_url[$ftp_url]");
-    $ftp_url =~ m!^ftp://([-a-z,A-Z,0-9,\.]+)(/.*)?!;
-    my $site = $1;
-    my $path = $2;
-    use Test::More;
-    diag("site[$site]path[$path]");
-
-    # Add debugging later based on fetchware commandline args.
-    # for debugging: $ftp = Net::FTP->new('$site','Debug' => 10);
-    # open a connection and log in!
-    my $ftp;
-    $ftp = Net::FTP->new($site)
-        or die <<EOD;
-App-Fetchware: run-time error. fetchware failed to connect to the ftp server at
-domain [$site]. The system error was [$@].
-See man App::Fetchware.
-EOD
-
-    $ftp->login("anonymous",'-anonymous@')
-        or die <<EOD;
-App-Fetchware: run-time error. fetchware failed to log in to the ftp server at
-domain [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
-EOD
-
-
-    my @dir_listing = $ftp->dir($path)
-        or die <<EOD;
-App-Fetchware: run-time error. fetchware failed to get a long directory listing
-of [$path] on server [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
-EOD
-
-    $ftp->quit();
-
-    return \@dir_listing;
-}
-
-
-=item http_download_dirlist
-
-Uses HTTP::Tiny to download a HTML directory listing from a HTTP Web server.
-
-Returns an scalar of the HTML ladden directory listing.
-
-=cut
-
-sub http_download_dirlist {
-    my $http_url = shift;
-
-    my $response = HTTP::Tiny->new->get($http_url);
-
-    die <<EOD unless $response->{success};
-App-Fetchware: run-time error. HTTP::Tiny failed to download a directory listing
-of your provided lookup_url. HTTP status code [$response->{status} $response->{reason}]
-HTTP headers [@{[Data::Dumper::Dumper($response->{headers})]}].
-See man App::Fetchware.
-EOD
-
-    use Test::More;
-    diag("$response->{status} $response->{reason}\n");
-
-    while (my ($k, $v) = each %{$response->{headers}}) {
-        for (ref $v eq 'ARRAY' ? @$v : $v) {
-            diag("$k: $_\n");
-        }
-    }
-
-    diag($response->{content}) if length $response->{content};
-    die <<EOD unless length $response->{content};
-App-Fetchware: run-time error. The lookup_url you provided downloaded nothing.
-HTTP status code [$response->{status} $response->{reason}]
-HTTP headers [@{[Data::Dumper::Dumper($response)]}].
-See man App::Fetchware.
-EOD
-    diag explain $response;
-    return $response->{content};
-}
-
 
 
 =item ftp_parse_filelist($ftp_listing)
@@ -1137,17 +1007,9 @@ bugs Net::FTP or HTTP::Tiny impose.
 =cut
 
 sub download {
-    my $filename;
-    given ($FW{DownloadType}) {
-        when ('ftp') {
-            $filename = download_ftp_url($FW{DownloadURL});
-        } when ('http') {
-            $filename = download_http_url($FW{DownloadURL});
-        } default {
 
-        }
-    }
-    use Test::More;
+    my $filename = download_file($FW{DownloadURL});
+
     $FW{PackagePath} = determine_package_path($FW{TempDir}, $filename);
 }
 
@@ -1169,12 +1031,433 @@ App::Fetchware to extend it!
 =cut
 
 
+=item determine_package_path($tempdir, $filename)
+
+Determines what C<$FW{PackagePath}> is based on the provided $tempdir and
+$filename. C<$FW{PackagePath}> is the path used by unarchive() to unarchive the
+software distribution download() downloads.
+
+=cut
+
+sub determine_package_path {
+    my ($tempdir, $filename) = @_;
+
+    # Save the $FW{PackagePath}, which stores the full path of where the file
+    # HTTP::Tiny downloaded.
+    return catfile($tempdir, $filename)
+}
+
+
+
+
+=item verify()
+
+=over
+=item Configuration subroutines used:
+=over
+=item gpg_key_url 'a browser-like url';
+=item verify_method 'md5,sha,gpg';
+=item verify_failure_ok 'True/False';
+=back
+=back
+
+=over
+=item LIMITATIONS
+Uses gpg command line or Crypt::OpenPGP for Windows, and the interface to gpg is
+a little brittle, while Crypt::OpenPGP is complex, poorly maintained, and bug
+ridden, but still usable.
+=back
+
+=cut
+
+sub verify {
+    # Obtain a KEYS file listing everyone's key that signs this distribution.
+    if (defined $FW{gpg_key_url}) {
+        ###BUGALERT### Must rewite download routines to do the download type
+        #checking for me!!!!!!!!!
+    } else {
+
+    }
+    # Import keys file (Use gpg compat flag for Crypt::OpenPGP)
+    # Download Signature using lookup_url.
+    # Verify sig.
+
+
+###BUGALERT### Below stuff is garbage!
+###BUGALERT### Rewrite to use proper error handling with exceptions!
+    given ($FW{verify_method}) {
+        when (undef) {
+            # if gpg fails try
+            # sha and if it fails try
+            # md5 and if it fails die
+            if (! gpg_verify()) {
+                if (! openpgp_verify()) {
+                    if (! sha_verify()) {
+                        if (! md5_verify()) {
+                            die <<EOD unless $FW{verify_failure_ok};
+App-Fetchware: run-time error. Fetchware failed to verify your downloaded
+software package. You can rerun fetchware with the --force option or add
+[verify_failure_ok 'True';] to your Fetchwarefile. See perldoc App::Fetchware.
+EOD
+                        }
+                    }
+                }
+            }
+        } when (/gpg/i) {
+            gpg_verify()
+                or openpgp_verify()
+                or die <<EOD;
+App-Fetchware: run-time error. You asked fetchware to only try to verify your
+package with gpg or openpgp, but they both failed. See the warning above for
+their error message. See perldoc App::Fetchware.
+EOD
+        } when (/sha/i) {
+            sha_verify()
+                or die <<EOD;
+App-Fetchware: run-time error. You asked fetchware to only try to verify your
+package with sha, but it failed. See the warning above for their error message.
+See perldoc App::Fetchware.
+EOD
+        } when (/md5/i) {
+            md5_verify()
+                or die <<EOD;
+App-Fetchware: run-time error. You asked fetchware to only try to verify your
+package with md5, but it failed. See the warning above for their error message.
+See perldoc App::Fetchware.
+EOD
+        } default {
+            die <<EOD;
+App-Fetchware: run-time error. Your fetchware file specified a wrong
+verify_method option. The only supported types are 'gpg', 'sha', 'md5', but you
+specified [$FW{verify_method}]. See perldoc App::Fetchware.
+EOD
+        }
+    }
+
+}
+
+
+
+=head1 verify() API REFERENCE
+
+The subroutines below are used by verify() to provide the verify
+functionality for fetchware. If you have overridden the verify() handler, you
+may want to use some of these subroutines so that you don't have to copy and
+paste anything from verify().
+
+App::Fetchware is B<not> object-oriented; therefore, you B<can not> subclass
+App::Fetchware to extend it! 
+
+###BUGALERT### App::Fetchware *not* subclassable; how will I impl the web app
+#support and wall paper support?!!?
+
+=cut
+
+
+=item gpg_verify(FILLIN);
+
+Verifies the downloaded source code distribution using the command line program
+gpg, which is available on pretty much every linux distro by default, and if not
+it's certainly in their repo to be easily installed.
+
+=cut
+
+sub gpg_verify {
+
+}
+
+
+=item crypt_openpgp_verify(FILLIN);
+
+Verifies the downloaded source code distribution using the CPAN module
+Crypt::OpenPGP, which is easily available on CPAN, but its full of unfixed bugs
+years old, and only recently has it been maintained again. Not sure of its
+future, which is a shame, because it makes Windows support much easier than
+having users install gpg, which would be pretty easy with cygwin, but still a
+hassel.
+=cut
+
+sub crypt_openpgp_verify {
+
+}
+
+# New hooks here!!!!!
+
+
+=item end()
+
+=over
+=item Configuration subroutines used:
+=over
+=item none
+=back
+=back
+
+end() is called after all of the other main fetchware subroutines such as
+lookup() are called. It's job is to cleanup after everything else. It just
+calls C<File::Temp>'s internalish File::Temp::cleanup() subroutine.
+
+=cut
+
+sub end {
+    # chdir to our home directory, so File::Temp can delete the tempdir. This is
+    # necessary, because operating systems do not allow you to delete a
+    # directory that a running program has as its cwd.
+    # Determines where to chdir() to so File::Temp can delete fetchware's temp
+    # directior $FW{TempDir}.
+    my $home = $ENV{HOME} // updir();
+
+    my $error = <<EOS;
+App-Fetchware: run-time error. Fetchware failed to chdir() to [$home]. See
+perldoc App::Fetchware.
+EOS
+
+    chdir($home) or die $error;
+
+    # Call File::Temp's cleanup subrouttine to delete fetchware's temp
+    # directory.
+    File::Temp::cleanup();
+    ###BUGALERT### Should end() clear %FW for next invocation of App::Fetchware
+    # Clear %FW for next run of App::Fetchware.
+    # Is this a design defect? It's a pretty lame hack! Does my() do this for
+    # me?
+    #%FW = ();
+}
+
+
+
+=head1 UTILITY SUBROUTINES
+
+These subroutines provide utility functions for testing and downloading files
+and dirlists that may also be helpful for anyone who's writing a custom
+Fetchwarefile to provide easier testing.
+
+=cut 
+
+=over
+
+=item eval_ok($code, $expected_exception_text_or_regex, $test_name)
+
+Executes the $code coderef, and compares its thrown exception, C<$@>, to
+$expected_exception_text_or_regex, and uses $test_name as the name for the test if
+provided.
+
+If $expected_exception_text_or_regex is a string then Test::More's is() is used,
+and if $expected_exception_text_or_regex is a C<'Regexp'> according to ref(),
+then like() is used, which will treat $expected_exception_text_or_regex as a
+regex instead of as just a string.
+
+=cut
+
+sub eval_ok {
+    my ($code, $expected_exception_text_or_regex, $test_name) = @_;
+    eval {$code->()};
+    # Test if an exception was actually thrown.
+    if (not defined $@) {
+        BAIL_OUT("[$test_name]'s provided code did not actually throw an exception");
+    }
+    
+    # Support regexing the thrown exception's test if needed.
+    if (ref $expected_exception_text_or_regex ne 'Regexp') {
+        is($@, $expected_exception_text_or_regex, $test_name);
+    } elsif (ref $expected_exception_text_or_regex eq 'Regexp') {
+        like($@, qr/$expected_exception_text_or_regex/, $test_name);
+    }
+
+}
+
+=item skip_all_unless_release_testing()
+
+Skips all tests in your test file or subtest() if fetchware's testing
+environment variable, C<FETCHWARE_RELEASE_TESTING>, is set to its proper value.
+
+=cut
+
+sub skip_all_unless_release_testing {
+    plan skip_all => 'Not testing for release.'
+        if $ENV{FETCHWARE_RELEASE_TESTING}
+            ne '***setting this will install software on your computer!!!!!!!***';
+}
+
+
+=item clear_FW()
+
+Clears App::Fetchware's internal %FW globalish (file scoped lexical) variable.
+This subroutine should never actually be executed in a Fetchwarefile, because
+its sole purpose is to clear %FW between tests being run in Fetchware's test
+suite.
+
+=cut
+
+sub clear_FW {
+    %FW = ();
+}
+
+
+
+
+=item download_dirlist($ftp_or_http_url)
+
+Downloads a ftp or http url and assumes that it will be downloading a directory
+listing instead of an actual file. To download an actual file use
+L<download_file()>. download_dirlist returns the directory listing that it
+obtained from the ftp or http server. ftp server will be an arrayref of C<ls -l>
+like output, while the http output will be a scalar of the HTML dirlisting
+provided by the http server.
+
+=cut
+
+sub download_dirlist {
+    my $url = shift;
+
+    my $dirlist;
+    given ($url) {
+        when (m!^ftp://.*$!) {
+            $dirlist = ftp_download_dirlist($url);
+        } when (m!^http://.*$!) {
+            $dirlist = http_download_dirlist($url);
+        } default {
+            die <<EOD;
+App-Fetchware: run-time syntax error: the url parameter your provided in
+your call to download_dirlist() [$url] does not have a supported URL scheme (the
+http:// or ftp:// part). The only supported download types, schemes, are FTP and
+HTTP. See perldoc App::Fetchware.
+EOD
+        }
+    }
+
+    return $dirlist;
+}
+
+
+=item ftp_download_dirlist
+
+Uses Net::Ftp's dir() method to obtain a I<long> directory listing. lookup()
+needs it in I<long> format, so that the timestamp algorithm has access to each
+file's timestamp.
+
+Returns an array ref of the directory listing.
+
+=cut
+
+sub ftp_download_dirlist {
+    my $ftp_url = shift;
+    use Test::More;
+    diag("ftp_url[$ftp_url]");
+    $ftp_url =~ m!^ftp://([-a-z,A-Z,0-9,\.]+)(/.*)?!;
+    my $site = $1;
+    my $path = $2;
+    use Test::More;
+    diag("site[$site]path[$path]");
+
+    # Add debugging later based on fetchware commandline args.
+    # for debugging: $ftp = Net::FTP->new('$site','Debug' => 10);
+    # open a connection and log in!
+    my $ftp;
+    $ftp = Net::FTP->new($site)
+        or die <<EOD;
+App-Fetchware: run-time error. fetchware failed to connect to the ftp server at
+domain [$site]. The system error was [$@].
+See man App::Fetchware.
+EOD
+
+    $ftp->login("anonymous",'-anonymous@')
+        or die <<EOD;
+App-Fetchware: run-time error. fetchware failed to log in to the ftp server at
+domain [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
+EOD
+
+
+    my @dir_listing = $ftp->dir($path)
+        or die <<EOD;
+App-Fetchware: run-time error. fetchware failed to get a long directory listing
+of [$path] on server [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
+EOD
+
+    $ftp->quit();
+
+    return \@dir_listing;
+}
+
+
+=item http_download_dirlist
+
+Uses HTTP::Tiny to download a HTML directory listing from a HTTP Web server.
+
+Returns an scalar of the HTML ladden directory listing.
+
+=cut
+
+sub http_download_dirlist {
+    my $http_url = shift;
+
+    my $response = HTTP::Tiny->new->get($http_url);
+
+    die <<EOD unless $response->{success};
+App-Fetchware: run-time error. HTTP::Tiny failed to download a directory listing
+of your provided lookup_url. HTTP status code [$response->{status} $response->{reason}]
+HTTP headers [@{[Data::Dumper::Dumper($response->{headers})]}].
+See man App::Fetchware.
+EOD
+
+    use Test::More;
+    diag("$response->{status} $response->{reason}\n");
+
+    while (my ($k, $v) = each %{$response->{headers}}) {
+        for (ref $v eq 'ARRAY' ? @$v : $v) {
+            diag("$k: $_\n");
+        }
+    }
+
+    diag($response->{content}) if length $response->{content};
+    die <<EOD unless length $response->{content};
+App-Fetchware: run-time error. The lookup_url you provided downloaded nothing.
+HTTP status code [$response->{status} $response->{reason}]
+HTTP headers [@{[Data::Dumper::Dumper($response)]}].
+See man App::Fetchware.
+EOD
+    diag explain $response;
+    return $response->{content};
+}
+
+
+
+=item download_file($url)
+
+Downloads a $url and assumes it is a file that will be downloaded instead of a
+file listing that will be returned. download_file() returns the file name of the
+file it downloads.
+
+=cut
+
+sub download_file {
+    my $url = shift;
+
+    my $filename;
+    given ($url) {
+        when (m!^ftp://.*$!) {
+            $filename = download_ftp_url($url);
+        } when (m!^http://.*$!) {
+            $filename = download_http_url($url);
+        } default {
+            die <<EOD;
+App-Fetchware: run-time syntax error: the url parameter your provided in
+your call to download_file() [$url] does not have a supported URL scheme (the
+http:// or ftp:// part). The only supported download types, schemes, are FTP and
+HTTP. See perldoc App::Fetchware.
+EOD
+        }
+    }
+
+    return $filename;
+}
+
+
 =item download_ftp_url($url);
 
 Uses Net::FTP to download the specified FTP URL using binary mode.
 
 =cut
-
 
 sub download_ftp_url {
     my $ftp_url = shift;
@@ -1237,13 +1520,6 @@ EOD
     diag("FILE[$file]");
     return $file;
 }
-
-
-=item download_http_url($url);
-
-Uses HTTP::Tiny to download the specified URL.
-
-=cut
 
 
 =item download_http_url($url);
@@ -1314,128 +1590,6 @@ EOS
     return $filename;
 }
 
-
-=item determine_package_path($tempdir, $filename)
-
-Determines what C<$FW{PackagePath}> is based on the provided $tempdir and
-$filename. C<$FW{PackagePath}> is the path used by unarchive() to unarchive the
-software distribution download() downloads.
-
-=cut
-
-sub determine_package_path {
-    my ($tempdir, $filename) = @_;
-
-    # Save the $FW{PackagePath}, which stores the full path of where the file
-    # HTTP::Tiny downloaded.
-    return catfile($tempdir, $filename)
-}
-
-# New hooks here!!!!!
-
-
-=item end()
-
-=over
-=item Configuration subroutines used:
-=over
-=item none
-=back
-=back
-
-end() is called after all of the other main fetchware subroutines such as
-lookup() are called. It's job is to cleanup after everything else. It just
-calls C<File::Temp>'s internalish File::Temp::cleanup() subroutine.
-
-=cut
-
-sub end {
-    # chdir to our home directory, so File::Temp can delete the tempdir. This is
-    # necessary, because operating systems do not allow you to delete a
-    # directory that a running program has as its cwd.
-    # Determines where to chdir() to so File::Temp can delete fetchware's temp
-    # directior $FW{TempDir}.
-    my $home = $ENV{HOME} // updir();
-
-    my $error = <<EOS;
-App-Fetchware: run-time error. Fetchware failed to chdir() to [$home]. See
-perldoc App::Fetchware.
-EOS
-
-    chdir($home) or die $error;
-
-    # Call File::Temp's cleanup subrouttine to delete fetchware's temp
-    # directory.
-    File::Temp::cleanup();
-}
-
-
-
-=head1 UTILITY SUBROUTINES
-
-These subroutines provide utility functions that may also be helpful for anyone
-who's writing a custom Fetchwarefile to provide easier testing.
-
-=cut 
-
-=over
-
-=item eval_ok($code, $expected_exception_text_or_regex, $test_name)
-
-Executes the $code coderef, and compares its thrown exception, C<$@>, to
-$expected_exception_text_or_regex, and uses $test_name as the name for the test if
-provided.
-
-If $expected_exception_text_or_regex is a string then Test::More's is() is used,
-and if $expected_exception_text_or_regex is a C<'Regexp'> according to ref(),
-then like() is used, which will treat $expected_exception_text_or_regex as a
-regex instead of as just a string.
-
-=cut
-
-sub eval_ok {
-    my ($code, $expected_exception_text_or_regex, $test_name) = @_;
-    eval {$code->()};
-    # Test if an exception was actually thrown.
-    if (not defined $@) {
-        BAIL_OUT("[$test_name]'s provided code did not actually throw an exception");
-    }
-    
-    # Support regexing the thrown exception's test if needed.
-    if (ref $expected_exception_text_or_regex ne 'Regexp') {
-        is($@, $expected_exception_text_or_regex, $test_name);
-    } elsif (ref $expected_exception_text_or_regex eq 'Regexp') {
-        like($@, qr/$expected_exception_text_or_regex/, $test_name);
-    }
-
-}
-
-=item skip_all_unless_release_testing()
-
-Skips all tests in your test file or subtest() if fetchware's testing
-environment variable, C<FETCHWARE_RELEASE_TESTING>, is set to its proper value.
-
-=cut
-
-sub skip_all_unless_release_testing {
-    plan skip_all => 'Not testing for release.'
-        if $ENV{FETCHWARE_RELEASE_TESTING}
-            ne '***setting this will install software on your computer!!!!!!!***';
-}
-
-
-=item clear_FW()
-
-Clears App::Fetchware's internal %FW globalish (file scoped lexical) variable.
-This subroutine should never actually be executed in a Fetchwarefile, because
-its sole purpose is to clear %FW between tests being run in Fetchware's test
-suite.
-
-=cut
-
-sub clear_FW {
-    %FW = ();
-}
 
 # End UTILITY SUBROUTINES =over.
 =back

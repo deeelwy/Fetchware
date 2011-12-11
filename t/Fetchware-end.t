@@ -6,7 +6,8 @@ use warnings;
 use diagnostics;
 use 5.010;
 
-use Test::More tests => '2'; #Update if this changes.
+# Test::More version 0.98 is needed for proper subtest support.
+use Test::More 0.98 tests => '2'; #Update if this changes.
 
 use File::Temp 'tempdir';
 
@@ -42,6 +43,8 @@ subtest 'test end()' => sub {
     end();
 
     ok( (not -e $tempdir) , 'checked end() success');
+
+    done_testing();
 };
 
 
