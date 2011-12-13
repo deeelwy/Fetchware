@@ -10,7 +10,13 @@ use Net::FTP;
 use HTTP::Tiny;
 use HTML::TreeBuilder;
 use Scalar::Util 'blessed';
-use Test::More; # some utility subroutines need it.
+use IPC::System::Simple 'system'; # remove me later???
+use Digest;
+use Digest::SHA;
+use Digest::MD5;
+#use Crypt::OpenPGP::KeyRing;
+#use Crypt::OpenPGP;
+use Test::More 0.98; # some utility test subroutines need it.
 
 # Enable Perl 6 knockoffs.
 use 5.010;
@@ -40,6 +46,8 @@ our @EXPORT = qw(
     lookup_url
     lookup_method
     gpg_key_url
+    sha1_url
+    md5_url
     verify_method
     no_install
     verify_failure_ok
@@ -69,7 +77,12 @@ our %EXPORT_TAGS = (
         download_http_url
         determine_package_path
     )],
-    OVERRIDE_VERIFY => [qw()],
+    OVERRIDE_VERIFY => [qw(
+        gpg_verify
+        sha1_verify
+        md5_verify
+        digest_verify
+    )],
     OVERRIDE_UNARCHIVE => [qw()],
     OVERRIDE_BUILD => [qw()],
     OVERRIDE_INSTALL => [qw()],
@@ -369,6 +382,9 @@ BEGIN { # BEGIN BLOCK due to api subs needing prototypes.
         [ lookup_url => 'ONE' ],
         [ lookup_method => 'ONE' ],
         [ gpg_key_url => 'ONE' ],
+        [ gpg_sig_url => 'ONE' ],
+        [ sha1_url => 'ONE' ],
+        [ md5_url => 'ONE' ],
         [ verify_method => 'ONE' ],
         [ mirror => 'MANY' ],
         [ no_install => 'BOOLEAN' ],
@@ -506,6 +522,10 @@ sub start {
     my $exception;
     eval {
         $FW{TempDir} = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1,);# CLEANUP => 1);
+
+        # Must chown 700 so gpg's localized keyfiles are good.
+        chown 0700, $FW{TempDir};
+
         use Test::More;
         diag("tempdir[$FW{TempDir}]");
         $exception = $@;
@@ -1055,7 +1075,10 @@ sub determine_package_path {
 =over
 =item Configuration subroutines used:
 =over
-=item gpg_key_url 'a browser-like url';
+=item gpg_key_url 'a.browser/like.url';
+=item gpg_sig_url 'a.browser/like.url';
+=item sha1_url 'a browser-like url';
+=item md5_url 'a browser-like url';
 =item verify_method 'md5,sha,gpg';
 =item verify_failure_ok 'True/False';
 =back
@@ -1071,56 +1094,64 @@ ridden, but still usable.
 =cut
 
 sub verify {
-    # Obtain a KEYS file listing everyone's key that signs this distribution.
-    if (defined $FW{gpg_key_url}) {
-        ###BUGALERT### Must rewite download routines to do the download type
-        #checking for me!!!!!!!!!
-    } else {
-
-    }
-    # Import keys file (Use gpg compat flag for Crypt::OpenPGP)
-    # Download Signature using lookup_url.
-    # Verify sig.
-
-
-###BUGALERT### Below stuff is garbage!
-###BUGALERT### Rewrite to use proper error handling with exceptions!
+            my $retval;
     given ($FW{verify_method}) {
         when (undef) {
             # if gpg fails try
             # sha and if it fails try
             # md5 and if it fails die
-            if (! gpg_verify()) {
-                if (! openpgp_verify()) {
-                    if (! sha_verify()) {
-                        if (! md5_verify()) {
-                            die <<EOD unless $FW{verify_failure_ok};
+            my ($gpg_err, $sha_err, $md5_err);
+            eval {$retval = gpg_verify()};
+            $gpg_err = $@;
+            diag("gpgrv[$retval]");
+            warn $gpg_err if $gpg_err;
+            if (! $retval or $gpg_err) {
+                eval {$retval = sha1_verify()};
+                $sha_err = $@;
+                diag("sharv[$retval]");
+                warn $sha_err if $sha_err;
+                if (! $retval or $sha_err) {
+                    diag("GOTTOMD5");
+                    eval {$retval = md5_verify()};
+                    $md5_err = $@;
+                    diag("md5rv[$retval]");
+                    warn $md5_err if $md5_err;
+                }
+                if (! $retval or $md5_err) {
+                    die <<EOD unless $FW{verify_failure_ok};
 App-Fetchware: run-time error. Fetchware failed to verify your downloaded
 software package. You can rerun fetchware with the --force option or add
 [verify_failure_ok 'True';] to your Fetchwarefile. See perldoc App::Fetchware.
 EOD
-                        }
-                    }
+                }
+                if ($FW{verify_failure_ok}) {
+                        warn <<EOW;
+App-Fetchware: run-time warning. Fetchware failed to verify the integrity of you
+downloaded file [$FW{PackagePath}]. This is ok, because you asked Fetchware to
+ignore its errors when it tries to verify the integrity of your downloaded file.
+You can also ignore the errors Fetchware printed out abover where it tried to
+verify your downloaded file. See perldoc App::Fetchware.
+EOW
+                    return 'warned due to verify_failure_ok'
                 }
             }
         } when (/gpg/i) {
             gpg_verify()
-                or openpgp_verify()
-                or die <<EOD;
+                or die <<EOD unless $FW{verify_failure_ok};
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
 package with gpg or openpgp, but they both failed. See the warning above for
 their error message. See perldoc App::Fetchware.
 EOD
-        } when (/sha/i) {
-            sha_verify()
-                or die <<EOD;
+        } when (/sha1?/i) {
+            sha1_verify()
+                or die <<EOD unless $FW{verify_failure_ok};
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
 package with sha, but it failed. See the warning above for their error message.
 See perldoc App::Fetchware.
 EOD
         } when (/md5/i) {
             md5_verify()
-                or die <<EOD;
+                or die <<EOD unless $FW{verify_failure_ok};
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
 package with md5, but it failed. See the warning above for their error message.
 See perldoc App::Fetchware.
@@ -1133,7 +1164,6 @@ specified [$FW{verify_method}]. See perldoc App::Fetchware.
 EOD
         }
     }
-
 }
 
 
@@ -1154,31 +1184,297 @@ App::Fetchware to extend it!
 =cut
 
 
-=item gpg_verify(FILLIN);
+=item gpg_verify();
 
 Verifies the downloaded source code distribution using the command line program
-gpg, which is available on pretty much every linux distro by default, and if not
-it's certainly in their repo to be easily installed.
-
+gpg or Crypt::OpenPGP on Windows or if gpg is not available.
 =cut
 
 sub gpg_verify {
+    my $keys_file;
+    # Obtain a KEYS file listing everyone's key that signs this distribution.
+##DELME##    if (defined $FW{gpg_key_url}) {
+##DELME##        $keys_file = download_file($FW{gpg_key_url});
+##DELME##    } else {
+##DELME##        eval {
+##DELME##            $keys_file = download_file("$FW{lookup_url}/KEYS");
+##DELME##        }; 
+##DELME##        if ($@ and not defined $FW{verify_failure_ok}) {
+##DELME##            die <<EOD;
+##DELME##App-Fetchware: Fetchware was unable to download the gpg_key_url you specified or
+##DELME##that fetchware tried appending asc, sig, or sign to [$FW{DownloadUrl}]. It needs
+##DELME##to download this file to properly verify you software package. This is a fatal
+##DELME##error, because failing to verify packages is a perferable default over
+##DELME##potentially installing compromised ones. If failing to verify your software
+##DELME##package is ok to you, then you may disable verification by adding
+##DELME##verify_failure_ok 'On'; to your Fetchwarefile. See perldoc App::Fetchware.
+##DELME##EOD
+##DELME##        }
+##DELME##    }
 
+    # Download Signature using lookup_url.
+    my $sig_file;
+    eval {
+        for my $ext (qw(asc sig sign)) {
+            $sig_file = download_file("$FW{DownloadURL}.$ext");
+
+            # If the file was downloaded successfully stop trying other extensions.
+            last if defined $sig_file;
+        }
+        1;
+    } or die <<EOD;
+App-Fetchware: Fetchware was unable to download the gpg_sig_url you specified or
+that fetchware tried appending asc, sig, or sign to [$FW{DownloadURL}]. It needs
+to download this file to properly verify you software package. This is a fatal
+error, because failing to verify packages is a perferable default over
+potentially installing compromised ones. If failing to verify your software
+package is ok to you, then you may disable verification by adding
+verify_failure_ok 'On'; to your Fetchwarefile. See perldoc App::Fetchware.
+EOD
+
+###BUGALERT###    # Use Crypt::OpenPGP if its installed.
+###BUGALERT###    if (eval {use Crypt::OpenPGP}) {
+##DOESNTWORK??        # Build a pubring needed for verify.
+##DOESNTWORK??        my $pubring = Crypt::OpenPGP::KeyRing->new();
+##DOESNTWORK??        my $secring = Crypt::OpenPGP::KeyRing->new();
+##DOESNTWORK??
+##DOESNTWORK??        # Turn on gpg compatibility just in case its needed.
+##DOESNTWORK??        my $pgp = Crypt::OpenPGP->new(
+##DOESNTWORK??            Compat     => 'GnuPG',
+##DOESNTWORK??            PubRing => $pubring,
+##DOESNTWORK??            SecRing => $secring,
+##DOESNTWORK??            # Automatically download public keys as needed.
+##DOESNTWORK??            AutoKeyRetrieve => 1,
+##DOESNTWORK??            # Use this keyserver to download them from.
+##DOESNTWORK??            KeyServer => 'pool.sks-keyservers.net',
+##DOESNTWORK??        );
+##DOESNTWORK??
+##DOESNTWORK??        # Verify the downloaded file.
+##DOESNTWORK??        my $retval = $pgp->verify(SigFile => $sig_file, Files => $FW{PackagePath});
+##DOESNTWORK??        if ($retval == 0) {
+##DOESNTWORK??            warn "Crypt::OpenPGP failed due to invalid signature.";
+##DOESNTWORK??            # return failure, because Fetchware failed to verify the downloaded
+##DOESNTWORK??            # file.
+##DOESNTWORK??            return undef;
+##DOESNTWORK??        } elsif ($retval) {
+##DOESNTWORK??            return 'Package verified';
+##DOESNTWORK??        } else {
+##DOESNTWORK??            # print warning about $pgp errstr message.
+##DOESNTWORK??            my $errstr = $pgp->errstr();
+##DOESNTWORK??            warn "Crypt::OpenPGP failed with message: [$errstr]";
+##DOESNTWORK??            # return failure, because Fetchware failed to verify the downloaded
+##DOESNTWORK??            # file.
+##DOESNTWORK??            return undef;
+##DOESNTWORK??        }
+###BUGALERT###    } else {
+###BUGALERT###        ###BUGALERT### eval the system()'s below & add better error reporting in
+###BUGALERT###        ###BUGALERT### if Crypt::OpenPGP works ok remove gpg support & this if &
+        #IPC::System::Simple dependency.
+        #my standard format.
+        # Use automatic key retrieval & a cool pool of keyservers
+        ###BUGALERT## Give Crypt::OpenPGP another try with
+        #pool.sks-keyservers.net
+        system('gpg', '--keyserver', 'pool.sks-keyservers.net',
+            '--keyserver-options', 'auto-key-retrieve=1',
+            '--homedir', '.',  "$sig_file");
+
+        # Verify sig.
+#        system('gpg', '--homedir', '.', '--verify', "$sig_file");
+###BUGALERT###    }
+
+    # Return true indicating the package was verified.
+    return 'Package Verified';
 }
 
 
-=item crypt_openpgp_verify(FILLIN);
+=item sha1_verify();
 
-Verifies the downloaded source code distribution using the CPAN module
-Crypt::OpenPGP, which is easily available on CPAN, but its full of unfixed bugs
-years old, and only recently has it been maintained again. Not sure of its
-future, which is a shame, because it makes Windows support much easier than
-having users install gpg, which would be pretty easy with cygwin, but still a
-hassel.
-=cut
+Verifies the downloaded software archive's integrity using the SHA Digest
+specified by the C<sha_url 'ftp://sha.url/package.sha'> config option. Returns
+true for sucess dies on error.
 
-sub crypt_openpgp_verify {
+=over
+=item SECURITY NOTE
+If an attacker cracks a mirror and modifies a software package, they can also
+modify the MD5 sum of that software package on that B<same mirror>. Because of
+this limitation MD5 sums can only tell you if the software package was corrupted
+while downloading. This can actually happen as I've had it happen to me once.
 
+If your stuck with using MD5 sum, because your software package does not provide
+gpg signing, I recommend that you download your SHA1 sums (and MD5 sums) from
+your software package's master mirror. For example, Apache provides MD5 and SHA1
+sums, but it does not mirror them--you must download them directly from Apache's
+servers. To do this specify a C<sha1_url 'master.mirror/package.sha1';> in your
+Fetchwarefile.
+=back
+
+=cut 
+
+sub sha1_verify {
+    return digest_verify('SHA-1');
+}
+
+
+=item md5_verify();
+
+Verifies the downloaded software archive's integrity using the MD5 Digest
+specified by the C<md5_url 'ftp://sha.url/package.sha'> config option. Returns
+true for sucess and dies on error.
+
+=over
+=item SECURITY NOTE
+If an attacker cracks a mirror and modifies a software package, they can also
+modify the MD5 sum of that software package on that B<same mirror>. Because of
+this limitation MD5 sums can only tell you if the software package was corrupted
+while downloading. This can actually happen as I've had it happen to me once.
+
+If your stuck with using MD5 sum, because your software package does not provide
+gpg signing, I recommend that you download your MD5 sums (and SHA1 sums) from
+your software package's master mirror. For example, Apache provides MD5 and SHA1
+sums, but it does not mirror them--you must download them directly from Apache's
+servers. To do this specify a C<md5_url 'master.mirror/package.md5';> in your
+Fetchwarefile.
+=back
+
+=cut 
+
+sub md5_verify {
+    return digest_verify('MD5');
+}
+
+
+
+=item digest_verify($digest_type);
+
+Verifies the downloaded software archive's integrity using the specified
+$digest_type, which also determines the
+C<"$digest_type_url" 'ftp://sha.url/package.sha'> config option. Returns
+true for sucess and returns false for failure.
+
+=over
+=item OVERRIDE NOTE
+If you need to override verify() in your Fetchwarefile to change the type of
+digest used, you can do this easily, because digest_verify() uses L<Digest>,
+which supporta a number of Digest::* modules of different Digest algorithms.
+Simply do this by override verify() to call 
+C<digest_verify('Digest's name for your Digest::* algorithm');>
+=back
+
+=over
+=item SECURITY NOTE
+If an attacker cracks a mirror and modifies a software package, they can also
+modify the $digest_type sum of that software package on that B<same mirror>.
+Because of this limitation $digest_type sums can only tell you if the software
+package was corrupted while downloading. This can actually happen as I've had
+it happen to me once.
+
+If your stuck with using $digest_type sum, because your software package does
+not provide gpg signing, I recommend that you download your $digest_type sums
+(and SHA1 sums) from your software package's master mirror. For example, Apache
+provides MD5 and SHA1 sums, but it does not mirror them--you must download them
+directly from Apache's servers. To do this specify a
+C<$digest_type_url 'master.mirror/package.$digest_type';>' in your Fetchwarefile.
+=back
+
+=cut 
+
+sub digest_verify {
+    my $digest_type = shift;
+
+    # Turn SHA-1 into sha1 & MD5 into md5.
+    my $digest_ext = $digest_type;
+    $digest_ext = lc $digest_type;
+    $digest_ext =~ s/-//g;
+##subify get_sha_sum()
+    my $digest_file;
+    # Obtain a sha sum file.
+    if (defined $FW{"${digest_type}_url"}) {
+        $digest_file = download_file($FW{"${digest_type}_url"});
+    } else {
+        eval {
+            $digest_file = download_file("$FW{DownloadURL}.$digest_ext");
+            diag("digestfile[$digest_file]");
+        };
+        if ($@) {
+            die <<EOD;
+App-Fetchware: Fetchware was unable to download the $digest_type sum it needs to download
+to properly verify you software package. This is a fatal error, because failing
+to verify packages is a perferable default over potentially installing
+compromised ones. If failing to verify your software package is ok to you, then
+you may disable verification by adding verify_failure_ok 'On'; to your
+Fetchwarefile. See perldoc App::Fetchware.
+EOD
+        }
+    }
+    
+###subify calc_sum()
+    # Open the downloaded software archive for reading.
+    diag("PACKAGEPATH[$FW{PackagePath}");
+    open(my $package_fh, '<', $FW{PackagePath})
+        or die <<EOD;
+App-Fetchware: run-time error. Fetchware failed to open the file it downloaded
+while trying to read it in order to check its MD5 sum. The file was
+[$FW{PackagePath}]. See perldoc App::Fetchware.
+EOD
+
+    my $digest;
+    if ($digest_type eq 'MD5') {
+        $digest = Digest::MD5->new();
+    } elsif ($digest_type eq 'SHA-1') {
+        $digest = Digest::SHA->new();
+    } else {
+        die <<EOD;
+EOD
+    }
+    #my $digest = Digest->new($digest_type);
+    # Digest requires the filehandle to have binmode set.
+    binmode $package_fh;
+
+    my $calculated_digest;
+    eval {
+        # Add the file for digesting.
+        $digest->addfile($package_fh);
+        # Actually digest it.
+        $calculated_digest = $digest->hexdigest();
+    };
+    if ($@) {
+        die <<EOD;
+App-Fetchware: run-time error. Digest::$digest_type croak()ed an error [$@].
+See perldoc App::Fetchware.
+EOD
+    }
+
+    close $package_fh or die <<EOD;
+App-Fetchware: run-time error Fetchware failed to close the file
+[$FW{PackagePath}] after opening it for reading. See perldoc App::Fetchware.
+EOD
+
+###subify compare_sums();
+    # Open the downloaded software archive for reading.
+    diag("DIGESTFILE[$digest_file]");
+    open(my $digest_fh, '<', $digest_file)
+        or die <<EOD;
+App-Fetchware: run-time error. Fetchware failed to open the $digest_type file it
+downloaded while trying to read it in order to check its $digest_type sum. The file was
+[$digest_file]. See perldoc App::Fetchware.
+EOD
+    # Will only check the first md5sum it finds.
+    while (<$digest_fh>) {
+        next if /^\s+$/; # skip whitespace only lines just in case.
+        my @fields = split ' '; # Defaults to $_, which is filled in by <>
+        diag("fields[@fields]");
+        diag("filemd5[$fields[0]]calcmd5[$calculated_digest]");
+
+        if ($fields[0] eq $calculated_digest) {
+            return 'Package verified';
+        # Sometimes a = is appended to make it 32bits.
+        } elsif ("$fields[0]=" eq $calculated_digest) {
+            return 'Package verified';
+        }
+    }
+
+    # Return failure, because fetchware failed to verify by md5sum
+    return undef;
 }
 
 # New hooks here!!!!!
