@@ -12,7 +12,7 @@ use File::Spec::Functions 'devnull';
 use File::Copy 'cp';
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98;# tests => '20'; #Update if this changes.
+use Test::More 0.98 tests => '7'; #Update if this changes.
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -266,4 +266,4 @@ end();
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-done_testing();
+#done_testing();
