@@ -4,7 +4,7 @@ package App::Fetchware;
 
 # CPAN modules making Fetchwarefile better.
 use File::Temp 'tempdir';
-use File::Spec::Functions qw(catfile splitpath updir);
+use File::Spec::Functions qw(catfile splitpath updir splitdir file_name_is_absolute);
 use Data::Dumper;
 use Net::FTP;
 use HTTP::Tiny;
@@ -16,6 +16,7 @@ use Digest::SHA;
 use Digest::MD5;
 #use Crypt::OpenPGP::KeyRing;
 #use Crypt::OpenPGP;
+use Archive::Extract;
 use Test::More 0.98; # some utility test subroutines need it.
 
 # Enable Perl 6 knockoffs.
@@ -83,7 +84,9 @@ our %EXPORT_TAGS = (
         md5_verify
         digest_verify
     )],
-    OVERRIDE_UNARCHIVE => [qw()],
+    OVERRIDE_UNARCHIVE => [qw(
+        check_archive_files    
+    )],
     OVERRIDE_BUILD => [qw()],
     OVERRIDE_INSTALL => [qw()],
     # Testing also imports lookup(), download(), etc, so that test scripts don't
@@ -108,6 +111,7 @@ our %EXPORT_TAGS = (
         download_file
         download_ftp_url
         download_http_url
+        just_filename
     )],
 );
 # OVERRIDE_ALL is simply all other tags combined.
@@ -521,7 +525,8 @@ sub start {
     ###BUGALERT### WTF is returned by tempdir???
     my $exception;
     eval {
-        $FW{TempDir} = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1,);# CLEANUP => 1);
+        #$FW{TempDir} = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1,);# CLEANUP => 1);
+        $FW{TempDir} = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
 
         # Must chown 700 so gpg's localized keyfiles are good.
         chown 0700, $FW{TempDir};
@@ -1084,6 +1089,10 @@ sub determine_package_path {
 =back
 =back
 
+Verifies the downloaded package stored in $FW{PackagePath} by downloading
+C<$FW{DownloadURL}.{asc,sha1,md5}> and comparing the two together. Uses the
+helper subroutines C<{gpg,sha1,md5,digest}_verify()>.
+
 =over
 =item LIMITATIONS
 Uses gpg command line or Crypt::OpenPGP for Windows, and the interface to gpg is
@@ -1343,7 +1352,6 @@ sub md5_verify {
 }
 
 
-
 =item digest_verify($digest_type);
 
 Verifies the downloaded software archive's integrity using the specified
@@ -1477,6 +1485,120 @@ EOD
     return undef;
 }
 
+
+
+
+=item unarchive()
+
+=over
+=item Configuration subroutines used:
+=over
+=item none
+=back
+=back
+
+Uses L<Archive::Tar> or L<Archive::Zip> to turn .tar.{gz,bz2,xz} or .zip into a
+directory. Is intelligent enough to warn if the archive being unarchived does
+not contain B<all> of its files in a single directory like nearly all software
+packages do. Uses C<$FW{PackagePath}> as the archive to unarchive, and sets
+C<$FW{BuildPath}>
+
+=over
+=item LIMITATIONS
+Uses gpg command line or Crypt::OpenPGP for Windows, and the interface to gpg is
+a little brittle, while Crypt::OpenPGP is complex, poorly maintained, and bug
+ridden, but still usable.
+=back
+
+=cut
+
+sub unarchive {
+    ###BUGALERT### fetchware needs Archive::Zip, which is *not* one of
+    #Archive::Extract's dependencies.
+my $ae = Archive::Extract->new(archive => "$FW{PackagePath}");
+
+    # list files.
+    my $files = $ae->files();
+#    die <<EOD if not defined $files;
+#App-Fetchware: run-time error. Fetchware failed to list the files in  the
+#archive it downloaded [$FW{PackagePath}]. The error message is
+#[@{[$ae->error()]}].  See perldoc App::Fetchware.
+#EOD
+
+    
+    check_archive_files($files);
+
+    $ae->extract() or die <<EOD;
+App-Fetchware: run-time error. Fetchware failed to extract the archive it
+downloaded [$FW{PackagePath}]. The error message is [@{[$ae->error()]}].
+See perldoc App::Fetchware.
+EOD
+}
+
+
+=head1 unarchive() API REFERENCE
+
+The subroutine below are used by unarchive() to provide the unarchive
+functionality for fetchware. If you have overridden the unarchive() handler, you
+may want to use some of these subroutines so that you don't have to copy and
+paste anything from unarchive().
+
+App::Fetchware is B<not> object-oriented; therefore, you B<can not> subclass
+App::Fetchware to extend it! 
+
+###BUGALERT### App::Fetchware *not* subclassable; how will I impl the web app
+#support and wall paper support?!!?
+
+=cut
+
+=item check_archive_files($files);
+
+Checks if all of the files in the archive are contained in one B<main>
+directory, and spits out a warning if they are not. Also checks if
+B<one or more> of the files is an absolute path, and if so it throws an
+exception, because absolute paths could potentially overwrite important system
+files messing up your computer.
+
+=cut
+
+sub check_archive_files {
+    my $files = shift;
+    # Determine if *all* files are in the same directory.
+    my %dir;
+    for my $path (@$files) {
+        my ($volume,$directories,$file) = splitpath($path); 
+        my @dirs = splitdir($directories);
+
+        die <<EOD if file_name_is_absolute($path);
+App-Fetchware: run-time error. The archive you asked fetchware to download has
+one or more files with an absolute path. Absolute paths in archives is
+dangerous, because the files could potentially overwrite files anywhere in the
+filesystem including important system files. That is why this is a fatal error
+that cannot be ignored. See perldoc App::Fetchware.
+Absolute path [$path].
+EOD
+
+        $dir{$dirs[0]}++;
+    }
+    
+    warn <<EOD if keys %dir > 1;
+App-Fetchware: run-time warning. The archive you asked Fetchware to download 
+does *not* have *all* of its files in one and only one containing directory.
+This is not a problem for fetchware, because it does all of its downloading,
+unarchive, and building in a temporary directory that makes it easy to
+automatically delete all of the files when fetchware is done with them. See
+perldoc App::Fetchware.
+EOD
+
+    return 'Files good';
+}
+
+
+
+
+
+
+
 # New hooks here!!!!!
 
 
@@ -1512,6 +1634,7 @@ EOS
 
     # Call File::Temp's cleanup subrouttine to delete fetchware's temp
     # directory.
+    ###BUGALERT### Below doesn't seem to work!!
     File::Temp::cleanup();
     ###BUGALERT### Should end() clear %FW for next invocation of App::Fetchware
     # Clear %FW for next run of App::Fetchware.
@@ -1883,6 +2006,23 @@ EOS
 
     # The caller needs the $filename to determine the $FW{PackagePath} later.
     diag("httpFILE[$filename]");
+    return $filename;
+}
+
+
+
+=item just_filename($path);
+
+Uses File::Spec::Functions splitpath() to chop off everything except the
+filename of the provided $path. Does zero error checking, so it will return
+whatever value splitpath() returns as its last return value.
+
+=cut
+
+sub just_filename {
+    my $path = shift;
+    my ($volume, $directories, $filename) = splitpath($path);
+
     return $filename;
 }
 
