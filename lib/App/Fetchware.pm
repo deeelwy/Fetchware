@@ -1987,7 +1987,7 @@ automate this for you.
 =cut
 
 sub make_clean {
-    systemx('make', 'clean');
+    system('make', 'clean');
     chdir(updir()) or fail(q{Can't chdir(updir())!});
 }
 
