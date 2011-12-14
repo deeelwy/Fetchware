@@ -68,6 +68,16 @@ dangerous, because the files could potentially overwrite files anywhere in the
 filesystem including important system files. That is why this is a fatal error
 that cannot be ignored. See perldoc App::Fetchware.
 Absolute path [/absolute/path/].
+NOTE: Due to limitations in Archive::Extract any absolute paths have *already*
+been extracted! Bug they are listed below in case you would like to see which
+ones they are.
+[
+samedir/blah/file/who.cares
+samedir/not/a/rea/file/but/who.cares
+samedir/a/real/file/just/joking
+samedir/why/am/i/adding/yet/another/worthless/fake.file
+/absolute/path/
+]
 EOE
     pop @$fake_file_paths;
 
@@ -101,11 +111,15 @@ subtest 'test unarchive()' => sub {
     ok(unarchive(), 'checked unarchive() success');
 
     $FW->{PackagePath} = devnull();
-    eval_ok(sub {unarchive()},
-        # note this error message is from Archive::Extract, which croaks on
-        # errors.
-        qr/Can't call method "files" on an undefined value/,
-        'checked unarchive failure');
+    # note this error message is from Archive::Extract, which croaks on
+    # errors.
+    {
+        local $SIG{__WARN__} = sub {
+        unarchive();
+        like($_[0], q{Cannot determine file type for '/dev/null'},
+            'checked unarchive failure');
+        }
+    }
 
 ###HOWTOTEST### I'm not sure how to test unarchive() failing to list and and
 #failing to unarchive files. Maybe I could create archives that can get past the

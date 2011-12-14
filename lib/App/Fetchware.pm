@@ -1505,9 +1505,12 @@ C<$FW{BuildPath}>
 
 =over
 =item LIMITATIONS
-Uses gpg command line or Crypt::OpenPGP for Windows, and the interface to gpg is
-a little brittle, while Crypt::OpenPGP is complex, poorly maintained, and bug
-ridden, but still usable.
+Depends on Archive::Extract, so it is stuck with Archive::Extract's limitations.
+
+Archive::Extract prevents fetchware from checking if there is an absolute path
+in the archive, and throwing a fatal error, because Archive::Extract B<only>
+extracts files it gives you B<zero> chance of listing them except after you
+already extract them.
 =back
 
 =cut
@@ -1515,24 +1518,28 @@ ridden, but still usable.
 sub unarchive {
     ###BUGALERT### fetchware needs Archive::Zip, which is *not* one of
     #Archive::Extract's dependencies.
-my $ae = Archive::Extract->new(archive => "$FW{PackagePath}");
+    diag("PP[$FW{PackagePath}]");
+    my $ae = Archive::Extract->new(archive => "$FW{PackagePath}");
 
-    # list files.
-    my $files = $ae->files();
-#    die <<EOD if not defined $files;
-#App-Fetchware: run-time error. Fetchware failed to list the files in  the
-#archive it downloaded [$FW{PackagePath}]. The error message is
-#[@{[$ae->error()]}].  See perldoc App::Fetchware.
-#EOD
-
-    
-    check_archive_files($files);
-
+###BUGALERT### Files are listed *after* they're extracted, because
+#Archive::Extract *only* extracts files and then lets you see what files were
+#*already* extracted! This is a huge limitation that prevents me from checking
+#if an archive has an absolute path in it.
     $ae->extract() or die <<EOD;
 App-Fetchware: run-time error. Fetchware failed to extract the archive it
 downloaded [$FW{PackagePath}]. The error message is [@{[$ae->error()]}].
 See perldoc App::Fetchware.
 EOD
+
+    # list files.
+    my $files = $ae->files();
+    die <<EOD if not defined $files;
+App-Fetchware: run-time error. Fetchware failed to list the files in  the
+archive it downloaded [$FW{PackagePath}]. The error message is
+[@{[$ae->error()]}].  See perldoc App::Fetchware.
+EOD
+
+    check_archive_files($files);
 }
 
 
@@ -1566,22 +1573,37 @@ sub check_archive_files {
     # Determine if *all* files are in the same directory.
     my %dir;
     for my $path (@$files) {
-        my ($volume,$directories,$file) = splitpath($path); 
-        my @dirs = splitdir($directories);
 
-        die <<EOD if file_name_is_absolute($path);
+###BUGALERT### Archive::Extract *only* extracts files! $ae->files() is an
+#accessor method to an arrayref of files that it has *already* extracted! This
+#extreme limitation may be circumvented in the future by using Archive::Tar and
+#Archive::Zip to list files, but I'm not fixing it now.
+        my $error = <<EOE;
 App-Fetchware: run-time error. The archive you asked fetchware to download has
 one or more files with an absolute path. Absolute paths in archives is
 dangerous, because the files could potentially overwrite files anywhere in the
 filesystem including important system files. That is why this is a fatal error
 that cannot be ignored. See perldoc App::Fetchware.
 Absolute path [$path].
-EOD
+NOTE: Due to limitations in Archive::Extract any absolute paths have *already*
+been extracted! Bug they are listed below in case you would like to see which
+ones they are.
+EOE
+        $error .= "[\n";
+        $error .= join("\n", @$files);
+        $error .= "\n]\n";
+        die $error if file_name_is_absolute($path);
+
+        my ($volume,$directories,$file) = splitpath($path); 
+        my @dirs = splitdir($directories);
 
         $dir{$dirs[0]}++;
     }
-    
-    warn <<EOD if keys %dir > 1;
+
+    my $i = 0;
+    for my $dir (keys %dir) {
+        $i++;
+        warn <<EOD if $i > 1;
 App-Fetchware: run-time warning. The archive you asked Fetchware to download 
 does *not* have *all* of its files in one and only one containing directory.
 This is not a problem for fetchware, because it does all of its downloading,
@@ -1589,6 +1611,11 @@ unarchive, and building in a temporary directory that makes it easy to
 automatically delete all of the files when fetchware is done with them. See
 perldoc App::Fetchware.
 EOD
+    
+        # Set $FW{BuildPath}
+        $FW{BuildPath} = $dir; #BuildPath should be a key not a value.
+        diag("BUILDPATH[$FW{BuildPath}]");
+    }
 
     return 'Files good';
 }
