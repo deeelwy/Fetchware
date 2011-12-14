@@ -374,19 +374,19 @@ make_config_sub() except for fetchware() and override().
 =cut
 
 BEGIN { # BEGIN BLOCK due to api subs needing prototypes.
+###BUGALERT### Replace BEGIN & eval's with AUTOLOAD???
     my @api_functions = (
         [ filter => 'ONE' ],
         [ temp_dir => 'ONE' ],
         [ user => 'ONE' ],
-        [ prefix => 'ONE' ],
-        [ configure_options=> 'ONE' ],
-        [ make_options => 'ONE' ],
-        [ build_commands => 'ONE' ],
-        [ install_commands => 'ONE' ],
+        [ prefix => 'ONEARRREF' ],
+        [ configure_options=> 'ONEARRREF' ],
+        [ make_options => 'ONEARRREF' ],
+        [ build_commands => 'ONEARRREF' ],
+        [ install_commands => 'ONEARRREF' ],
         [ lookup_url => 'ONE' ],
         [ lookup_method => 'ONE' ],
         [ gpg_key_url => 'ONE' ],
-        [ gpg_sig_url => 'ONE' ],
         [ sha1_url => 'ONE' ],
         [ md5_url => 'ONE' ],
         [ verify_method => 'ONE' ],
@@ -412,6 +412,7 @@ App::Fetchware.
 EOD
         use Test::More;
         unless ($one_or_many_values eq 'ONE'
+                or $one_or_many_values eq 'ONEARRREF',
                 or $one_or_many_values eq 'MANY'
                 or $one_or_many_values eq 'BOOLEAN') {
             die <<EOD;
@@ -427,7 +428,7 @@ EOD
                 ###BUGALERT### the ($) sub prototype needed for ditching parens must
                 #be seen at compile time. Is "eval time" considered compile time?
                 my $eval = <<'EOE'; 
-sub $name ($) {
+sub $name (@) {
     my $value = shift;
     
     die <<EOD if defined $FW{$name};
@@ -436,18 +437,55 @@ Fetchwarefile. Currently only mirror supports being used more than once in a
 Fetchwarefile, but you have used $name more than once. Please remove all calls
 to $name but one. See perldoc App::Fetchware.
 EOD
-    $FW{$name} = $value;
+    unless (@_) {
+        $FW{$name} = $value;
+    } else {
+        die <<EOD;
+App-Fetchware: internal syntax error. $name was called with more than one
+option. $name only supports just one option such as '$name 'option';'. It does
+not support more than one option such as '$name 'option', 'another option';'.
+Please chose one option not both, or combine both into one option. See perldoc
+App::Fetchware.
+EOD
+    }
 }
 1; # return true from eval
 EOE
                 $eval =~ s/\$name/$name/g;
                 eval $eval or die <<EOD;
-App-Fetchware: internal operational error: make_config_sub()'s internal eval()
+1App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [$@]. See perldoc App::Fetchware.
 EOD
-            } when('MANY') {
+            } when('ONEARRREF') {
+                ###BUGALERT### the (@) sub prototype needed for ditching parens must
+                #be seen at compile time. Is "eval time" considered compile time?
+                my $eval = <<'EOE'; 
+sub $name (@) {
+    my $value = shift;
+    
+    die <<EOD if defined $FW{$name};
+App-Fetchware: internal syntax error: $name was called more than once in this
+Fetchwarefile. Currently only mirror supports being used more than once in a
+Fetchwarefile, but you have used $name more than once. Please remove all calls
+to $name but one. See perldoc App::Fetchware.
+EOD
+    unless (@_) {
+        $FW{$name} = $value;
+    } else {
+        $FW{$name} = [$value, @_];
+    }
+}
+1; # return true from eval
+EOE
+                $eval =~ s/\$name/$name/g;
+                eval $eval or die <<EOD;
+2App-Fetchware: internal operational error: make_config_sub()'s internal eval()
+call failed with the exception [$@]. See perldoc App::Fetchware.
+EOD
+            }
+            when('MANY') {
                 my $eval = <<'EOE';
-sub $name ($) {
+sub $name (@) {
     my $value = shift;
 
     if (defined $FW{$name} and ref $FW{$name} ne 'ARRAY') {
@@ -459,17 +497,21 @@ EOD
     }
 
     push @{$FW{$name}}, $value;
+
+    # Support multiple arguments specified on the same line. like:
+    # mirror 'http://djfjf.com/a', 'ftp://kdjfjkl.net/b';
+    push @{$FW{$name}}, @_ if @_;
 }
 1; # return true from eval
 EOE
                 $eval =~ s/\$name/$name/g;
                 eval $eval or die <<EOD;
-App-Fetchware: internal operational error: make_config_sub()'s internal eval()
+3App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [\$@]. See perldoc App::Fetchware.
 EOD
             } when('BOOLEAN') {
                 my $eval = <<'EOE';
-sub $name ($) {
+sub $name (@) {
     my $value = shift;
 
     die <<EOD if defined $FW{$name};
@@ -486,13 +528,24 @@ EOD
             $value = 0;
         }
     }
-    $FW{$name} = $value;
+
+    unless (@_) {
+        $FW{$name} = $value;
+    } else {
+        die <<EOD;
+App-Fetchware: internal syntax error. $name was called with more than one
+option. $name only supports just one option such as '$name 'option';'. It does
+not support more than one option such as '$name 'option', 'another option';'.
+Please chose one option not both, or combine both into one option. See perldoc
+App::Fetchware.
+EOD
+    }
 }
 1; # return true from eval
 EOE
                 $eval =~ s/\$name/$name/g;
                 eval $eval or die <<EOD;
-App-Fetchware: internal operational error: make_config_sub()'s internal eval()
+4App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [\$@]. See perldoc App::Fetchware.
 EOD
             }
