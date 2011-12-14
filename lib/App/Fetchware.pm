@@ -95,6 +95,7 @@ our %EXPORT_TAGS = (
         eval_ok
         skip_all_unless_release_testing
         clear_FW
+        make_clean
         start
         lookup
         download
@@ -379,7 +380,7 @@ BEGIN { # BEGIN BLOCK due to api subs needing prototypes.
         [ filter => 'ONE' ],
         [ temp_dir => 'ONE' ],
         [ user => 'ONE' ],
-        [ prefix => 'ONEARRREF' ],
+        [ prefix => 'ONE' ],
         [ configure_options=> 'ONEARRREF' ],
         [ make_options => 'ONEARRREF' ],
         [ build_commands => 'ONEARRREF' ],
@@ -1675,6 +1676,124 @@ EOD
 
 
 
+=item build()
+
+=over
+=item Configuration subroutines used:
+=over
+=item prefix
+=item configure_options
+=item make_options
+=item build_commands
+=back
+=back
+
+Changes directory to C<$FW{BuildPath}>, and then executes the default build
+commands of C<'./configure', 'make', 'make install'> unless your Fetchwarefile
+specifies some build options like C<build_commands 'exact, build, commands';>,
+C<make_options '-j4';>, C<configure_options '--prefix=/usr/local';>, or
+C<prefix '/usr/local'>.
+
+=over
+=item LIMITATIONS
+build() likeinstall() inteligently parses C<build_commands>, C<prefix>,
+C<make_options>, and C<configure_options> by C<split()ing> on C</,\s+/>, and
+then C<split()ing> again on C<' '>, and then execute them using
+L<IPC::System::Simple>'s system().
+
+Also, simply executes the commands you specify or the default ones if you
+specify none. Fetchware will check if the commands you specify exist and are
+executable, but the kernel will do it for you and any errors will be in
+fetchware's output.
+=back
+
+=cut
+
+sub build {
+    # Cd to $FW{BuildPath}.
+    chdir $FW{BuildPath} or die <<EOD;
+App-Fetchware: run-time error. Failed to chdir to the directory fetchware
+unarchived [$FW{BuildPath}]. See perldoc App::Fetchware.
+EOD
+
+
+    # If build_commands is set, then all other build config options are ignored.
+    if (defined $FW{build_commands}) {
+        # Support multiple options like build_command './configur', 'make';
+        for my $build_command
+            (ref $FW{build_commands} eq 'ARRAY'
+                ? @{$FW{build_commands}}
+                : $FW{build_commands}) {
+            # Dequote build_commands they just get in the way.
+            my $dequoted_commands = $build_command;
+            $dequoted_commands =~ s/'|"//g;
+            # split build_commands on ,\s+ and execute them.
+            my @build_commands = split /,\s+/, $dequoted_commands;
+
+            for my $build_command (@build_commands) {
+                my ($cmd, @options) = split ' ', $build_command;
+                system($cmd, @options);
+            }
+        }
+    # Otherwise handle the other options properly.
+    } elsif (
+        defined $FW{configure_options}
+        or defined $FW{prefix}
+        or defined $FW{make_options}
+    ) {
+        my $configure = './configure';
+        if ($FW{configure_options}) {
+            # Support multiple options like configure_options '--prefix', '.';
+            for my $configure_option
+                (ref $FW{configure_options} eq 'ARRAY'
+                ? @{$FW{configure_options}}
+                : $FW{configure_options}) {
+
+                $configure .= " $configure_option";
+                diag("configureopts[$configure]");
+            }
+        } elsif ($FW{prefix}) {
+            if ($configure =~ /--prefix/) {
+                die <<EOD;
+App-Fetchware: run-time error. You specified both the --prefix option twice.
+Once in 'prefix' and once in 'configure_options'. You may only specify prefix
+once in either configure option. See perldoc App::Fetchware.
+EOD
+            } else {
+                $configure .= " --prefix=$FW{prefix}";
+                diag("prefixaddingprefix[$configure]");
+            }
+        }
+        
+        # Now lets execute the modifed standard commands.
+        # First ./configure.
+        my ($cmd, @options) = split ' ', $configure;
+        system($cmd, @options);
+
+        # Next, make.
+        if (defined $FW{make_options}) {
+            my @make_options;
+            # Support multiple options like make_options '-j', '4';
+            for my $make_option
+                (ref $FW{make_options} eq 'ARRAY'
+                ? @{$FW{make_options}}
+                : $FW{make_options}) {
+                push @make_options, $make_option;
+            }
+
+            system('make', @make_options)
+        } else {
+            system('make');
+        }
+
+    # Execute the default commands.
+    } else {
+        system($_) for qw(./configure make);
+    }
+    
+    # Return success.
+    return 'build succeeded';
+}
 
 
 
@@ -1791,6 +1910,21 @@ suite.
 sub clear_FW {
     %FW = ();
 }
+
+=item make_clean
+
+Runs C<make clean> and then chdirs to the parent directory. This subroutine is
+used in build() and install()'s test scripts to run make clean in between test
+runs. If you override build() or install() you may wish to use make_clean to
+automate this for you.
+
+=cut
+
+sub make_clean {
+    system('make', 'clean');
+    chdir(updir()) or fail(q{Can't chdir(updir())!});
+}
+
 
 
 
