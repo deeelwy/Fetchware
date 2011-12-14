@@ -111,7 +111,7 @@ subtest 'test unarchive()' => sub {
     ok(unarchive(), 'checked unarchive() success');
 
     $FW->{PackagePath} = devnull();
-    # note this error message is from Archive::Extract, which croaks on
+    # note this error message is from Archive::Extract, which carps on
     # errors.
     {
         local $SIG{__WARN__} = sub {
