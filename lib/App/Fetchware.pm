@@ -10,7 +10,7 @@ use Net::FTP;
 use HTTP::Tiny;
 use HTML::TreeBuilder;
 use Scalar::Util 'blessed';
-use IPC::System::Simple 'system'; # remove me later???
+use IPC::System::Simple 'systemx'; # remove me later???
 use Digest;
 use Digest::SHA;
 use Digest::MD5;
@@ -1328,19 +1328,19 @@ EOD
 ##DOESNTWORK??            return undef;
 ##DOESNTWORK??        }
 ###BUGALERT###    } else {
-###BUGALERT###        ###BUGALERT### eval the system()'s below & add better error reporting in
+###BUGALERT###        ###BUGALERT### eval the systemx()'s below & add better error reporting in
 ###BUGALERT###        ###BUGALERT### if Crypt::OpenPGP works ok remove gpg support & this if &
         #IPC::System::Simple dependency.
         #my standard format.
         # Use automatic key retrieval & a cool pool of keyservers
         ###BUGALERT## Give Crypt::OpenPGP another try with
         #pool.sks-keyservers.net
-        system('gpg', '--keyserver', 'pool.sks-keyservers.net',
+        systemx('gpg', '--keyserver', 'pool.sks-keyservers.net',
             '--keyserver-options', 'auto-key-retrieve=1',
             '--homedir', '.',  "$sig_file");
 
         # Verify sig.
-#        system('gpg', '--homedir', '.', '--verify', "$sig_file");
+#        systemx('gpg', '--homedir', '.', '--verify', "$sig_file");
 ###BUGALERT###    }
 
     # Return true indicating the package was verified.
@@ -1696,7 +1696,7 @@ C<prefix '/usr/local'>.
 build() likeinstall() inteligently parses C<build_commands>, C<prefix>,
 C<make_options>, and C<configure_options> by C<split()ing> on C</,\s+/>, and
 then C<split()ing> again on C<' '>, and then execute them using
-L<IPC::System::Simple>'s system().
+L<IPC::System::Simple>'s systemx().
 
 Also, simply executes the commands you specify or the default ones if you
 specify none. Fetchware will check if the commands you specify exist and are
@@ -1729,7 +1729,7 @@ EOD
 
             for my $build_command (@build_commands) {
                 my ($cmd, @options) = split ' ', $build_command;
-                system($cmd, @options);
+                systemx($cmd, @options);
             }
         }
     # Otherwise handle the other options properly.
@@ -1765,7 +1765,7 @@ EOD
         # Now lets execute the modifed standard commands.
         # First ./configure.
         my ($cmd, @options) = split ' ', $configure;
-        system($cmd, @options);
+        systemx($cmd, @options);
 
         # Next, make.
         if (defined $FW{make_options}) {
@@ -1778,14 +1778,14 @@ EOD
                 push @make_options, $make_option;
             }
 
-            system('make', @make_options)
+            systemx('make', @make_options)
         } else {
-            system('make');
+            systemx('make');
         }
 
     # Execute the default commands.
     } else {
-        system($_) for qw(./configure make);
+        systemx($_) for qw(./configure make);
     }
     
     # Return success.
@@ -1810,7 +1810,7 @@ whatever C<install_commands 'install, commands';> if its defined.
 =item LIMITATIONS
 install() like build() inteligently parses C<install_commands> by C<split()ing>
 on C</,\s+/>, and then C<split()ing> again on C<' '>, and then execute them
-using L<IPC::System::Simple>'s system().
+using L<IPC::System::Simple>'s systemx().
 
 Also, simply executes the commands you specify or the default ones if you
 specify none. Fetchware will check if the commands you specify exist and are
@@ -1835,14 +1835,14 @@ sub install {
 
             for my $install_command (@install_commands) {
                 my ($cmd, @options) = split ' ', $install_command;
-                system($cmd, @options);
+                systemx($cmd, @options);
             }
         }
     } else {
         if (defined $FW{make_options}) {
-            system('make', 'install', $FW{make_options})
+            systemx('make', 'install', $FW{make_options})
         } else {
-            system('make', 'install');
+            systemx('make', 'install');
         }
     }
 
@@ -1984,7 +1984,7 @@ automate this for you.
 =cut
 
 sub make_clean {
-    system('make', 'clean');
+    systemx('make', 'clean');
     chdir(updir()) or fail(q{Can't chdir(updir())!});
 }
 

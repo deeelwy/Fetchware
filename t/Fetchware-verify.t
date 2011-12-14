@@ -7,7 +7,6 @@ use diagnostics;
 use 5.010;
 
 use Fcntl ':mode';
-use IPC::System::Simple 'system';
 use File::Spec::Functions 'devnull';
 use File::Copy 'cp';
 
