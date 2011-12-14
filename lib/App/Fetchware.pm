@@ -1821,6 +1821,9 @@ fetchware's output.
 =cut
 
 sub install {
+    # Skip installation if the user requests it.
+    return 'installation skipped!' if $FW{no_install};
+
     if (defined $FW{install_commands}) {
         # Support multiple options like install_commands 'make', 'install';
         for my $install_command

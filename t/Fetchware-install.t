@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '6'; #Update if this changes.
+use Test::More 0.98 tests => '7'; #Update if this changes.
 use File::Copy 'cp';
 
 # Set PATH to a known good value.
@@ -85,6 +85,14 @@ subtest 'test install() install_commands success' => sub {
     install_commands 'make install', 'make clean';
     ok(install(), 'checked install() install_commands success.');
     delete $FW->{install_commands};
+};
+
+
+subtest 'test install() no_install success' => sub {
+    no_install 'True';
+
+    is(install(), 'installation skipped!',
+        'checked install() no_install success');
 };
 
 
