@@ -1060,7 +1060,6 @@ EOD
 
 
 
-
 =item download()
 
 =over
@@ -1125,7 +1124,6 @@ sub determine_package_path {
     # HTTP::Tiny downloaded.
     return catfile($tempdir, $filename)
 }
-
 
 
 
@@ -1541,7 +1539,6 @@ EOD
 
 
 
-
 =item unarchive()
 
 =over
@@ -1719,7 +1716,7 @@ EOD
 
     # If build_commands is set, then all other build config options are ignored.
     if (defined $FW{build_commands}) {
-        # Support multiple options like build_command './configur', 'make';
+        # Support multiple options like build_command './configure', 'make';
         for my $build_command
             (ref $FW{build_commands} eq 'ARRAY'
                 ? @{$FW{build_commands}}
@@ -1797,8 +1794,74 @@ EOD
 
 
 
+=item install()
 
-# New hooks here!!!!!
+=over
+=item Configuration subroutines used:
+=over
+=item install_commands
+=back
+=back
+
+Executes C<make install>, which installs the specified software, or executes
+whatever C<install_commands 'install, commands';> if its defined.
+
+=over
+=item LIMITATIONS
+install() like build() inteligently parses C<install_commands> by C<split()ing>
+on C</,\s+/>, and then C<split()ing> again on C<' '>, and then execute them
+using L<IPC::System::Simple>'s system().
+
+Also, simply executes the commands you specify or the default ones if you
+specify none. Fetchware will check if the commands you specify exist and are
+executable, but the kernel will do it for you and any errors will be in
+fetchware's output.
+=back
+
+=cut
+
+sub install {
+    if (defined $FW{install_commands}) {
+        # Support multiple options like install_commands 'make', 'install';
+        for my $install_command
+            (ref $FW{install_commands} eq 'ARRAY'
+                ? @{$FW{install_commands}}
+                : $FW{install_commands}) {
+            # Dequote install_commands they just get in the way.
+            my $dequoted_commands = $install_command;
+            $dequoted_commands =~ s/'|"//g;
+            # split install_commands on /,\s+/ and execute them.
+            my @install_commands = split /,\s+/, $dequoted_commands;
+
+            for my $install_command (@install_commands) {
+                my ($cmd, @options) = split ' ', $install_command;
+                system($cmd, @options);
+            }
+        }
+    } else {
+        if (defined $FW{make_options}) {
+            system('make', 'install', $FW{make_options})
+        } else {
+            system('make', 'install');
+        }
+    }
+
+    # Return success.
+    return 'install succeeded';
+}
+
+
+
+
+
+# new hooks here!
+
+
+
+
+
+
+
 
 
 =item end()
