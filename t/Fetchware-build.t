@@ -9,8 +9,6 @@ use 5.010;
 # Test::More version 0.98 is needed for proper subtest support.
 use Test::More 0.98 tests => '7'; #Update if this changes.
 use File::Copy 'cp';
-use IPC::System::Simple 'system';
-use File::Spec::Functions 'updir';
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
