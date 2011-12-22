@@ -10,13 +10,17 @@ use Net::FTP;
 use HTTP::Tiny;
 use HTML::TreeBuilder;
 use Scalar::Util 'blessed';
-use IPC::System::Simple 'systemx'; # remove me later???
+###BUGALERT### Replace IPC::System::Simple with App::Cmd, because App::Cmd is one of
+# Archive::Extract's dependencies, so I may as well use one of my dependencies'
+# dependencies so App::Fetchware users have one fewer dependency to install.
+use IPC::System::Simple 'systemx';
 use Digest;
 use Digest::SHA;
 use Digest::MD5;
 #use Crypt::OpenPGP::KeyRing;
 #use Crypt::OpenPGP;
 use Archive::Extract;
+use Sub::Override;
 use Test::More 0.98; # some utility test subroutines need it.
 
 # Enable Perl 6 knockoffs.
@@ -143,8 +147,6 @@ importantly> also Fetchwarefile's configuration file syntax See the SECTION
 L<FETCHWAREFILE CONFIGURATION SYNTAX> for more information regarding using these
 subroutines as Fetchwarefile configuration syntax.
 
-=cut
-
 
 =over
 
@@ -206,6 +208,10 @@ die()ing printing an error message.
 ###BUGALERT### Add a --force option to fetchware to be able to do the above on
 #the command line too.
 
+=cut
+
+
+
 =item fetchware;
 
 C<fetchware> is the subroutine that actually causes the Fetchwarefile to
@@ -221,12 +227,52 @@ override the lookup() subroutine, or you could just override one of the
 subroutines lookup() calls. It's very flexible and reusable. See
 L<CUSTOMIZING YOUR FETCHWAREFILE> below for the details.
 
-It's not fancy on purpose, because it is meant to be dead simple, and easy to
-implement and pragmatic.  
+It's not fancy on purpose, because it is meant to be pragmatic and dead simple
+as well as easy to implement.  
 
 =back
 
 =cut
+
+sub fetchware () {
+    die <<EOD if @_;
+App-Fetchware: Fetchwarefile syntax error. You specified arguments to
+'fetchware;', but 'fetchware;' does not take any arguments, and it is a fatal
+syntax error to specify any. Please remove the arguments to 'fetchware;'. See
+perldoc App::Fetchware.
+EOD
+    # Tell bin/fetchware that fetchware actually executed.
+    _fetchware_executed('FETCHWARE_EXECUTED!!!');
+
+    # Execute the subroutines that implement each piece of fetchware's
+    # functionality.
+    start();
+    lookup();
+    download();
+    verify();
+    unarchive();
+    build();
+    ###BUGALERT### Install should only be called by bin/fetchware when packages are actualy
+    # installed!!!
+    install();
+    end();
+
+    # Return true to caller.
+    return 'fetchware fetched!';
+}
+
+# Undocumented internal subroutine that tells bin/fetchware or any caller that
+# fetchware was executed.
+sub _fetchware_executed {
+    my $did_fetchware_execute = shift;
+
+    my $fetchware_executed;
+    if ($did_fetchware_execute eq 'FETCHWARE_EXECUTED!!!') {
+        $fetchware_executed = 1;
+    } else {
+        return 'Fetchware executed!';
+    }
+}
 
 
 
@@ -244,11 +290,11 @@ would like to replace as explained below.
 If you also would like to have access to the functions fetchware itself uses to
 implement each step, then specify the :OVERRIDE_<STEPNAME> tag when C<use>ing
 App::Fetchware like C<use App::Fetchware :OVERRIDE_LOOKUP> to import the
-subroutines fetchware itself uses to import the lookup() step of installation.
-You can also use C<:OVERRIDE_ALL> to import all of the subroutines fetchware uses
-to implement its behavior.  Feel free to specify a list of the specifc
-subroutines that you need to avoid namespace polution, or install and use
-L<Sub::Exporter> if you demand more control over imports.
+subroutines fetchware itself uses to implement the lookup() step of
+installation.  You can also use C<:OVERRIDE_ALL> to import all of the
+subroutines fetchware uses to implement its behavior.  Feel free to specify a
+list of the specifc subroutines that you need to avoid namespace polution, or
+install and use L<Sub::Import> if you demand more control over imports.
 
 =cut
 
@@ -260,38 +306,57 @@ Used instead of C<fetchware;> to override fetchware's default behavior. This
 should only be used if fetchware's configuration options do B<not> provide the
 customization that your particular program may need.
 
-The LIST your provide is a fake hash of steps you want to override as keys and a
-coderef to a replacement subroutine like:
-C<override lookup => \&overridden_lookup;>
+The LIST your provide is a fake hash of steps you want to override as keys and
+the coderefs to a replacement  those subroutines like:
 
+=over
+override lookup => \&overridden_lookup,
+    download => sub { code refs work too; };
+=back
 
 
 =cut
 
 sub override (@) {
     my %opts = @_;
+    #diag("OVERRIDE");
+    #$Data::Dumper::Deparse = 1; # Turn on deparsing coderefs.
+    #diag explain \%opts;
 
     # override the parts that need overriden as specified in %opts.
 
     # Then execute just like fetchware; does, but exchanging the default steps
     # with the overriden ones.
 
-    die <<EOD if %opts = ();
+    die <<EOD if keys %opts == 0;
 App-Fetchware: syntax error: you called override with no options. It must be
-called with a fake hash of name value pairs where the names are the names of the
-Fetchwarefile steps you would like to override, and the values are a coderef to
-a subroutine that implements that steps behavior. See perldoc App::Fetchware.
+called with a fake hash of name => value, pairs where the names are the names of
+the Fetchwarefile steps you would like to override, and the values are a coderef
+to a subroutine that implements that steps behavior. See perldoc App::Fetchware.
 EOD
 
-    ###BUGALERT### update to support all of the subs that lookup() and etc...
-    #call. Update pod above accordingly.
-    defined $opts{lookup} ? $opts{lookup}->() : lookup();
-    defined $opts{download} ? $opts{download}->() : download();
-    defined $opts{verify} ? $opts{verify}->() : verify();
-    defined $opts{unarchive} ? $opts{unarchive}->() : unarchive();
-    defined $opts{build} ? $opts{build}->() : build();
-    defined $opts{install} ? $opts{install}->() : install();
 
+    my $override = Sub::Override->new();
+
+    for my $sub (keys %opts) {
+        die <<EOD unless grep { $_ eq $sub } @EXPORT_OK;
+App-Fetchware: run-time error. override was called specifying a subroutine to
+override that it is not allowed to override. override is only allowed to
+override App::Fetchware's *own* routines as listed in [@EXPORT_OK].
+See perldoc App::Fetchware.
+EOD
+        $override->replace("App::Fetchware::$sub", $opts{$sub});
+    }
+    #diag("Did I override them?");
+    #diag explain $override;
+
+    # Call fetchware after overriding what ever subs that need overridden.
+    fetchware;
+
+    # When $override falls out of scope at the end of 
+
+    # Return success.
+    return 'overrode specified subs and executed them';
 }
 
 # End over CUSTOMIZING YOUR FETCHWAREFILE.
@@ -1026,7 +1091,8 @@ sub lookup_determine_downloadurl {
     $_->[0] =~ /^(:?latest|current)[_-]is(.*)$/i for @$file_listing;
     my $latest_version = $1;
     diag("latestver[$latest_version]");
-    @$file_listing = grep { $_->[0] =~ /$latest_version/ } @$file_listing;
+    @$file_listing = grep { $_->[0] =~ /$latest_version/ } @$file_listing
+        if defined$latest_version;
 
     # Determine the $FW{DownloadURL} based on the sorted @$file_listing by
     # finding a downloadable file (a tarball or zip archive).
@@ -1035,19 +1101,19 @@ sub lookup_determine_downloadurl {
     for my $fl (@$file_listing) {
         given ($fl->[0]) {
             when (/\.tar\.xz$/) {
-                return catfile($FW{lookup_url}, $fl->[0]);
+                return "$FW{lookup_url}/$fl->[0]";
             } when (/\.txz$/) {
-                return catfile($FW{lookup_url}, $fl->[0]);
+                return "$FW{lookup_url}/$fl->[0]";
             } when (/\.tar\.bz2$/) {
-                return catfile($FW{lookup_url}, $fl->[0]);
+                return "$FW{lookup_url}/$fl->[0]";
             } when (/\.tbz$/) {
-                return catfile($FW{lookup_url}, $fl->[0]);
+                return "$FW{lookup_url}/$fl->[0]";
             } when (/\.tar\.gz$/) {
-                return catfile($FW{lookup_url}, $fl->[0]);
+                return "$FW{lookup_url}/$fl->[0]";
             } when (/\.tgz$/) {
-                return catfile($FW{lookup_url}, $fl->[0]);
+                return "$FW{lookup_url}/$fl->[0]";
             } when (/\.zip$/) {
-                return catfile($FW{lookup_url}, $fl->[0]);
+                return "$FW{lookup_url}/$fl->[0]";
             }
         }
     }
@@ -1708,10 +1774,13 @@ fetchware's output.
 
 sub build {
     # Cd to $FW{BuildPath}.
+    use Cwd;
+    diag("before[@{[cwd()]}]");
     chdir $FW{BuildPath} or die <<EOD;
 App-Fetchware: run-time error. Failed to chdir to the directory fetchware
 unarchived [$FW{BuildPath}]. See perldoc App::Fetchware.
 EOD
+    diag("after[@{[cwd()]}]");
 
 
     # If build_commands is set, then all other build config options are ignored.
@@ -2134,9 +2203,9 @@ sub download_file {
 
     my $filename;
     given ($url) {
-        when (m!^ftp://.*$!) {
+        when (m!^ftp://!) {
             $filename = download_ftp_url($url);
-        } when (m!^http://.*$!) {
+        } when (m!^http://!) {
             $filename = download_http_url($url);
         } default {
             die <<EOD;

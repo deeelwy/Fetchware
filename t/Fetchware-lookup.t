@@ -282,7 +282,7 @@ subtest 'test lookup_determine_downloadurl()' => sub {
         [ 'httpd-2.2.21.tar.gz.asc', '999909121702' ],
     ];
     is(lookup_determine_downloadurl($current_file_list),
-        'ftp:/carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
 
 ###BUGALERT### Make test_filename_listing() usable again supporting both ftp and
@@ -292,7 +292,7 @@ subtest 'test lookup_determine_downloadurl()' => sub {
             grep { $_->[0] !~ /^(:?latest|current)[_-]is(.*)$/i } @$current_file_list;
 
     is(lookup_determine_downloadurl($no_current_file_list),
-        'ftp:/carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
 
     # The weird argument below needs to be a array of arrays.
@@ -310,7 +310,7 @@ subtest 'test lookup_by_timestamp()' => sub {
     skip_all_unless_release_testing();
 
     is(lookup_by_timestamp(test_filename_listing('no current')),
-        'ftp:/carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'check lookup_by_timestamp() success.');
 
 };
@@ -320,7 +320,7 @@ subtest 'test lookup_by_versionstring()' => sub {
     skip_all_unless_release_testing();
 
     is(lookup_by_versionstring(test_filename_listing('no current')),
-        'ftp:/carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'check lookup_by_versionstring() success.');
 
 }; 
@@ -344,7 +344,7 @@ subtest 'test determine_download_url()' => sub {
     determine_download_url();
     
     is($FW->{DownloadURL},
-        'ftp:/carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
     
     # Clear App::Fetchware's %FW variable so I can test it with custom
@@ -365,7 +365,7 @@ subtest 'test determine_download_url()' => sub {
     determine_download_url();
     
     is($FW->{DownloadURL},
-        'ftp:/carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
 
 };
@@ -387,7 +387,7 @@ subtest 'test lookup()' => sub {
     lookup();
 
     is($FW->{DownloadURL},
-        'ftp:/carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
 
 };
