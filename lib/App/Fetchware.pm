@@ -643,15 +643,15 @@ sub start {
     # processes process id), and cleaning up at program exit.
     ###BUGALERT### WTF is returned by tempdir???
     my $exception;
+    my $temp_dir;
     eval {
-        #$FW{TempDir} = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1,);# CLEANUP => 1);
-        $FW{TempDir} = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+        $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
 
         # Must chown 700 so gpg's localized keyfiles are good.
-        chown 0700, $FW{TempDir};
+        chown 0700, $temp_dir;
 
         use Test::More;
-        diag("tempdir[$FW{TempDir}]");
+        diag("tempdir[$temp_dir]");
         $exception = $@;
         1; # return true unless an exception is thrown.
     } or die <<EOD;
@@ -665,12 +665,14 @@ EOD
     # Change directory to $FW{TempDir} to make unarchiving and building happen
     # in a temporary directory, and to allow for multiple concurrent fetchware
     # runs at the same time.
-    chdir $FW{TempDir} or die <<EOD;
+    chdir $temp_dir or die <<EOD;
 App-Fetchware: run-time error. Fetchware failed to change its directory to the
 temporary directory that it successfully created. This just shouldn't happen,
 and is weird, and may be a bug. See perldoc App::Fetchware.
 EOD
     diag("cwd[@{[cwd()]}]");
+
+    return $temp_dir;
 }
 
 

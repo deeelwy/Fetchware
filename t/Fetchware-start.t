@@ -37,9 +37,9 @@ my $FW = App::Fetchware::__FW();
 subtest 'test start()' => sub {
     skip_all_unless_release_testing();
 
-    start();
+    my $temp_dir = start();
 
-    ok(-e $FW->{TempDir}, 'check start() success');
+    ok(-e $temp_dir, 'check start() success');
     
     # chdir() so File::Temp can delete the tempdir.
     chdir();
