@@ -1761,7 +1761,7 @@ EOD
 
 
 
-=item build()
+=item build($build_path)
 
 =over
 =item Configuration subroutines used:
@@ -1773,7 +1773,7 @@ EOD
 =back
 =back
 
-Changes directory to C<$FW{BuildPath}>, and then executes the default build
+Changes directory to $build_path, and then executes the default build
 commands of C<'./configure', 'make', 'make install'> unless your Fetchwarefile
 specifies some build options like C<build_commands 'exact, build, commands';>,
 C<make_options '-j4';>, C<configure_options '--prefix=/usr/local';>, or
@@ -1795,12 +1795,13 @@ fetchware's output.
 =cut
 
 sub build {
-    # Cd to $FW{BuildPath}.
+    my $build_path = shift;
+
     use Cwd;
     diag("before[@{[cwd()]}]");
-    chdir $FW{BuildPath} or die <<EOD;
+    chdir $build_path or die <<EOD;
 App-Fetchware: run-time error. Failed to chdir to the directory fetchware
-unarchived [$FW{BuildPath}]. See perldoc App::Fetchware.
+unarchived [$build_path]. See perldoc App::Fetchware.
 EOD
     diag("after[@{[cwd()]}]");
 

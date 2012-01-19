@@ -51,13 +51,12 @@ start();
 cp("$package_path", '.') or die "copy $package_path failed: $!";
 
 # I have to unarchive the package before I can build it.
-$FW->{PackagePath} = $package_path;
-unarchive() unless skip_all_unless_release_testing();
+my $build_path = unarchive($package_path) unless skip_all_unless_release_testing();
 
 subtest 'test build() default success' => sub {
     skip_all_unless_release_testing();
 
-    ok(build(), 'checked build() success.');
+    ok(build($build_path), 'checked build() success.');
 };
 
 
@@ -69,14 +68,14 @@ subtest 'test build() build_commands' => sub {
     skip_all_unless_release_testing();
 
     build_commands './configure, make';
-    ok(build(), 'checked build() build_command success.');
+    ok(build($build_path), 'checked build() build_command success.');
 
     # Clean up after previous build() run.
     make_clean();
 
     delete $FW->{build_commands};
     build_commands './configure', 'make';
-    ok(build(), 'checked build() build_command success.');
+    ok(build($build_path), 'checked build() build_command success.');
 
     # Clear $FW of build_commands for next subtest.
     delete $FW->{build_commands};
@@ -92,14 +91,14 @@ subtest 'test build() configure_options' => sub {
     skip_all_unless_release_testing();
 
     configure_options '--enable-etags';
-    ok(build(), 'checked build() configure_options success.');
+    ok(build($build_path), 'checked build() configure_options success.');
 
     # Clean up after previous build() run.
     make_clean();
     
     delete $FW->{configure_options};
     configure_options '--enable-etags', '--enable-tmpdir=/var/tmp';
-    ok(build(), 'checked build() configure_options success.');
+    ok(build($build_path), 'checked build() configure_options success.');
 
     # Clear $FW of configure_options for next subtest.
     delete $FW->{configure_options};
@@ -115,7 +114,7 @@ subtest 'test build() prefix success' => sub {
     skip_all_unless_release_testing();
 
     prefix '/usr/local';
-    ok(build(), 'checked build() prefix success.');
+    ok(build($build_path), 'checked build() prefix success.');
 
     # Clean up after previous build() run.
     make_clean();
@@ -146,14 +145,14 @@ subtest 'test build() make_options success' => sub {
     skip_all_unless_release_testing();
 
     make_options '-j4';
-    ok(build(), 'checked build() make_options success.');
+    ok(build($build_path), 'checked build() make_options success.');
 
     # Clean up after previous build() run.
     make_clean();
     
     delete $FW->{make_options};
     make_options '-j', '4';
-    ok(build(), 'checked build() make_options success.');
+    ok(build($build_path), 'checked build() make_options success.');
 
     # Clear $FW of configure_options for next subtest.
     delete $FW->{make_options};
