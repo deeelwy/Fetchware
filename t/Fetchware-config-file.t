@@ -25,9 +25,9 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __FW() to access App::Fetchware's internal state
+# Use extra private sub __CONFIG() to access App::Fetchware's internal state
 # variable, so that I can test that the configuration subroutines work properly.
-my $FW = App::Fetchware::__FW();
+my $CONFIG = App::Fetchware::__CONFIG();
 
 subtest 'test config file subs' => sub {
     # Test 'ONE' and 'BOOLEAN' config subs.
@@ -45,7 +45,7 @@ subtest 'test config file subs' => sub {
     no_install 'test';
     verify_failure_ok 'test';
 
-    diag explain $FW;
+    diag explain $CONFIG;
 
     for my $config_sub (qw(
         temp_dir
@@ -62,7 +62,7 @@ subtest 'test config file subs' => sub {
         no_install
         verify_failure_ok
     )) {
-        is($FW->{$config_sub}, 'test', "checked config sub $config_sub");
+        is($CONFIG->{$config_sub}, 'test', "checked config sub $config_sub");
     }
 
     # Test 'MANY' config subs.
@@ -72,17 +72,17 @@ subtest 'test config file subs' => sub {
     mirror 'test';
     mirror 'test';
 
-    diag explain $FW;
+    diag explain $CONFIG;
 
     for (my $i = 0; $i <= 4; $i++) { # Its 0 based. 4 is the 5th entry.
-        is($FW->{mirror}->[$i], 'test', 'checked config sub mirror');
+        is($CONFIG->{mirror}->[$i], 'test', 'checked config sub mirror');
     }
-    ok('Succeed', 'checked only 5 entries in mirror') if not defined $FW->{mirror}->[5];
+    ok('Succeed', 'checked only 5 entries in mirror') if not defined $CONFIG->{mirror}->[5];
 
 };
 
-# Clear %FW
-%$FW = ();
+# Clear %CONFIG
+%$CONFIG = ();
 
 subtest 'test ONEARRREF config_file_subs()' => sub {
     my @onearrref_or_not = (

@@ -26,9 +26,9 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __FW() to access App::Fetchware's internal state
+# Use extra private sub __CONFIG() to access App::Fetchware's internal state
 # variable, so that I can test that the configuration subroutines work properly.
-my $FW = App::Fetchware::__FW();
+my $CONFIG = App::Fetchware::__CONFIG();
 
 # Call start() to create & cd to a tempdir, so end() called later can delete all
 # of the files that will be downloaded.

@@ -24,9 +24,9 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __FW() to access App::Fetchware's internal state
+# Use extra private sub __CONFIG() to access App::Fetchware's internal state
 # variable, so that I can test that the configuration subroutines work properly.
-my $FW = App::Fetchware::__FW();
+my $CONFIG = App::Fetchware::__CONFIG();
 
 subtest 'OVERRIDE_LOOKUP exports what it should' => sub {
     my @expected_overide_lookup_exports = qw(
@@ -75,9 +75,9 @@ EOS
 
     # Change lookup_method to test the other 2 branches of the check_method failure
     # code.
-    $FW->{lookup_method} = 'timestamp';
+    $CONFIG->{lookup_method} = 'timestamp';
     ok(eval {check_lookup_config(); 1;}, "checked check_lookup_config() 'timestamp'");
-    $FW->{lookup_method} = 'versionstring';
+    $CONFIG->{lookup_method} = 'versionstring';
     ok(eval {check_lookup_config(); 1;}, "checked check_lookup_config() 'versionstring'");
 };
 
@@ -89,8 +89,8 @@ subtest 'test download_directory_listing()' => sub {
         $ENV{FETCHWARE_FTP_LOOKUP_URL},
         $ENV{FETCHWARE_HTTP_LOOKUP_URL}
     ) {
-        # Clear %FW, so I can call lookup_url again.
-        clear_FW();
+        # Clear %CONFIG, so I can call lookup_url again.
+        clear_CONFIG();
         # Set download type.
         # Make this a FETCHWARE_FTP_REMOTE env var in frt().
         lookup_url $lookup_url;
@@ -109,8 +109,8 @@ subtest 'test download_directory_listing()' => sub {
 subtest 'test ftp_parse_filelist()' => sub {
     skip_all_unless_release_testing();
 
-    # Clear %FW, so I can call lookup_url again.
-    clear_FW();
+    # Clear %CONFIG, so I can call lookup_url again.
+    clear_CONFIG();
     # Set download type.
     # Make this a FETCHWARE_FTP_REMOTE env var in frt().
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
@@ -151,8 +151,8 @@ subtest 'test http_parse_filelist()' => sub {
 subtest 'test parse_directory_listing()' => sub {
     skip_all_unless_release_testing();
 
-    # Clear App::Fetchware's %FW variable.
-    clear_FW();
+    # Clear App::Fetchware's %CONFIG variable.
+    clear_CONFIG();
 
     ###BUGALERT### Add loop after http_parse_listing() is finished to test this
     #sub's http functionality too.
@@ -175,8 +175,8 @@ subtest 'test parse_directory_listing()' => sub {
 subtest 'test lookup_determine_downloadurl()' => sub {
     skip_all_unless_release_testing();
 
-    # Clear App::Fetchware's %FW variable.
-    clear_FW();
+    # Clear App::Fetchware's %CONFIG variable.
+    clear_CONFIG();
     
     ###BUGALERT### NOTE THIS TEST IS BRITLE, AND DEPENDS ON YOU SELECTING AN
     #APACHE LOOKUP_URL. THIS ISN'T THAT BIG A DEAL, BECAUSE THIS TEST WILL ONLY
@@ -246,8 +246,8 @@ subtest 'test determine_download_url()' => sub {
     ###BUGALERT### Double-check which subtests actually need to be skipped.
     skip_all_unless_release_testing();
 
-    # Clear App::Fetchware's %FW variable.
-    clear_FW();
+    # Clear App::Fetchware's %CONFIG variable.
+    clear_CONFIG();
 
     # This must be set for lookup() to work on Apache's mirror format.
     filter 'httpd-2.2';
@@ -263,9 +263,9 @@ subtest 'test determine_download_url()' => sub {
         'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
     
-    # Clear App::Fetchware's %FW variable so I can test it with custom
+    # Clear App::Fetchware's %CONFIG variable so I can test it with custom
     # lookup_methods.
-    clear_FW();
+    clear_CONFIG();
 
     # This must be set for lookup() to work on Apache's mirror format.
     filter 'httpd-2.2';
@@ -290,8 +290,8 @@ subtest 'test lookup()' => sub {
     ###BUGALERT### Double-check which subtests actually need to be skipped.
     skip_all_unless_release_testing();
 
-    # Clear App::Fetchware's %FW variable.
-    clear_FW();
+    # Clear App::Fetchware's %CONFIG variable.
+    clear_CONFIG();
 
     # This must be set for lookup() to work on Apache's mirror format.
     filter 'httpd-2.2';

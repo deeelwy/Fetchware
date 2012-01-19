@@ -29,9 +29,9 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __FW() to access App::Fetchware's internal state
+# Use extra private sub __CONFIG() to access App::Fetchware's internal state
 # variable, so that I can test that the configuration subroutines work properly.
-my $FW = App::Fetchware::__FW();
+my $CONFIG = App::Fetchware::__CONFIG();
 
 
 subtest 'UTIL exports what it should' => sub {
@@ -42,6 +42,7 @@ subtest 'UTIL exports what it should' => sub {
         download_file
         download_ftp_url
         download_http_url
+        just_filename
     );
     # sort them to make the testing their equality very easy.
     @expected_util_exports = sort @expected_util_exports;
@@ -53,7 +54,7 @@ subtest 'UTIL exports what it should' => sub {
 
 
 ###BUGALERT###Need to add tests for :TESTING exports & specifc subtests for eval_ok(),
-# skip_all_unless_release_testing(), and clear_FW()
+# skip_all_unless_release_testing(), and clear_CONFIG()
 
 
 subtest 'test ftp_download_dirlist()' => sub {

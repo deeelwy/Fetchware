@@ -24,9 +24,9 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __FW() to access App::Fetchware's internal state
+# Use extra private sub __CONFIG() to access App::Fetchware's internal state
 # variable, so that I can test that the configuration subroutines work properly.
-my $FW = App::Fetchware::__FW();
+my $CONFIG = App::Fetchware::__CONFIG();
 
 subtest 'override success' => sub {
 
@@ -74,10 +74,10 @@ EOD
 
 subtest 'override invalid options' => sub {
 
-    eval_ok(sub { override __FW => sub {} }, <<EOD, 'checked override invalid options');
+    eval_ok(sub { override __CONFIG => sub {} }, <<EOD, 'checked override invalid options');
 App-Fetchware: run-time error. override was called specifying a subroutine to
 override that it is not allowed to override. override is only allowed to
-override App::Fetchware's *own* routines as listed in [check_lookup_config download_directory_listing parse_directory_listing determine_download_url ftp_parse_filelist http_parse_filelist lookup_by_timestamp lookup_by_versionstring lookup_determine_downloadurl download_dirlist ftp_download_dirlist http_download_dirlist download_file download_ftp_url download_http_url just_filename download_ftp_url download_http_url determine_package_path eval_ok skip_all_unless_release_testing clear_FW make_clean start lookup download verify unarchive build install end gpg_verify sha1_verify md5_verify digest_verify check_archive_files].
+override App::Fetchware's *own* routines as listed in [check_lookup_config download_directory_listing parse_directory_listing determine_download_url ftp_parse_filelist http_parse_filelist lookup_by_timestamp lookup_by_versionstring lookup_determine_downloadurl download_dirlist ftp_download_dirlist http_download_dirlist download_file download_ftp_url download_http_url just_filename download_ftp_url download_http_url determine_package_path eval_ok skip_all_unless_release_testing clear_CONFIG make_clean start lookup download verify unarchive build install end gpg_verify sha1_verify md5_verify digest_verify check_archive_files].
 See perldoc App::Fetchware.
 EOD
 

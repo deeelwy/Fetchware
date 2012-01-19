@@ -25,9 +25,9 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __FW() to access App::Fetchware's internal state
+# Use extra private sub __CONFIG() to access App::Fetchware's internal state
 # variable, so that I can test that the configuration subroutines work properly.
-my $FW = App::Fetchware::__FW();
+my $CONFIG = App::Fetchware::__CONFIG();
 
 subtest 'OVERRIDE_BUILD exports what it should' => sub {
     my @expected_overide_build_exports = qw(
@@ -73,12 +73,12 @@ subtest 'test build() build_commands' => sub {
     # Clean up after previous build() run.
     make_clean();
 
-    delete $FW->{build_commands};
+    delete $CONFIG->{build_commands};
     build_commands './configure', 'make';
     ok(build($build_path), 'checked build() build_command success.');
 
-    # Clear $FW of build_commands for next subtest.
-    delete $FW->{build_commands};
+    # Clear $CONFIG of build_commands for next subtest.
+    delete $CONFIG->{build_commands};
 };
 
 
@@ -96,12 +96,12 @@ subtest 'test build() configure_options' => sub {
     # Clean up after previous build() run.
     make_clean();
     
-    delete $FW->{configure_options};
+    delete $CONFIG->{configure_options};
     configure_options '--enable-etags', '--enable-tmpdir=/var/tmp';
     ok(build($build_path), 'checked build() configure_options success.');
 
-    # Clear $FW of configure_options for next subtest.
-    delete $FW->{configure_options};
+    # Clear $CONFIG of configure_options for next subtest.
+    delete $CONFIG->{configure_options};
 };
 
 
@@ -119,7 +119,7 @@ subtest 'test build() prefix success' => sub {
     # Clean up after previous build() run.
     make_clean();
     
-    delete $FW->{prefix};
+    delete $CONFIG->{prefix};
     # prefix only supports one and only one option.
     eval_ok(sub {prefix '/usr/', '--enable-tmpdir=/var/tmp'},
         <<EOD, 'checked build() prefix success.');
@@ -130,8 +130,8 @@ Please chose one option not both, or combine both into one option. See perldoc
 App::Fetchware.
 EOD
 
-    # Clear $FW of prefix for next subtest.
-    delete $FW->{prefix};
+    # Clear $CONFIG of prefix for next subtest.
+    delete $CONFIG->{prefix};
 };
 
 
@@ -150,12 +150,12 @@ subtest 'test build() make_options success' => sub {
     # Clean up after previous build() run.
     make_clean();
     
-    delete $FW->{make_options};
+    delete $CONFIG->{make_options};
     make_options '-j', '4';
     ok(build($build_path), 'checked build() make_options success.');
 
-    # Clear $FW of configure_options for next subtest.
-    delete $FW->{make_options};
+    # Clear $CONFIG of configure_options for next subtest.
+    delete $CONFIG->{make_options};
 };
 
 # Call end() to delete temp dir created by start().

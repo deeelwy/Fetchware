@@ -28,9 +28,9 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __FW() to access App::Fetchware's internal state
+# Use extra private sub __CONFIG() to access App::Fetchware's internal state
 # variable, so that I can test that the configuration subroutines work properly.
-my $FW = App::Fetchware::__FW();
+my $CONFIG = App::Fetchware::__CONFIG();
 
 
 subtest 'OVERRIDE_DOWNLOAD exports what it should' => sub {
@@ -65,11 +65,9 @@ subtest 'test download()' => sub {
 
     for my $url ($ENV{FETCHWARE_FTP_DOWNLOAD_URL},
         $ENV{FETCHWARE_HTTP_DOWNLOAD_URL}) {
-        # Manually set $FW{DownloadURL};
-        $FW->{DownloadURL} = $url;
-        # manually set $FW{TempDir} to cwd().
+        # manually set $CONFIG{TempDir} to cwd().
         my $cwd = cwd();
-        $FW->{TempDir} = $cwd;
+        $CONFIG->{TempDir} = $cwd;
 
         # Determine $filename for is() test below.
         my ($scheme, $auth, $path, $query, $frag) = uri_split($url);

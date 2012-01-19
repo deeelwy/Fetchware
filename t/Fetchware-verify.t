@@ -28,9 +28,9 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __FW() to access App::Fetchware's internal state
+# Use extra private sub __CONFIG() to access App::Fetchware's internal state
 # variable, so that I can test that the configuration subroutines work properly.
-my $FW = App::Fetchware::__FW();
+my $CONFIG = App::Fetchware::__CONFIG();
 
 
 subtest 'OVERRIDE_VERIFY exports what it should' => sub {
@@ -176,7 +176,7 @@ subtest 'test verify()' => sub {
         } else {
             fail("checked verify() verify_method $verify_method");
         }
-        delete $FW->{verify_method}; # clear verify_method so I can all it again.
+        delete $CONFIG->{verify_method}; # clear verify_method so I can all it again.
     }
 
 
@@ -226,7 +226,7 @@ EOE
     # test verify_failure_ok
     ###BUGALERT### Must test success & failure with this option.
     verify_failure_ok 'On';
-    diag("vfo[$FW->{verify_failure_ok}]");
+    diag("vfo[$CONFIG->{verify_failure_ok}]");
     is(verify('ftp://fake.url/doesnt/exist.ever', $package_path),
         'warned due to verify_failure_ok',
         'checked verify() verify_failure_ok');
@@ -239,7 +239,7 @@ App-Fetchware: run-time error. Your fetchware file specified a wrong
 verify_method option. The only supported types are 'gpg', 'sha', 'md5', but you
 specified [invalid]. See perldoc App::Fetchware.
 EOE
-    delete $FW->{verify_method};
+    delete $CONFIG->{verify_method};
 
 };
 
