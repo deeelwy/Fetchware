@@ -106,16 +106,14 @@ subtest 'test unarchive()' => sub {
 
     my $package_path = $ENV{FETCHWARE_LOCAL_URL};
     $package_path =~ s!^file://!!;
-    $FW->{PackagePath} = $package_path;
 
-    ok(unarchive(), 'checked unarchive() success');
+    ok(unarchive($package_path), 'checked unarchive() success');
 
-    $FW->{PackagePath} = devnull();
     # note this error message is from Archive::Extract, which carps on
     # errors.
     {
         local $SIG{__WARN__} = sub {
-        unarchive();
+        unarchive(devnull());
         like($_[0], q{Cannot determine file type for '/dev/null'},
             'checked unarchive failure');
         }

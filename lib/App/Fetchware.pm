@@ -1626,7 +1626,7 @@ EOD
 
 
 
-=item unarchive()
+=item unarchive($package_path)
 
 =over
 =item Configuration subroutines used:
@@ -1638,8 +1638,8 @@ EOD
 Uses L<Archive::Tar> or L<Archive::Zip> to turn .tar.{gz,bz2,xz} or .zip into a
 directory. Is intelligent enough to warn if the archive being unarchived does
 not contain B<all> of its files in a single directory like nearly all software
-packages do. Uses C<$FW{PackagePath}> as the archive to unarchive, and sets
-C<$FW{BuildPath}>
+packages do. Uses $package_path as the archive to unarchive, and returns
+$build_path.
 
 =over
 =item LIMITATIONS
@@ -1654,10 +1654,12 @@ already extract them.
 =cut
 
 sub unarchive {
+    my $package_path = shift;
+
     ###BUGALERT### fetchware needs Archive::Zip, which is *not* one of
     #Archive::Extract's dependencies.
-    diag("PP[$FW{PackagePath}]");
-    my $ae = Archive::Extract->new(archive => "$FW{PackagePath}");
+    diag("PP[$package_path]");
+    my $ae = Archive::Extract->new(archive => "$package_path");
 
 ###BUGALERT### Files are listed *after* they're extracted, because
 #Archive::Extract *only* extracts files and then lets you see what files were
@@ -1665,7 +1667,7 @@ sub unarchive {
 #if an archive has an absolute path in it.
     $ae->extract() or die <<EOD;
 App-Fetchware: run-time error. Fetchware failed to extract the archive it
-downloaded [$FW{PackagePath}]. The error message is [@{[$ae->error()]}].
+downloaded [$package_path]. The error message is [@{[$ae->error()]}].
 See perldoc App::Fetchware.
 EOD
 
@@ -1673,7 +1675,7 @@ EOD
     my $files = $ae->files();
     die <<EOD if not defined $files;
 App-Fetchware: run-time error. Fetchware failed to list the files in  the
-archive it downloaded [$FW{PackagePath}]. The error message is
+archive it downloaded [$package_path]. The error message is
 [@{[$ae->error()]}].  See perldoc App::Fetchware.
 EOD
 
@@ -1750,12 +1752,11 @@ automatically delete all of the files when fetchware is done with them. See
 perldoc App::Fetchware.
 EOD
     
-        # Set $FW{BuildPath}
-        $FW{BuildPath} = $dir; #BuildPath should be a key not a value.
-        diag("BUILDPATH[$FW{BuildPath}]");
+        # Return $build_path
+        my $build_path = $dir;
+        diag("BUILDPATH[$build_path]");
+        return $build_path;
     }
-
-    return 'Files good';
 }
 
 
