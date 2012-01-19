@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '12'; #Update if this changes.
+use Test::More 0.98;# tests => '12'; #Update if this changes.
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -107,99 +107,17 @@ subtest 'test download_directory_listing()' => sub {
 
 
 subtest 'test ftp_parse_filelist()' => sub {
+    skip_all_unless_release_testing();
 
-    my $ftp_listing = [
-        '-rw-rw-r--    1 200      200          5584 Oct 19  2010 Announcement2.0.html',
-        '-rw-rw-r--    1 200      200          4314 Oct 19  2010 Announcement2.0.txt',
-        '-rw-rw-r--    1 200      200          3890 Sep 14 06:21 Announcement2.2.html',
-        '-rw-rw-r--    1 200      200          2794 Sep 14 06:21 Announcement2.2.txt',
-        '-rw-rw-r--    1 200      200          1467 Nov 13 19:39 Announcement2.3.txt',
-        '-rw-rw-r--    1 200      200        323391 Oct 18  2010 CHANGES_2.0',
-        '-rw-rw-r--    1 200      200          3244 Oct 18  2010 CHANGES_2.0.64',
-        '-rw-rw-r--    1 200      200        118335 Sep 12 17:02 CHANGES_2.2',
-        '-rw-rw-r--    1 200      200          1397 Sep 12 17:02 CHANGES_2.2.21',
-        '-rw-rw-r--    1 200      200         99984 Nov 13 19:37 CHANGES_2.3',
-        '-rw-rw-r--    1 200      200         10771 Nov 13 19:37 CHANGES_2.3.15',
-        '-rw-rw-r--    1 200      200             0 Oct 05 18:31 CURRENT-IS-2.2.21',
-        '-rw-rw-r--    1 200      200           682 Oct 03  2009 HEADER.html',
-        '-rw-rw-r--    1 200      200        373101 Aug 31 05:11 KEYS',
-        '-rw-rw-r--    1 200      200          3031 Oct 03  2009 README.html',
-        'drwxrwsr-x    4 200      200          4096 May 11  2011 binaries',
-        'drwxrwsr-x    2 200      200          4096 Dec 11  2010 docs',
-        'drwxrwsr-x    2 200      200          4096 Dec 08  2009 flood',
-        '-rw-rw-r--    1 200      200      11018427 Oct 18  2010 httpd-2.0.64-win32-src.zip',
-        '-rw-rw-r--    1 200      200           850 Oct 18  2010 httpd-2.0.64-win32-src.zip.asc',
-        '-rw-rw-r--    1 200      200       4954766 Oct 18  2010 httpd-2.0.64.tar.bz2',
-        '-rw-rw-r--    1 200      200           833 Oct 18  2010 httpd-2.0.64.tar.bz2.asc',
-        '-rw-rw-r--    1 200      200       6431717 Oct 18  2010 httpd-2.0.64.tar.gz',
-        '-rw-rw-r--    1 200      200           833 Oct 18  2010 httpd-2.0.64.tar.gz.asc',
-        '-rw-rw-r--    1 200      200      10285091 Sep 12 17:02 httpd-2.2.21-win32-src.zip',
-        '-rw-rw-r--    1 200      200           835 Sep 12 17:02 httpd-2.2.21-win32-src.zip.asc',
-        '-rw-rw-r--    1 200      200       5324905 Sep 12 17:02 httpd-2.2.21.tar.bz2',
-        '-rw-rw-r--    1 200      200           835 Sep 12 17:02 httpd-2.2.21.tar.bz2.asc',
-        '-rw-rw-r--    1 200      200       7095187 Sep 12 17:02 httpd-2.2.21.tar.gz',
-        '-rw-rw-r--    1 200      200           835 Sep 12 17:02 httpd-2.2.21.tar.gz.asc',
-        '-rw-rw-r--    1 200      200       1359733 Nov 13 19:37 httpd-2.3.15-beta-deps.tar.bz2',
-        '-rw-rw-r--    1 200      200           825 Nov 13 19:37 httpd-2.3.15-beta-deps.tar.bz2.asc',
-        '-rw-rw-r--    1 200      200       1679817 Nov 13 19:37 httpd-2.3.15-beta-deps.tar.gz',
-        '-rw-rw-r--    1 200      200           825 Nov 13 19:37 httpd-2.3.15-beta-deps.tar.gz.asc',
-        '-rw-rw-r--    1 200      200       4085718 Nov 13 19:37 httpd-2.3.15-beta.tar.bz2',
-        '-rw-rw-r--    1 200      200           825 Nov 13 19:37 httpd-2.3.15-beta.tar.bz2.asc',
-        '-rw-rw-r--    1 200      200       5539856 Nov 13 19:37 httpd-2.3.15-beta.tar.gz',
-        '-rw-rw-r--    1 200      200           825 Nov 13 19:37 httpd-2.3.15-beta.tar.gz.asc',
-        'drwxrwsr-x    2 200      200          4096 Apr 27  2011 libapreq',
-        'drwxrwsr-x    3 200      200          4096 Nov 23  2010 mod_fcgid',
-        'drwxrwsr-x    2 200      200          4096 Dec 08  2009 mod_ftp',
-        'drwxrwsr-x   49 200      200          4096 Oct 05 14:27 patches',
-    ];
+    # Clear %FW, so I can call lookup_url again.
+    clear_FW();
+    # Set download type.
+    # Make this a FETCHWARE_FTP_REMOTE env var in frt().
+    lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
 
-
-##DELELTE##    my $expected_filename_listing = [
-##DELELTE##        [ 'Announcement2.0.html', '201010190000' ],
-##DELELTE##        [ 'Announcement2.0.txt', '201010190000' ],
-##DELELTE##        [ 'Announcement2.2.html', '999909140621' ],
-##DELELTE##        [ 'Announcement2.2.txt', '999909140621' ],
-##DELELTE##        [ 'Announcement2.3.txt', '999911131939' ],
-##DELELTE##        [ 'CHANGES_2.0', '201010180000' ],
-##DELELTE##        [ 'CHANGES_2.0.64', '201010180000' ],
-##DELELTE##        [ 'CHANGES_2.2', '99999121702' ],
-##DELELTE##        [ 'CHANGES_2.2.21', '99999121702' ],
-##DELELTE##        [ 'CHANGES_2.3', '999911131937' ],
-##DELELTE##        [ 'CHANGES_2.3.15', '999911131937' ],
-##DELELTE##        [ 'CURRENT-IS-2.2.21', '999910051831' ],
-##DELELTE##        [ 'HEADER.html', '200910030000' ],
-##DELELTE##        [ 'KEYS', '99998310511' ],
-##DELELTE##        [ 'README.html', '200910030000' ],
-##DELELTE##        [ 'binaries', '20115110000' ],
-##DELELTE##        [ 'docs', '201012110000' ],
-##DELELTE##        [ 'flood', '200912080000' ],
-##DELELTE##        [ 'httpd-2.0.64-win32-src.zip', '201010180000' ],
-##DELELTE##        [ 'httpd-2.0.64-win32-src.zip.asc', '201010180000' ],
-##DELELTE##        [ 'httpd-2.0.64.tar.bz2', '201010180000' ],
-##DELELTE##        [ 'httpd-2.0.64.tar.bz2.asc', '201010180000' ],
-##DELELTE##        [ 'httpd-2.0.64.tar.gz', '201010180000' ],
-##DELELTE##        [ 'httpd-2.0.64.tar.gz.asc', '201010180000' ],
-##DELELTE##        [ 'httpd-2.2.21-win32-src.zip', '99999121702' ],
-##DELELTE##        [ 'httpd-2.2.21-win32-src.zip.asc', '99999121702' ],
-##DELELTE##        [ 'httpd-2.2.21.tar.bz2', '99999121702' ],
-##DELELTE##        [ 'httpd-2.2.21.tar.bz2.asc', '99999121702' ],
-##DELELTE##        [ 'httpd-2.2.21.tar.gz', '99999121702' ],
-##DELELTE##        [ 'httpd-2.2.21.tar.gz.asc', '99999121702' ],
-##DELELTE##        [ 'httpd-2.3.15-beta-deps.tar.bz2', '999911131937' ],
-##DELELTE##        [ 'httpd-2.3.15-beta-deps.tar.bz2.asc', '999911131937' ],
-##DELELTE##        [ 'httpd-2.3.15-beta-deps.tar.gz', '999911131937' ],
-##DELELTE##        [ 'httpd-2.3.15-beta-deps.tar.gz.asc', '999911131937' ],
-##DELELTE##        [ 'httpd-2.3.15-beta.tar.bz2', '999911131937' ],
-##DELELTE##        [ 'httpd-2.3.15-beta.tar.bz2.asc', '999911131937' ],
-##DELELTE##        [ 'httpd-2.3.15-beta.tar.gz', '999911131937' ],
-##DELELTE##        [ 'httpd-2.3.15-beta.tar.gz.asc', '999911131937' ],
-##DELELTE##        [ 'libapreq', '20114270000' ],
-##DELELTE##        [ 'mod_fcgid', '201011230000' ],
-##DELELTE##        [ 'mod_ftp', '200912080000' ],
-##DELELTE##        [ 'patches', '999910051427' ]
-##DELELTE##    ];
-
-    my $filename_listing = ftp_parse_filelist($ftp_listing);
+    my $directory_listing = download_directory_listing();
+    
+    my $filename_listing = ftp_parse_filelist($directory_listing);
 
     is_deeply($filename_listing, test_filename_listing(),
         'checked ftp_parse_listing() success');
@@ -242,12 +160,11 @@ subtest 'test parse_directory_listing()' => sub {
 
     # Do the stuff parse_directory_listing() depends on.
     check_lookup_config();
-    download_directory_listing();
-    parse_directory_listing();
+    my $directory_listing = download_directory_listing();
 
     ###BUGALERT### NOTE THIS TEST IS BRITLE, BUT IT WILL ONLY BE RUN WHEN I
     #RELEASE A NEW VERSION OF FETCHWARE. FIX WITH SUB::OVERRIDE??
-    is_deeply($FW->{FilenameListing}, test_filename_listing(),
+    is_deeply(parse_directory_listing($directory_listing), test_filename_listing(),
         'checked parse_directory_listing() ftp success.');
 
 };
@@ -339,11 +256,10 @@ subtest 'test determine_download_url()' => sub {
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
 
     check_lookup_config();
-    download_directory_listing();
-    parse_directory_listing();
-    determine_download_url();
+    my $directory_listing = download_directory_listing();
+    my $filename_listing = parse_directory_listing($directory_listing);
     
-    is($FW->{DownloadURL},
+    is(determine_download_url($filename_listing),
         'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
     
@@ -360,11 +276,10 @@ subtest 'test determine_download_url()' => sub {
     lookup_method 'versionstring';
 
     check_lookup_config();
-    download_directory_listing();
-    parse_directory_listing();
-    determine_download_url();
+    $directory_listing = download_directory_listing();
+    $filename_listing = parse_directory_listing($directory_listing);
     
-    is($FW->{DownloadURL},
+    is(determine_download_url($filename_listing),
         'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
 
@@ -384,9 +299,7 @@ subtest 'test lookup()' => sub {
     # Set needed config variables.
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
 
-    lookup();
-
-    is($FW->{DownloadURL},
+    is(lookup(),
         'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
 
@@ -395,11 +308,12 @@ subtest 'test lookup()' => sub {
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-#done_testing();
+done_testing();
 
 
 # Testing subroutine only used in this test file.
 ###BUGALERT### Not as useful anymore refactor.
+###BUGALERT### This is crap code rewrite now!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 sub test_filename_listing {
     my $no_current = shift;
 
@@ -409,13 +323,13 @@ sub test_filename_listing {
         [ 'Announcement2.0.txt', '201010190000' ],
         [ 'Announcement2.2.html', '999909140621' ],
         [ 'Announcement2.2.txt', '999909140621' ],
-        [ 'Announcement2.3.txt', '999911131939' ],
+        [ 'Announcement2.3.txt', '999912191335' ],
         [ 'CHANGES_2.0', '201010180000' ],
         [ 'CHANGES_2.0.64', '201010180000' ],
         [ 'CHANGES_2.2', '999909121702' ],
         [ 'CHANGES_2.2.21', '999909121702' ],
-        [ 'CHANGES_2.3', '999911131937' ],
-        [ 'CHANGES_2.3.15', '999911131937' ],
+        [ 'CHANGES_2.3', '999912191335' ],
+        [ 'CHANGES_2.3.16', '999912191335' ],
         [ 'CURRENT-IS-2.2.21', '999910051831' ],
         [ 'HEADER.html', '200910030000' ],
         [ 'KEYS', '999908310511' ],
@@ -435,14 +349,14 @@ sub test_filename_listing {
         [ 'httpd-2.2.21.tar.bz2.asc', '999909121702' ],
         [ 'httpd-2.2.21.tar.gz', '999909121702' ],
         [ 'httpd-2.2.21.tar.gz.asc', '999909121702' ],
-        [ 'httpd-2.3.15-beta-deps.tar.bz2', '999911131937' ],
-        [ 'httpd-2.3.15-beta-deps.tar.bz2.asc', '999911131937' ],
-        [ 'httpd-2.3.15-beta-deps.tar.gz', '999911131937' ],
-        [ 'httpd-2.3.15-beta-deps.tar.gz.asc', '999911131937' ],
-        [ 'httpd-2.3.15-beta.tar.bz2', '999911131937' ],
-        [ 'httpd-2.3.15-beta.tar.bz2.asc', '999911131937' ],
-        [ 'httpd-2.3.15-beta.tar.gz', '999911131937' ],
-        [ 'httpd-2.3.15-beta.tar.gz.asc', '999911131937' ],
+        [ 'httpd-2.3.16-beta-deps.tar.bz2', '999912191335' ],
+        [ 'httpd-2.3.16-beta-deps.tar.bz2.asc', '999912191335' ],
+        [ 'httpd-2.3.16-beta-deps.tar.gz', '999912191335' ],
+        [ 'httpd-2.3.16-beta-deps.tar.gz.asc', '999912191335' ],
+        [ 'httpd-2.3.16-beta.tar.bz2', '999912191335' ],
+        [ 'httpd-2.3.16-beta.tar.bz2.asc', '999912191335' ],
+        [ 'httpd-2.3.16-beta.tar.gz', '999912191335' ],
+        [ 'httpd-2.3.16-beta.tar.gz.asc', '999912191335' ],
         [ 'libapreq', '201104270000' ],
         [ 'mod_fcgid', '201011230000' ],
         [ 'mod_ftp', '200912080000' ],

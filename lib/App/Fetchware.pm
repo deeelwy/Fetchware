@@ -690,7 +690,8 @@ EOD
 
 Accesses C<lookup_url> as a http/ftp directory listing, and uses C<lookup_method>
 to determine what the newest version of the software is available, which it
-combines with the C<lookup_url> and stores in C<$FW{DownloadURL}>
+combines with the C<lookup_url> and returns it to caller for use as an argument
+to download().
 
 =over
 =item LIMITATIONS
@@ -710,18 +711,20 @@ sub lookup {
     # die if lookup_method was specified wrong.
     check_lookup_config();
     # obtain directory listing for ftp or http. (a sub for each.)
-    download_directory_listing();
+    my $directory_listing = download_directory_listing();
     # parse the directory listing's format based on ftp or http.
     # ftp: just use Net::Ftp's dir command to get a "long" listing.
     # http: use regex hackery or *html:linkextractor*.
-    parse_directory_listing();
+    my $filename_listing = parse_directory_listing($directory_listing);
     # Run those listings through lookup_by_timestamp() and/or
         # lookup_by_versionstring() based on lookup_method, or first by timestamp,
         # and then by versionstring if timestamp can't figure out the latest
         # version (normally because everything in the directory listing has the
         # same timestamp.
     # Set $FW{DownloadURL} to lookup_url . <latest version archive>
-    determine_download_url();
+    my $download_url = determine_download_url($filename_listing);
+
+    return $download_url;
 }
 
 
@@ -781,79 +784,80 @@ EOD
 =item download_directory_listing()
 
 Downloads a directory listing that lookup() uses to determine what the latest
-version of your program is. It is B<not> returned, but instead placed in
-C<$FW{DirectoryListing}>.
+version of your program is. It is returned.
 
 =over
 =item SIDE EFFECTS
-determine_directory_listing() sets $FW{DirectoryListing} to a SCALAR REF of the
-output of HTTP::Tiny or a ARRAY REF for Net::Ftp downloading that listing.
-Note: the output is different for each download type. Type 'http' will have HTML
-crap in it, and type 'ftp' will be the output of Net::Ftp's dir() method.
+determine_directory_listing() returns a SCALAR REF of the output of HTTP::Tiny
+or a ARRAY REF for Net::Ftp downloading that listing. Note: the output is
+different for each download type. Type 'http' will have HTML crap in it, and
+type 'ftp' will be the output of Net::Ftp's dir() method.
 =back
 
 =cut
 
 sub download_directory_listing {
-    $FW{DirectoryListing} = download_dirlist($FW{lookup_url});
+
+    return download_dirlist($FW{lookup_url});
 }
 
 
-=item parse_directory_listing();
+=item parse_directory_listing($directory_listing);
 
-Based on C<$FW{DownloadType}> of C<'http'> or C<'ftp'>,
-parse_directory_listing() will call either ftp_parse_filelist() or
-http_parse_filelist(). Those subroutines do the heavy lifting, and the results
-are stored by parse_directory_listing() in C<$FW{FilenameListing}>.
+Based on URL scheme of C<'http'> or C<'ftp'>, parse_directory_listing() will
+call either ftp_parse_filelist() or http_parse_filelist(). Those subroutines do
+the heavy lifting, and the results are returned.
 
 =over
 =item SIDE EFFECTS
-parse_directory_listing() sets $FW{FilenameListing} to a array of arrays of the
-filenames  and timestamps that make up the directory listing.
+parse_directory_listing() returns to a array of arrays of the filenames and
+timestamps that make up the directory listing.
 =back
 
 =cut
 
 sub parse_directory_listing {
+    my ($directory_listing) = @_;
+
     given ($FW{lookup_url}) {
         when (m!^ftp://!) {
-            my $filename_listing = ftp_parse_filelist($FW{DirectoryListing});
-            $FW{FilenameListing} = $filename_listing;
+            return ftp_parse_filelist($directory_listing);
         } when (m!^http://!) {
-            my $filename_listing = http_parse_filelist($FW{DirectoryListing});
-            $FW{FilenameListing} = $filename_listing;
+            return http_parse_filelist($directory_listing);
         }
     }
 }
 
 
-=item determine_download_url()
+=item determine_download_url($filename_listing)
 
 Runs the C<lookup_method> to determine what the lastest filename is, and that
-one is then concatenated with C<lookup_url> to determine and set the
-C<FW{DownloadURL}>.
+one is then concatenated with C<lookup_url> to determine the $download_url,
+which is then returned to the caller.
 
 =over
 =item SIDE EFFECTS
-determine_download_url(); sets $FW{DownloadURL} to the URL that download() will
+determine_download_url(); returns $download_url to the URL that download() will
 use to download the archive of your program.
 =back
 
 =cut
 
 sub determine_download_url {
+    my $filename_listing = shift;
+
     # Base lookup algorithm on lookup_method configuration sub if it was
     # specified.
     given ($FW{lookup_method}) {
         when ('timestamp') {
-            $FW{DownloadURL} =  lookup_by_timestamp($FW{FilenameListing});
+            return lookup_by_timestamp($filename_listing);
         } when ('versionstring') {
-            $FW{DownloadURL} =  lookup_by_versionstring($FW{FilenameListing});
+            return lookup_by_versionstring($filename_listing);
         # Default is to just use timestamp although timestamp will call
         # versionstring if it can't figure it out, because all of the timestamps
         # are the same.
         } default {
-            $FW{DownloadURL} = lookup_by_timestamp($FW{FilenameListing});
+            return lookup_by_timestamp($filename_listing);
         }
     }
 }
@@ -999,12 +1003,12 @@ EOD
 } # end bare block for %month.
 
 
-=item lookup_by_timestamp($FW{FileListing})
+=item lookup_by_timestamp($filename_listing)
 
 Implements the 'timestamp' lookup algorithm. It takes the timestamps placed in
-C<@$FW{FileListing}>, normalizes them into a standard descending format
+its first argument, normalizes them into a standard descending format
 (YYYYMMDDHHMM), and then cleverly uses sort to determine the latest
-filename.
+filename, which should be the latest version of your program.
 
 =cut
 
@@ -1023,12 +1027,13 @@ sub  lookup_by_timestamp {
 }
 
 
-=item lookup_by_versionstring($FW{FileListing})
+=item lookup_by_versionstring($filename_listing)
 
-Determines the C<$FW{DownloadURL}> by cleverly C<split>ing the filenames on
-C</\D+/>, which will return a list of version numbers. Then they're just sorted
-normally. And lookup_determine_downloadurl() is used to take the sorted
-$file_listing, and determine the actual C<$FW{DownloadURL}>.
+Determines the $download_url used by download() by cleverly C<split>ing the
+filenames on C</\D+/>, which will return a list of version numbers. Then
+they're just sorted normally. And lookup_determine_downloadurl() is used to
+take the sorted $file_listing, and determine the actual $download_url, which is
+returned.
 
 =cut
 
