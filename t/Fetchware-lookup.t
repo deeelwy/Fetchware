@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98;# tests => '12'; #Update if this changes.
+use Test::More 0.98 tests => '12'; #Update if this changes.
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -308,7 +308,7 @@ subtest 'test lookup()' => sub {
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-done_testing();
+#done_testing();
 
 
 # Testing subroutine only used in this test file.
