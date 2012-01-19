@@ -47,10 +47,11 @@ subtest 'OVERRIDE_VERIFY exports what it should' => sub {
         'checked for correct OVERRIDE_VERIFY @EXPORT_TAG');
 };
 
-# Needed my all other subtests.
+# Needed by all other subtests.
 my $package_path = $ENV{FETCHWARE_LOCAL_URL};
 $package_path =~ s!^file://!!;
-$FW->{PackagePath} =  $package_path;
+# Note: Cannot use a mirror site, because they don't mirror MD5 and SHA1 sums.
+my $download_url = 'http://www.apache.org/dist/httpd/httpd-2.2.21.tar.bz2';
 
 
 # Call start() to create & cd to a tempdir, so end() called later can delete all
@@ -63,26 +64,23 @@ cp("$package_path", '.') or die "copy $package_path failed: $!";
 subtest 'test digest_verify()' => sub {
     skip_all_unless_release_testing();
 
-    for my $digest_type (qw(MD5 SHA-1)) {
+    for my $digest_type (qw(SHA-1 MD5)) {
 
         diag("TYPE[$digest_type]");
 
-        # Specify a DownloadURL to test some md5_verify() guessing magic.
-        $FW->{DownloadURL} = 'http://www.apache.org/dist/httpd/httpd-2.2.21.tar.bz2';
 
-        ok(digest_verify($digest_type), "checked digest_verify($digest_type) success.");
+        ok(digest_verify($digest_type, $download_url, $package_path),
+            "checked digest_verify($digest_type) success.");
 
-        my $local_package_path = $FW->{PackagePath};
         eval_ok(sub {
-                $FW->{PackagePath} = './doesntexistunlessyoucreateitbutdontdothat';
-                digest_verify($digest_type);
+                digest_verify($digest_type, $download_url,
+                    './doesntexistunlessyoucreateitbutdontdothat');
         }, <<EOE, "checked digest_verify($digest_type) package path failure");
 App-Fetchware: run-time error. Fetchware failed to open the file it downloaded
 while trying to read it in order to check its MD5 sum. The file was
 [./doesntexistunlessyoucreateitbutdontdothat]. See perldoc App::Fetchware.
 EOE
         # Undo last tests change to make it fail, so now it'll succeed.
-        $FW->{PackagePath} = $local_package_path;
 
 ###HOWTOTEST###eval_ok(sub {}, <<EOE, 'checked md5_verify() md5 croaked with error'
 ###HOWTOTEST###    eval_ok(sub {}, <<EOD, 'checked md5_verify() failed to open downloaded md5m file');
@@ -91,17 +89,13 @@ EOE
 ###HOWTOTEST###[$md5_file]. See perldoc App::Fetchware.
 ###HOWTOTEST###EOE
 
-        # Test failure by setting PackagePath to the wrong thing.
-        $FW->{PackagePath} = devnull();
-        is(digest_verify($digest_type), undef,
+        # Test failure by setting $package_path to the wrong thing.
+        is(digest_verify($digest_type, $download_url, devnull()), undef,
             "checked digest_verify($digest_type) failure");
-        # Undo last tests change to make it fail, so now it'll succeed.
-        $FW->{PackagePath} = $local_package_path;
 
         eval_ok(sub {
-            delete $FW->{md5_url};
-            $FW->{DownloadURL} = 'ftp://fake.url/will.fail'; 
-            digest_verify($digest_type);
+            digest_verify($digest_type,
+                'ftp://fake.url/will.fail', $package_path);
         }, <<EOE, "checked digest_verify($digest_type) download digest failure");
 App-Fetchware: Fetchware was unable to download the $digest_type sum it needs to download
 to properly verify you software package. This is a fatal error, because failing
@@ -118,27 +112,25 @@ EOE
 subtest 'test md5_verify()' => sub {
     skip_all_unless_release_testing();
 
-    # Specify a DownloadURL to test some md5_verify() guessing magic.
-    $FW->{DownloadURL} = 'http://www.apache.org/dist/httpd/httpd-2.2.21.tar.bz2';
-
-    ok(md5_verify(), "checked md5_verify() success.");
+    ok(md5_verify($download_url, $package_path),
+        "checked md5_verify() success.");
 
     md5_url 'http://www.apache.org/dist/httpd/httpd-2.2.21.tar.bz2.md5';
 
-    ok(md5_verify(), 'checked md5_verify() md5_url success.');
+    ok(md5_verify($download_url, $package_path),
+        'checked md5_verify() md5_url success.');
 };
 
 subtest 'test sha1_verify()' => sub {
     skip_all_unless_release_testing();
 
-    # Specify a DownloadURL to test some md5_verify() guessing magic.
-    $FW->{DownloadURL} = 'http://www.apache.org/dist/httpd/httpd-2.2.21.tar.bz2';
-
-    ok(sha1_verify(), "checked sha1_verify() success.");
+    ok(sha1_verify($download_url, $package_path),
+        "checked sha1_verify() success.");
 
     sha1_url 'http://www.apache.org/dist/httpd/httpd-2.2.21.tar.bz2.md5';
 
-    ok(sha1_verify(), 'checked sha1_verify() sha_url success.');
+    ok(sha1_verify($download_url, $package_path),
+        'checked sha1_verify() sha_url success.');
 };
 
 
@@ -146,19 +138,14 @@ subtest 'test sha1_verify()' => sub {
 subtest 'test gpg_verify()' => sub {
     skip_all_unless_release_testing();
 
-
     lookup_url 'http://www.alliedquotes.com/mirrors/apache//httpd/';
-
-    # Specify a DownloadURL to test some gpg_verify() guessing magic.
-    $FW->{DownloadURL} = 'http://www.apache.org/dist/httpd/httpd-2.2.21.tar.bz2';
 
     gpg_key_url 'http://www.alliedquotes.com/mirrors/apache//httpd/KEYS';
 
-    ok(gpg_verify(), 'checked gpg_verify() success');
+    ok(gpg_verify($download_url), 'checked gpg_verify() success');
 
     eval_ok(sub {
-        $FW->{DownloadURL} = 'ftp://fake.url/will.fail';
-        gpg_verify();
+        gpg_verify('ftp://fake.url/will.fail');
         }, <<EOE, 'checked gpg_verify() download gpg_sig_url failure'); 
 App-Fetchware: Fetchware was unable to download the gpg_sig_url you specified or
 that fetchware tried appending asc, sig, or sign to [ftp://fake.url/will.fail]. It needs
@@ -175,8 +162,6 @@ EOE
 subtest 'test verify()' => sub {
     skip_all_unless_release_testing();
 
-    $FW->{DownloadURL} = 'http://www.apache.org/dist/httpd/httpd-2.2.21.tar.bz2';
-
     # test verify_method
     # test gpg verify_method
     # test sha1 verify_method
@@ -184,7 +169,7 @@ subtest 'test verify()' => sub {
     # Specify a DownloadURL to test some gpg_verify() guessing magic.
     for my $verify_method (qw(gpg sha md5)) {
         verify_method "$verify_method";
-        eval {verify()};
+        eval {verify($download_url, $package_path)};
 
         unless ($@) {
             pass("checked verify() verify_method $verify_method");
@@ -196,7 +181,7 @@ subtest 'test verify()' => sub {
 
 
     # test using copied gpg_verify setup from above.
-    eval {verify()};
+    eval {verify($download_url, $package_path)};
     diag("exe[$@]");
     unless ($@) {
         pass("checked verify() automatic method gpg");
@@ -216,41 +201,40 @@ subtest 'test verify()' => sub {
     # test using just a plain old md5sum.
     # Use postgressql to test for only a md5, though I should find a smaller
     # progject that packages up md5 correctly.
-    my $local_download_url = $FW->{DownloadURL};
-    my $local_package_path = $FW->{PackagePath};
-    $FW->{DownloadURL} =
-    'http://ftp.postgresql.org/pub/source/v9.1.2/postgresql-9.1.2.tar.bz2';
-    # Download the file I need to md5.
-    $FW->{PackagePath} = download_file($FW->{DownloadURL});
-    eval {verify()};
+    my $postgres_download_url =
+        'http://ftp.postgresql.org/pub/source/v9.1.2/postgresql-9.1.2.tar.bz2';
+    eval {verify(
+        $postgres_download_url, download_file($postgres_download_url)
+    )};
     unless ($@) {
         pass("checked verify() automatic method md5");
     } else {
         die $@;
         fail("checked verify() automatic method md5");
     }
-    $FW->{DownloadURL} = $local_download_url;
-    $FW->{PackagePath} = $local_package_path;
 
 
 
     # test verify failure with verify_failure_ok Off.
-    $FW->{DownloadURL} = 'ftp://fake.url/doesnt/exist.ever';
-    eval_ok(sub {verify()}, <<EOE, 'checked verify() failure');
+    eval_ok(sub {verify('ftp://fake.url/doesnt/exist.ever',
+            $package_path)}, <<EOE, 'checked verify() failure');
 App-Fetchware: run-time error. Fetchware failed to verify your downloaded
 software package. You can rerun fetchware with the --force option or add
 [verify_failure_ok 'True';] to your Fetchwarefile. See perldoc App::Fetchware.
 EOE
 
     # test verify_failure_ok
+    ###BUGALERT### Must test success & failure with this option.
     verify_failure_ok 'On';
     diag("vfo[$FW->{verify_failure_ok}]");
-    is(verify(), 'warned due to verify_failure_ok',
+    is(verify('ftp://fake.url/doesnt/exist.ever', $package_path),
+        'warned due to verify_failure_ok',
         'checked verify() verify_failure_ok');
 
     # Test an invalid verify_method.
     verify_method 'invalid';
-    eval_ok(sub {verify()}, <<EOE, 'checked verify() invalid verify_method');
+    eval_ok(sub {verify($download_url, $package_path)},
+        <<EOE, 'checked verify() invalid verify_method');
 App-Fetchware: run-time error. Your fetchware file specified a wrong
 verify_method option. The only supported types are 'gpg', 'sha', 'md5', but you
 specified [invalid]. See perldoc App::Fetchware.

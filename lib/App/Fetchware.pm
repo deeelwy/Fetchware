@@ -1203,7 +1203,7 @@ sub determine_package_path {
 
 
 
-=item verify()
+=item verify($download_url, $package_path)
 
 =over
 =item Configuration subroutines used:
@@ -1217,10 +1217,11 @@ sub determine_package_path {
 =back
 =back
 
-Verifies the downloaded package stored in $FW{PackagePath} by downloading
-C<$FW{DownloadURL}.{asc,sha1,md5}> and comparing the two together. Uses the
+Verifies the downloaded package stored in $package_path by downloading
+$download_url.{asc,sha1,md5}> and comparing the two together. Uses the
 helper subroutines C<{gpg,sha1,md5,digest}_verify()>.
 
+###BUGALERT### Update comment below regarding support status of Crypt::OpenPGP.
 =over
 =item LIMITATIONS
 Uses gpg command line or Crypt::OpenPGP for Windows, and the interface to gpg is
@@ -1231,25 +1232,27 @@ ridden, but still usable.
 =cut
 
 sub verify {
-            my $retval;
+    my ($download_url, $package_path) = @_;
+
+    my $retval;
     given ($FW{verify_method}) {
         when (undef) {
             # if gpg fails try
             # sha and if it fails try
             # md5 and if it fails die
             my ($gpg_err, $sha_err, $md5_err);
-            eval {$retval = gpg_verify()};
+            eval {$retval = gpg_verify($download_url)};
             $gpg_err = $@;
             diag("gpgrv[$retval]");
             warn $gpg_err if $gpg_err;
             if (! $retval or $gpg_err) {
-                eval {$retval = sha1_verify()};
+                eval {$retval = sha1_verify($download_url, $package_path)};
                 $sha_err = $@;
                 diag("sharv[$retval]");
                 warn $sha_err if $sha_err;
                 if (! $retval or $sha_err) {
                     diag("GOTTOMD5");
-                    eval {$retval = md5_verify()};
+                    eval {$retval = md5_verify($download_url, $package_path)};
                     $md5_err = $@;
                     diag("md5rv[$retval]");
                     warn $md5_err if $md5_err;
@@ -1264,7 +1267,7 @@ EOD
                 if ($FW{verify_failure_ok}) {
                         warn <<EOW;
 App-Fetchware: run-time warning. Fetchware failed to verify the integrity of you
-downloaded file [$FW{PackagePath}]. This is ok, because you asked Fetchware to
+downloaded file [$package_path]. This is ok, because you asked Fetchware to
 ignore its errors when it tries to verify the integrity of your downloaded file.
 You can also ignore the errors Fetchware printed out abover where it tried to
 verify your downloaded file. See perldoc App::Fetchware.
@@ -1273,21 +1276,21 @@ EOW
                 }
             }
         } when (/gpg/i) {
-            gpg_verify()
+            gpg_verify($download_url)
                 or die <<EOD unless $FW{verify_failure_ok};
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
 package with gpg or openpgp, but they both failed. See the warning above for
 their error message. See perldoc App::Fetchware.
 EOD
         } when (/sha1?/i) {
-            sha1_verify()
+            sha1_verify($download_url, $package_path)
                 or die <<EOD unless $FW{verify_failure_ok};
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
 package with sha, but it failed. See the warning above for their error message.
 See perldoc App::Fetchware.
 EOD
         } when (/md5/i) {
-            md5_verify()
+            md5_verify($download_url, $package_path)
                 or die <<EOD unless $FW{verify_failure_ok};
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
 package with md5, but it failed. See the warning above for their error message.
@@ -1321,13 +1324,16 @@ App::Fetchware to extend it!
 =cut
 
 
-=item gpg_verify();
+=item gpg_verify($download_url);
 
+###BUGALERT### Update statement regarding use of Crypt::OpenPGP.
 Verifies the downloaded source code distribution using the command line program
 gpg or Crypt::OpenPGP on Windows or if gpg is not available.
 =cut
 
 sub gpg_verify {
+    my $download_url = shift;
+
     my $keys_file;
     # Obtain a KEYS file listing everyone's key that signs this distribution.
 ##DELME##    if (defined $FW{gpg_key_url}) {
@@ -1353,7 +1359,7 @@ sub gpg_verify {
     my $sig_file;
     eval {
         for my $ext (qw(asc sig sign)) {
-            $sig_file = download_file("$FW{DownloadURL}.$ext");
+            $sig_file = download_file("$download_url.$ext");
 
             # If the file was downloaded successfully stop trying other extensions.
             last if defined $sig_file;
@@ -1361,7 +1367,7 @@ sub gpg_verify {
         1;
     } or die <<EOD;
 App-Fetchware: Fetchware was unable to download the gpg_sig_url you specified or
-that fetchware tried appending asc, sig, or sign to [$FW{DownloadURL}]. It needs
+that fetchware tried appending asc, sig, or sign to [$download_url]. It needs
 to download this file to properly verify you software package. This is a fatal
 error, because failing to verify packages is a perferable default over
 potentially installing compromised ones. If failing to verify your software
@@ -1424,7 +1430,7 @@ EOD
 }
 
 
-=item sha1_verify();
+=item sha1_verify($download_url, $package_path);
 
 Verifies the downloaded software archive's integrity using the SHA Digest
 specified by the C<sha_url 'ftp://sha.url/package.sha'> config option. Returns
@@ -1448,11 +1454,13 @@ Fetchwarefile.
 =cut 
 
 sub sha1_verify {
-    return digest_verify('SHA-1');
+    my ($download_url, $package_path) = @_;
+
+    return digest_verify('SHA-1', $download_url, $package_path);
 }
 
 
-=item md5_verify();
+=item md5_verify($download_url, $package_path);
 
 Verifies the downloaded software archive's integrity using the MD5 Digest
 specified by the C<md5_url 'ftp://sha.url/package.sha'> config option. Returns
@@ -1476,11 +1484,13 @@ Fetchwarefile.
 =cut 
 
 sub md5_verify {
-    return digest_verify('MD5');
+    my ($download_url, $package_path) = @_;
+
+    return digest_verify('MD5', $download_url, $package_path);
 }
 
 
-=item digest_verify($digest_type);
+=item digest_verify($digest_type, $download_url, $package_path);
 
 Verifies the downloaded software archive's integrity using the specified
 $digest_type, which also determines the
@@ -1491,7 +1501,7 @@ true for sucess and returns false for failure.
 =item OVERRIDE NOTE
 If you need to override verify() in your Fetchwarefile to change the type of
 digest used, you can do this easily, because digest_verify() uses L<Digest>,
-which supporta a number of Digest::* modules of different Digest algorithms.
+which supports a number of Digest::* modules of different Digest algorithms.
 Simply do this by override verify() to call 
 C<digest_verify('Digest's name for your Digest::* algorithm');>
 =back
@@ -1515,7 +1525,7 @@ C<$digest_type_url 'master.mirror/package.$digest_type';>' in your Fetchwarefile
 =cut 
 
 sub digest_verify {
-    my $digest_type = shift;
+    my ($digest_type, $download_url, $package_path) = @_;
 
     # Turn SHA-1 into sha1 & MD5 into md5.
     my $digest_ext = $digest_type;
@@ -1528,7 +1538,7 @@ sub digest_verify {
         $digest_file = download_file($FW{"${digest_type}_url"});
     } else {
         eval {
-            $digest_file = download_file("$FW{DownloadURL}.$digest_ext");
+            $digest_file = download_file("$download_url.$digest_ext");
             diag("digestfile[$digest_file]");
         };
         if ($@) {
@@ -1545,12 +1555,12 @@ EOD
     
 ###subify calc_sum()
     # Open the downloaded software archive for reading.
-    diag("PACKAGEPATH[$FW{PackagePath}");
-    open(my $package_fh, '<', $FW{PackagePath})
+    diag("PACKAGEPATH[$package_path");
+    open(my $package_fh, '<', $package_path)
         or die <<EOD;
 App-Fetchware: run-time error. Fetchware failed to open the file it downloaded
 while trying to read it in order to check its MD5 sum. The file was
-[$FW{PackagePath}]. See perldoc App::Fetchware.
+[$package_path]. See perldoc App::Fetchware.
 EOD
 
     my $digest;
@@ -1582,7 +1592,7 @@ EOD
 
     close $package_fh or die <<EOD;
 App-Fetchware: run-time error Fetchware failed to close the file
-[$FW{PackagePath}] after opening it for reading. See perldoc App::Fetchware.
+[$package_path] after opening it for reading. See perldoc App::Fetchware.
 EOD
 
 ###subify compare_sums();
@@ -1608,6 +1618,7 @@ EOD
             return 'Package verified';
         }
     }
+    close $digest_fh;
 
     # Return failure, because fetchware failed to verify by md5sum
     return undef;
