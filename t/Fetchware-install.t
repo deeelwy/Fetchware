@@ -50,12 +50,13 @@ start();
 # is what download would normally do for fetchware.
 cp("$package_path", '.') or die "copy $package_path failed: $!";
 
+###BUGALERT### Needs to fail gracefully or su to root when run as non-root.
 # I have to unarchive the package before I can build it.
-$FW->{PackagePath} = $package_path;
 subtest 'do prerequisites' => sub {
     skip_all_unless_release_testing();
-    ok(unarchive(), 'prerequisite install() run');
-    ok(build(), 'prerequisite build() run');
+    my $build_path = unarchive($package_path);
+    ok($build_path, 'prerequisite install() run');
+    ok(build($build_path), 'prerequisite build() run');
 };
 
 
