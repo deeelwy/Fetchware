@@ -1133,7 +1133,7 @@ EOD
 
 
 
-=item download()
+=item download($download_url)
 
 =over
 =item Configuration subroutines used:
@@ -1142,26 +1142,27 @@ EOD
 =back
 =back
 
-Downloads C<$FW{DownloadURL}> to C<tempdir 'whatever/you/specify';> or to
+Downloads $download_url to C<tempdir 'whatever/you/specify';> or to
 whatever File::Spec's tempdir() method tries. Supports ftp and http URLs.
 
-Also, sets C<$FW{PackagePath}>, which is used by unarchive() as the path to the
+Also, returns $package_path, which is used by unarchive() as the path to the
 archive for unarchive() to untar or unzip.
 
 =over
 =item LIMITATIONS
 Uses Net::FTP and HTTP::Tiny to download ftp and http files. No other types of
-downloading ar supported, and fetchware is stuck with whatever limitations or
+downloading are supported, and fetchware is stuck with whatever limitations or
 bugs Net::FTP or HTTP::Tiny impose.
 =back
 
 =cut
 
 sub download {
+    my $download_url = shift;
 
-    my $filename = download_file($FW{DownloadURL});
+    my $downloaded_file_path = download_file($download_url);
 
-    $FW{PackagePath} = determine_package_path($FW{TempDir}, $filename);
+    return determine_package_path($FW{TempDir}, $downloaded_file_path);
 }
 
 
@@ -1184,9 +1185,11 @@ App::Fetchware to extend it!
 
 =item determine_package_path($tempdir, $filename)
 
-Determines what C<$FW{PackagePath}> is based on the provided $tempdir and
-$filename. C<$FW{PackagePath}> is the path used by unarchive() to unarchive the
+Determines what $package_path is based on the provided $tempdir and
+$filename. $package_path is the path used by unarchive() to unarchive the
 software distribution download() downloads.
+
+$package_path is returned to caller.
 
 =cut
 

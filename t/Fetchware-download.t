@@ -65,18 +65,16 @@ subtest 'test download()' => sub {
 
     for my $url ($ENV{FETCHWARE_FTP_DOWNLOAD_URL},
         $ENV{FETCHWARE_HTTP_DOWNLOAD_URL}) {
-        # manually set DownloadType, which download() depends on.
-        my ($scheme, $auth, $path, $query, $frag) = uri_split($url);
-        my ($volume, $directories, $filename) = splitpath($path);
         # Manually set $FW{DownloadURL};
         $FW->{DownloadURL} = $url;
         # manually set $FW{TempDir} to cwd().
         my $cwd = cwd();
         $FW->{TempDir} = $cwd;
 
-        download();
-
-        is($FW->{PackagePath}, catfile($cwd, $filename),
+        # Determine $filename for is() test below.
+        my ($scheme, $auth, $path, $query, $frag) = uri_split($url);
+        my ($volume, $directories, $filename) = splitpath($path);
+        is(download($url), catfile($cwd, $filename),
             'checked download() success.');
 
         ok(-e $filename, 'checked download() file exists success');
