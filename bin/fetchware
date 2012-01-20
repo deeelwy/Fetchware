@@ -7,18 +7,27 @@ use 5.010;
 # Use Getopt::Long for options parsing beyond fetchware's simple commands such
 # as install, new, uninstall, help, and so on.
 use Getopt::Long qw(:config bundling pass_through);
+use App::Fetchware ':FETCHWARE';
+use File::Copy qw(mv cp);
+use File::Spec::Functions qw(curdir catfile tmpdir splitpath);
+use Cwd 'cwd';
+use Term::UI;
+use Term::ReadLine;
+use File::Temp 'tempfile';
 
 my $verbose;
+my $dry_run;
 
 
 GetOptions(
 	# $VERSION is managed by dzil; therefore, I use eval to access it at
 	# run time instead of compile time, so that I can test fetchware without
 	# running dzil test.
-	'version|V' => sub { eval 'say "Fetchware version $VERSION"; '; exit 1},
+	'version|V' => sub { eval 'say "Fetchware version $VERSION"; '; exit 0},
 	'help|h|?' => \&help,
 	'verbose|v' => \$verbose,
 	'quiet|q' => sub { $verbose = 0 },
+    'dry-run|d' => \$dry_run,
 );
 
 
@@ -27,86 +36,754 @@ GetOptions(
 #
 # Below the first argument to fetchware is used to determine what fetchware
 # does.  If nothing is specified then help is printed.
-given ($ARGV[0]) {
-	when('install') {
-		install();
-	} when('uninstall') {
-		uninstall();
-	} when('new') {
-		new();
-	} when('upgrade') {
-		upgrade();
-	} when('upgrade-all') {
-		upgrade_all();
-	} when('help') {
-		help();
-	} default {
-		help();
-	}
+eval { # Trap any fatal errors.
+    given ($ARGV[0]) {
+        when('install') {
+            cmd_install(); # install() was taken by App::Fetchware!.
+        } when('uninstall') {
+            uninstall();
+        } when('new') {
+            new();
+        } when('upgrade') {
+            upgrade();
+        } when('upgrade-all') {
+            upgrade_all();
+        } when('help') {
+            help();
+        } default {
+            help();
+        }
+    }
+};
+# If a fatal error was thrown print it to STDERR and exit indicating failure.
+if ($@) {
+    warn $@;
+    exit 1;
 }
 
 
-=head1 SUBROUTINES
+=head1 COMMAND LINE OPTION SUBROUTINES
 
-
-=head2 install()
-
-
+Below are all of subroutines that implement fetchware's main command line
+options such as C<fetchware install> or C<fetchware new> and so on. These main
+subroutines are called based on the options you pass to fetchware from the
+command line.
 
 =cut
 
-sub install {
-	say "INSTALL";
+=head2 cmd_install()
 
+cmd_install() implements fetchware's install command, which installs a package
+based on the specified Fetchwarefile or fetchware package. If no filename was
+provided then, cmd_install() calls new() to create and install a new fetchware
+package.
+
+=cut
+
+sub cmd_install {
+    my $filename = pop @ARGV;
+
+    # If no Fetchwarefile or *.fpkg was specified, then pretend the user ran
+    # new() instead of install().
+    if (defined($filename)) {
+        eval_config_file($filename);
+
+        # Run the :FETCHWARE subroutines to do everything to install the
+        # program.
+        ###BUGALERT### Needs support for override(), which I'll add later.
+        ###BUGALERT### Add printing messages about what fetchware is doing, and
+        #support -q and -v and -D.
+        start();
+        my $download_url = lookup();
+
+        my $package_path = download($download_url);
+
+        verify($download_url, $package_path);
+
+        my $build_path = unarchive($package_path);
+
+        build($build_path);
+
+        install();
+
+        my $fetchwarefile_path = create_fetchware_package();
+
+        install_fetchware_package($fetchwarefile_path);
+
+        end();
+
+        # Exit program indicating success.
+        exit 0;
+    } else {
+        new();
+    }
 }
+
 
 
 =head2 uninstall()
 
-
+Uninstalls the given package. Note the given package does B<not> have to be an
+exact 
 
 =cut
 
 sub uninstall {
-	say "UNINSTALL";
+    my $filename = pop @ARGV;
 
+    my $fetchware_package_path = determine_fetchware_package_path($filename);
+
+    my $uninstall_path = unarchive_fetchware_package($fetchware_package_path);
+
+    chdir $uninstall_path or die <<EOD
+Make a sub for chdir!!! maybe old pushd popd???
+EOD
+
+    ###BUGALERT### Add executing make install & support for a config sub for
+    #this uninstall_commands! Why not install and build get them.
 }
 
 
 
 =head2 new()
 
+new() implements fetchware's new command. See L<whereeverthehell> for detailed
+documentation for the specifics of the new command. This chunk of POD is about
+its implementation. new() calls a bunch of helper subroutines that implement the
+algorithm fetchware uses to build new Fetchwarefiles automagically for the user.
+The algorithm is dead stupid:
 
+=over
+=item 1. Ask for lookup_url & download it.
+=item 2. Analyze the contents of the output from the lookup_url.
+=item 3. Build the Fetchwarefile according to the output.
+=item 4. Ask other questions as needed.
+=back
+
+new() uses Term::UI, which in turn uses Term::ReadLine to implement the
+character basesd question and anwser wizard interface.
 
 =cut
 
 sub new {
-	say "NEW";
+    my $term = Term::ReadLine->new('Fetchware new');
 
+    my $now = localtime;
+    my $fetchwarefile = <<EOF;
+# Auto generated $now by fetchware's new command.
+# However, feel free to edit this file if fetchware's new command's
+# autoconfiguration is not enough.
+#
+# Please look up fetchware's documentation of its configuration file syntax at
+# perldoc App::Fetchware, and only if its configuration file syntax is not
+# malleable enough for your application should you resort to customizing
+# fetchware's behavior with override. For extra flexible customization see
+# perldoc App::Fetchware.
+EOF
+    ###INSANEFEATUREENHANCEMENT### Prompt for name of program, and do a fuzzy 
+    #search on CPAN for that program under
+    #App::Fetchware::Fetchwarefile::UpCasedProgName. Consider using the meta
+    #CPAN API. And if it exists ask user if they wanna use that one instead of
+    #autogeging one.
+
+    opening_message();
+
+
+    my $lookup_url = get_lookup_url($term);
+
+    # Add $lookup_url to $fetchwarefile.
+    append_options_to_fetchwarefile({lookup_url => $lookup_url},
+        $fetchwarefile);
+
+    my $filename_listing = download_lookup_url($term, $lookup_url);
+
+    my $filter = analyze_lookup_url($term, $filename_listing);
+
+    # Append filter option to fetchwarefile if its needed.
+    if ($filter) {
+        append_options_to_fetchwarefile({filter => $filter}, $fetchwarefile);
+    }
+
+    my %options = prompt_for_other_options($term);
+
+    # Append all other options to fetchwarefile.
+    append_options_to_fetchwarefile(\%options, $fetchwarefile);
+
+    add_mirrors($term, $fetchwarefile);
+
+    $fetchwarefile = edit_manually($term, $fetchwarefile);
+
+    ask_to_install_now_to_test_fetchwarefile($term, $fetchwarefile);
+}
+
+
+
+=head1 new() API REFERENCE
+
+Below are the API routines that new() uses to create the question and answer
+interface for helping to build new Fetchwarefiles and fetchware packages.
+
+=cut
+
+##BUGALERT### Add POD for new() api subs.
+
+sub opening_message {
+
+    my $opening_message = <<EOM;
+# Fetchware's new command is reasonable sophistocated, and is smart enough to
+# determine based on the lookup_url you provide it if it can autogenerate this
+# Fetchwarefile for you. If Fetchware cannot, then it will ask you more
+# questions regarding the information it requires to be able to build a
+# installable fetchware package for you. After that, fetchware will ask you if
+# you would like to edit the Fetchwarefile, fetchware has created for you in an
+# editor. If you say yes, fetchware will open a editor for you, but if you say
+# no, fetchware will skip the custom editing. Next, fetchware will create a test
+# Fetchwarefile for you, and ask you if you would like to test it by trying to
+# install it now. If you say yes, fetchware will install it, and if you say no,
+# then fetchware will print the location of the Fetchwarefile it created for
+# you to later use it to install your application.
+EOM
+
+    # Just print the opening message.
+    print $opening_message;
+}
+
+
+sub get_lookup_url {
+    my $term = shift;
+
+    my $what_a_lookup_url_is = <<EOF;
+Fetchware's heart and soul is its lookup_url. This is the configuration option
+that tells fetchware where to check if a new version of fetchware is released.
+
+How to determine your application's lookup_url:
+    1. Go to your application's Web site.
+    2. Determine the download link for the latest version and copy it with
+       CTRL-C or right-click it and select "copy".
+    3. Paste the download link into your browser's URL Location Bar.
+    4. Delete the filename from the location by starting at the end and deleting
+       everything to the left until you reach a slash '/'.
+       * ftp://a.url/downloads/program.tar.gz -> ftp://a.url/downloads/
+    5. Press enter to access the directory listing on your Application's mirror
+       site.
+    6. If the directory listing in either FTP or HTTP format is displayed in
+       your browser, then Fetchware's default, built-in lookup fuctionality will
+       probably work properly. Copy and paste this URL into the prompt below, and
+       Fetchware will download and analyze your lookup_url to see if it will work
+       properly. If you do not end up with a browser directory listing, then
+       please see Fetchware's documentation using perldoc App::Fetchware.
+EOF
+
+    # prompt for lookup_url.
+    my $lookup_url = $term->get_reply(
+        prompt => q{What is your application's lookup_url?},
+        allow => qr!(ftp|http)://!,
+        print_me => $what_a_lookup_url_is,
+    );
+
+    return $lookup_url;
+}
+
+
+sub download_lookup_url {
+    my $term = shift;
+    my $lookup_url = shift;
+
+    my $filename_listing;
+    eval {
+        my $directory_listing = download_directory_listing($lookup_url);
+
+        $filename_listing = parse_directory_listing($directory_listing);
+
+        my $download_url = determine_download_url($filename_listing);
+    };
+    if ($@) {
+        my $lookup_url_failed_try_again = <<EOF;
+fetchware: the lookup_url you provided failed because of :
+[$@]
+Please try again. Try the steps outlined above to determine what your program's
+lookup_url should be. If you cannot figure out what it should be please see
+perldoc App::Fetchware for additional hints on how to choose a lookup_url.
+EOF
+        $lookup_url = get_lookup_url($term, $lookup_url_failed_try_again);
+
+        eval {
+            my $dir_list = download_directory_listing($lookup_url);
+
+            $filename_listing = parse_directory_listing($dir_list);
+
+            my $download_url = determine_download_url($filename_listing);
+        };
+        if ($@) {
+            die <<EOD;
+fetchware: run-time error. The lookup_url you provided [$lookup_url] is not a
+usable lookup_url because of the error below:
+[$@]
+Please see perldoc App::Fetchware for troubleshooting tips and rerun
+fetchware new.
+EOD
+        }
+    }
+
+    return $filename_listing;
+}
+
+
+sub analyze_lookup_listing {
+    my $term = shift;
+    # $filename_listing is an array of [$filename, $timestamp] arrays.
+    my $filename_listing = shift;
+    say <<EOS;
+Analyzing the lookup_url you provided to determine if fetchware can use it to
+successfully determine when new versions of your software are released.
+EOS
+
+    # What am I supposed to look for here???
+    # 1. Determine if a filter option is needed!!!
+        # split on \D just like lookup_by_version() does & then check if there
+        # are multiple nonpatchlevel versions such as 2.2 and 2.3 and 2.0 or 1.3
+        # and 2.0 and so on!!!
+    my %set;
+    for my $listing (@$filename_listing) {
+        ###BUGALERT### $filename_listing could have multiple programs in it with
+        #different versions confusing the algorithm & lookup_by_version()'s
+        #algorithm!!! Fix this bug here and there!!!
+        my @versions = split /\D/, $listing->[0];
+
+        # Populate $set with the first two "main" version numbers, and then
+        # store as a hash of hashesall of the other versions, and then increment
+        # its value by one to track duplicate versions if needed.
+        $set{"@versions[0..1]"}->{$versions[2..$#versions]}++;
+
+    }
+
+    # Now I just have to see if there are multiple %sets!
+    my $filter;
+    if (keys %set == 1) {
+        # There is only one version in the lookup_url directory listing, so
+        # I do not need a filter option.
+        say <<EOS;
+* The lookup_url you gave fetchware does *not* have multiple versions of the same
+program in it.
+EOS
+    } elsif (keys %set > 1) {
+        # There is more than one version in the lookup_url directory
+        # listing; therefore, I need a filter option.
+        say <<EOS;
+* The lookup_url you gave fetchware has multiple versions of the same program
+in it. Therefore, you must specify a filter option to fetchware, which will tell
+fetchware which version of the program you want fetchware to manage for your.
+EOS
+        my $what_a_filter_is = <<EOA;
+Fetchware needs you to provide a filter option, which is a filter that fetchware
+compares each file in the directory listing of your lookup_url to to determine
+which version of your program to install.
+
+For example, Apache's lookup_url has three versions in the same lookup_url
+directory listing. These are 2.3, 2.2, and 2.0. Without the filter option
+fetchware would choose the highest, which would be 2.3, which is in beta.
+Chances are you do not want to replace your stable 2.2 apache with a beta
+release. Therefore, fetchware needs a filter option. In apache's case simply
+answering:
+2.2
+will result in fetchware filtering the results of its lookup check through your
+filter of 2.2 causing fetchware to choose the latest version from the 2.2 stable
+branch instead of the higher version numbered 2.3 beta or 2.0 legacy releases.
+
+Note: fetchware does accept any valid perl regular expresion as an acceptable
+filter option, but that should only be needed for advanced users. See perldoc
+fetchware.
+EOA
+        # Prompt for the needed filter option.
+        $filter = $term->get_reply(
+            prompt => q{What does fetchware need your filter option to be?},
+            print_me => $what_a_filter_is,
+        );
+    }
+
+    ###BUGALERT### Add support for checking if lookup_url/package.{md5,sha1?}
+    #exists and setting {md5,sha}_url accordingly, because nobody is going to
+    #set it for each release & it changes for each release so the current
+    #implemntation has to be replaced with the current automatic guessing
+    #behavior.
+    
+    # 2. Consider all possible options & if any of them may be needed.
+    # 3. Check if there is a {LATEST,CURRENT}{-,_}IS file.
+    return $filter;
+}
+
+
+sub append_to_fetchwarefile {
+    my ($config_file_option,
+        $config_file_value,
+        $description,
+        $fetchwarefile) = @_;
+
+    # Append a double newline for easier reading.
+    $fetchwarefile .= "\n\n";
+
+    # Append the description for the configfile options were adding.
+    $fetchwarefile .= "$description\n";
+
+    $fetchwarefile .= "$config_file_option $config_file_value;\n";
+}
+
+
+sub prompt_for_other_options {
+    my $term = shift;
+
+    my %option_description = (
+    temp_dir => [
+        <<EOP,
+What temp_dir configuration option would you like?
+EOP
+        <<EOP
+temp_dir is the directory where fetchware creates a temporary directory that
+stores all of the temporary files it creates while it is building your software.
+The default directory is /tmp on Unix systems and C:\\temp on Windows systems.
+EOP
+    ],
+    #Fill in the rest.
+#    user,
+#    prefix,
+#    configure_options,
+#    make_options,
+#    build_commands,
+#    install_commands,
+#    lookup_url,
+#    lookup_method,
+#    gpg_key_url,
+#    sha1_url,
+#    md5_url,
+#    verify_method,
+#    no_install,
+#    verify_failure_ok,
+    );
+    my %answered_option;
+
+    # Obtain other options from App::Fetchware instead of manually copy and
+    # pasting. This way I don't have to bother adding code or data to support
+    # new default options.
+    my @options = @App::Fetchware::EXPORT;
+    # Remove fetchware and override!
+    my @remove;
+    for (my $i = 0; $i <= $#options; $i++) {
+        # Remove unnecessary ones and ones asked about in other places.
+        for (qw(fetchware override filter mirror)) {
+            push @remove, $i if $options[$i] eq $_;
+        }
+    }
+    splice @options, $_, 1 for @remove;
+
+    if (
+        $term->ask_yn(prompt => <<EOP,
+Would you like to add extra configuration options to your
+fetchwarefile?
+EOP
+        default => 'n',
+        print_me => <<EOP,
+Fetchware has many different configuration options that allow you to control its
+behavior, and even change its behavior if needed to bend fetchware for any
+possible source code distribution.
+
+If you think you need to add configuration options please check out perldoc
+fetchware for more details on fetchware and its Fetchwarefile configuration
+options.
+
+If this is your first package your creating with Fetchware or you're creating a
+package for a new program for the first time, you should skip messing with
+fetchware's more flexible options, and just give the defaults a chance.
+EOP
+        )
+    ) {
+        my @config_file_options_to_provide = $term->get_reply(
+            prompt => <<EOP,
+Please answer with a space seperated list of the configuration file options that
+you would like to provide options for?
+EOP
+            choices => [@options],
+            multi => 'True: Allow multiple answers',
+        );
+
+
+        for my $config_file_option (@config_file_options_to_provide) {
+            $answered_option{$config_file_option} = $term->get_reply(
+                prompt => $option_description{$config_file_option}->[0],
+                print_me => $option_description{$config_file_option}->[1],
+            );
+        }
+    }
+    return %answered_option;
+}
+
+
+
+sub append_options_to_fetchwarefile {
+    my ($options, $fetchwarefile) = @_;
+
+    my %config_file_description = (
+        filter => <<EOA,
+# filter specifies a program name and/or version number that tells fetchware
+# which program and or which version of a program you want fetchware to install.
+# This is *only* needed in cases where there are multiple programs and or
+# multiple versions of the same program in the directory lookup_url specifies.
+EOA
+        ###BUGALERT### Fill in with great descriptive comments for autogenerated
+        #config file.
+        temp_dir => <<EOA,
+EOA
+        user => <<EOA,
+EOA
+        prefix => <<EOA,
+EOA
+        configure_options => <<EOA,
+EOA
+        make_options => <<EOA,
+EOA
+        build_commands => <<EOA,
+EOA
+        install_commands => <<EOA,
+EOA
+        lookup_url => <<EOA,
+EOA
+        lookup_method => <<EOA,
+EOA
+        gpg_key_url => <<EOA,
+EOA
+        sha1_url => <<EOA,
+EOA
+        md5_url => <<EOA,
+EOA
+        verify_method => <<EOA,
+EOA
+        no_install => <<EOA,
+EOA
+        verify_failure_ok => <<EOA,
+EOA
+        # Mirror is not supported by this subroutine, because it is a 'MANY'
+        # config file option that can be used multiple times, and this
+        # subroutine does not support that. add_mirrors() below handles that.
+    );
+
+    for my $option (keys %$options) {
+        append_to_fetchwarefile($option, $options->{$option},
+            $config_file_description{$option}, $fetchwarefile);
+    }
+}
+
+
+sub add_mirrors {
+    my ($term, $fetchwarefile) = @_;
+
+    if (
+        $term->ask_yn(prompt => <<EOP,
+Would you like to provide additional mirrors?
+EOP
+        default => 'n',
+        print_me => <<EOP,
+Most servers administered by large organizations that provide mirrors for open
+source software monitor their servers, and keep them running all of the time
+making outages rare.
+
+But if you would like fetchware to use other mirrors in addition to the built in
+one in any options you've provided to fetchware, answer yes, and fetchware fill
+let you provide multiple mirrors.
+EOP
+        )
+    ) {
+        # Append mirror's description to $fetchwarefile.
+        $fetchwarefile .= "\n\n";
+        $fetchwarefile .= <<EOA;
+# The mirror configuration option provides fetchware with alternate servers to
+# try to download this program from. This option is used when the server
+# specified in the url options in this file is unavailable or times out.
+EOA
+
+        while (1) {
+            my $mirror_or_done = $term->get_reply(
+                prompt => <<EOP,
+Type mirror or done to continue:
+EOP
+                default => 'done',
+            );
+            given ($mirror_or_done) {
+                when ('done') {
+                    last;
+                } default {
+                    $fetchwarefile .= "mirror $mirror_or_done;";
+                }
+            }
+        }
+    }
+}
+
+
+sub edit_manually {
+    my ($term, $fetchwarefile) = @_;
+
+    if (
+        $term->ask_yn(prompt => <<EOP,
+Would you like to edit your automagically generated Fetchwarefile manually?
+EOP
+        default => 'n',
+        print_me => <<EOP,
+
+EOP
+        )
+    ) {
+        my ($fh, $fetchwarefile_filename) =
+            tempfile('fetchwarefile-XXXXXXXXX', TMPDIR => 1);
+        print $fh $fetchwarefile;
+
+        if ($ENV{EDITOR}) {
+            say <<EOS;
+If you would like to cancel any edits you have made, and use the automagically
+generated Fetchwarefile, just delete the entire contents of the file, and save
+an empty file.
+EOS
+            system($ENV{EDITOR}, $fetchwarefile_filename);
+            # NOTE: fetchware will "block" during the above call to system, and
+            # wait for the user to close the email program.
+        } else {
+            ###BUGALERT### Add support for asking what editor to use if the
+            #EDITOR environment varible isn't set.
+        }
+
+        unless (-e $fetchwarefile_filename) {
+            local $/;
+            undef $/;
+            open my $fh, '<', $fetchwarefile_filename or die <<EOD;
+fetchware: run-time error. fetchware can't open the fetchwarefile you edited
+with your editor after you edited it. This just shouldn't happen. Possible race
+condition or weird bug. See perldoc fetchware.
+EOD
+            $fetchwarefile = <$fh>;
+        } else {
+            say <<EOS;
+You canceled any custom editing of your fetchwarefile by writing an empty file
+to disk.
+EOS
+        }
+    }
+    return $fetchwarefile;
+}
+
+
+sub ask_to_install_now_to_test_fetchwarefile {
+    my ($term, $fetchwarefile) = @_;
+
+
+    if (
+        $term->ask_yn(prompt => <<EOP,
+Would you like to install the program you just created a Fetchwarefile for?
+EOP
+        default => 'y',
+###BUGALERT### Does this need one of these?
+#        print_me => <<EOP,
+        #
+#EOP
+        )
+    ) {
+        # Run the fetchwarefile
+        fetchware(All => 1);
+    } else {
+
+        if (
+            $term->ask_yn(prompt => <<EOP,
+Would you like to just build a fetchware package that you could install later?
+EOP
+            default => 'y',
+###BUGALERT### Does this need one of these?
+#        print_me => <<EOP,
+        #
+#EOP
+            )
+        ) {
+            fetchware(Build => 1);
+            #Runwhatevercodeto install package!!!
+            ###BUGALERT### Fill in after install() is written.
+            fetchware(End => 1);
+            ###BUGALERT### Print out stuff about the where the fetchware package
+            #has been created (default should be cwd()).
+        }
+    }
 }
 
 
 =head2 upgrade()
 
-
+Subroutine implementing Fetchware's upgrade command. This subroutine and command
+upgrade one and only one package that must be specified on the command line as
+well.
 
 =cut
 
 sub upgrade {
-	say "UPGRADE";
+    my $filename = shift;
+    ###BUGALERT### Double check the crazy code below!
+    $filename // pop @ARGV;
 
+    my $fetchware_package_path = determine_fetchware_package_path($filename);
+
+    my $upgrade_path = unarchive_fetchware_package($fetchware_package_path);
+    
+    parse_config_file(catfile($upgrade_path, 'Fetchwarefile'));
+
+    my $latest_url_path = lookup();
+
+    # Determine the filenames of the latest url path as determined by lookup()
+    # and the currently installed filename.
+    my ($latest_volume, $latest_directories, $latest_filename)
+        =
+        splitpath($latest_url_path);
+    my ($fetchware_volume, $fetchware_directories, $installed_filename)
+        =
+        splitpath($fetchware_package_path);
+
+    ###BUGALERT### Implement similar or refactor and use the same algorithm that
+    #lookup uses only locally to determine if we need to install the latest
+    #version of if the latest version is already installed.
+    if ($latest_filename eq $installed_filename) {
+        my $package_path = download($latest_url_path);
+
+        verify($latest_url_path, $package_path);
+
+        my $build_path = unarchive($package_path);
+
+        build($build_path);
+
+        install();
+
+        my $fetchwarefile_path = create_fetchware_package();
+
+        install_fetchware_package($fetchwarefile_path);
+
+        end();
+    } else {
+        ###BUGALERT### Add verbose, quite, and debug statement saying that the
+        #installed version is the latest version.
+        #And in default output include both latest and installed filenames so
+        #you can easily see if they're the same & in output if a new version is
+        #installed.
+    }
 }
 
 
 =head2 upgrade_all()
 
-
+Implements the C<fetchware upgrade-all> command, which upgrades all installed
+packages simply by looping over the fetchware database and running upgrade on
+each one.
 
 =cut
 
 sub upgrade_all {
-	say "UPGRADE-ALL";
+    my $fetchware_db_glob = catfile(fetchware_database_path(), '*');
 
+    for my $fetchware_package (glob $fetchware_db_glob) {
+        upgrade($fetchware_package);
+    }
+    ###BUGALERT### Add exit 0 at end of each command sub.
 }
 
 
@@ -124,7 +801,7 @@ sub help {
 
 fetchware is a package manager for source code distributions. It gives you the
 ability to install, uninstall , and even upgrade your source code distributions
-just like you can with your binary packages such as yum, apt-get, or slackpkg.
+just like you can with your binary packages using yum, apt-get, or slackpkg.
 
 To create a new package just use fetchware's "new" command such as:
 	$ fetchware new
@@ -152,12 +829,194 @@ OPTIONS:
 	--version|-V - prints a version message.
 	--verbose|-v - prints additional logging information.
 	--quiet|-q - prints *no* logging invormation. Determine success or
-		failure with fetchware's exit status.
+		failure with fetchware's exit status. 0 = success. Non-zero = failure.
+    --dry-run|-d - turns on dry run functionality causing fetchware to not
+    actually download or install or create any packages.
 
 For more information see perldoc fetchware and perldoc App::Fetchware.
 HELP
-	exit 1;
+	exit 0;
 }
 
 
+
+
+=head1 FETCHWARE API REFERENCE
+
+Below are the helper subroutines used by install(), uninstall(), new(), and so
+on.
+
+=cut
+
+
+=item eval_config_file($filename);
+
+Eval's the $filename, which is either a Fetchwarefile, or a fetchware package
+ending in .fpkg. If its a fetchware package the Fetchwarefile is extracted from
+it.
+
+=cut
+
+sub eval_config_file {
+    my $filename = shift;
+
+    # If the file specified was a fetchware package (ends in .fpkg), then
+    #extract out Fetchwarefile, and use that as the fetchwarefile.
+    my $fetchwarefile;
+    if ($filename =~ /\.fpkg$/) {
+        # Create & cd to a temp dir to unpackage the provided package.
+        start();
+
+        my $no_extenstion_fetchwarefile = $filename =~ s/\.fpkg$//;
+        my $package_path = "$no_extenstion_fetchwarefile.tar.gz";
+        mv($filename, $package_path) or die <<EOD;
+fetchware: run-time error. Fetchware failed to rename $filename to 
+"$no_extenstion_fetchwarefile.tar.gz", which it must do before it unarchives
+your fetchware package, which is just a .tar.gz. Os error [$!]
+EOD
+        
+        my $build_path = unarchive($package_path);
+
+        chdir $build_path or die <<EOD;
+fetchware: run-time error. Failed to chdir to the directory fetchware
+unarchived [$build_path]. See perldoc App::Fetchware.
+EOD
+        
+        # Set $fetchwarefile to what the fetchwarefile is.
+        my $fpkg_fetchwarefile = catfile(curdir(), 'Fetchwarefile');
+
+            die <<EOD unless -e $fpkg_fetchwarefile;
+fetchware: run-time error. You ran 'fetchware install some-package.fpkg', and
+the fetchware package your provided is not a proper fetchware package, because
+it does not containt a Fetchwarefile in its root directory. Please see perldoc
+App::Fetchware.
+EOD
+        # Set $filename to $fpkg_fetchwarefile so the shared code with non .fpkg
+        # options will open, slurp, and parse the file for us.
+        $filename = $fpkg_fetchwarefile;
+    }
+
+    ###BUGALERT### Need security checking code!!!!!!!!!!
+    open my $fh, '<', $filename or die <<EOD;
+fetchware: run-time error. fetchware failed to open the Fetchwarefile you
+specified on the command line [$filename]. Please check permissions and try
+again. See perldoc App::Fetchware. The system error was [$!].
+EOD
+
+    {
+        local $/;
+        undef $/;
+        $fetchwarefile = <$fh>;
+    }
+    eval $fetchwarefile;
+    die <<EOD if $@;
+fetchware: run-time error. fetchware failed to execute the Fetchwarefile
+[$filename] you provieded on the command line or that was packaged with your
+Fetchware package (*.fpkg). The error was [$@].
+EOD
+
+    # Clear out the temp directory. There may be a cleaner implementation in the
+    # future such as using Archive::Tar to extract just the Fetchwarefile.
+    ###BUGALERT### Remove start(), unarchive(), and end() calls, and replace
+    #them with Archive::Tar calls to directly extract just the Fetchwarefile.
+    end();
+}
+
+
+=item create_fetchware_package($fetchwarefile_path);
+
+Creates and returns the path of a newly created fetchware package.
+
+=cut
+
+sub create_fetchware_package {
+    my $fetchwarefile_path = shift;
+
+    cp($fetchwarefile_path, cwd()) or die <<EOD;
+fetchware: run-time error. Fetchware failed to copy the Fetchwarefile you
+specified [$fetchwarefile_path] on the command line or was contained in the
+fetchware package you specified to the newly created fetchware package. Please
+see perldoc App::Fetchware.
+EOD
+
+    # Chdir to temp directory so that fetchware can delete the temp dir where
+    # in now.
+    chdir tmpdir() or die <<EOD;
+fetchware: runt-time error. Fetchware failed to chdir to its temporary
+directory. Os error [$!]. Please see App::Fetchware.
+EOD
+
+    # Add Archive::Tar archiving code, and obtain and return the path of the
+    # newly created fetchware package.
+}
+
+
+=item determine_fetchware_package_path($fetchware_package);
+
+Determines and returns the specified fetchware package's path in the fetchware
+package database.
+
+=cut
+
+sub determine_fetchware_package_path {
+    my $fetchware_package = shift;
+
+    my $fetchware_db_glob = catfile(fetchware_database_path(), '*');
+
+    my $fetchware_package_filename
+        =
+        grep /$fetchware_package/, glob $fetchware_db_glob;
+
+    my $fetchware_package_path
+        =
+        catfile(fetchware_database_path(), $fetchware_package_filename);
+    return $fetchware_package_path;
+}
+
+
+=item unarchive_fetchware_package($fetchware_package_path);
+
+Unarchives the specified $fetchware_package_path. Returns $uninstall_path, which
+is the path of the unarchive()d package.
+
+=cut
+
+sub unarchive_fetchware_package {
+    my $fetchware_package_path = shift;
+
+        ###BUGALERT### Must mv *.fpkg .tar.gz!!!
+        ###BUGALERT### cp $fetchware_package_path to a tmpdir created by
+        #start().
+    my $uninstall_path = unarchive($fetchware_package_path);
+
+    return $uninstall_path;
+}
+
+
+=item fetchware_database_path();
+
+Returns the correct path the the fetchware package database.
+###BUGALERT### Specifiy the exact directories.
+
+=cut
+
+sub fetchware_database_path {
+    #return whatever_goes here
+}
+
+
+=item install_fetchware_package($fetchwarefile_path);
+
+Installs the specified fetchware package to the fetchware database, which is
+/var/log/fetchware on UNIX, C:\FETCHWARE on Windows with root or Administrator,
+or $HOME/.fetchware if run as a user.
+
+=cut
+
+sub install_fetchware_package {
+    my $fetchwarefile_path = shift;
+
+###BUGALERT## This isn't really implemented yet, so implement it!!! Use
+#File::Homedir!!!!
+}
 1;

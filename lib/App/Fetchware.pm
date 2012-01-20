@@ -65,6 +65,15 @@ our @EXPORT = qw(
 # replace some or all of fetchware's default behavior to install unusual
 # software.
 our %EXPORT_TAGS = (
+    FETCHWARE => [qw(
+        start
+        lookup
+        download
+        verify
+        build
+        install
+        end
+    )],
     OVERRIDE_LOOKUP => [qw(
         check_lookup_config
         download_directory_listing
@@ -202,68 +211,6 @@ die()ing printing an error message.
 
 
 
-=item fetchware;
-
-C<fetchware> is the subroutine that actually causes the Fetchwarefile to
-execute fetchware's B<default, bult-in functionality>. If it is left out, then
-the Fetchwarefile is incomplete, and will not actually do anything. The only
-time to leave C<fetchware> out of a Fetchwarefile is if you want to customize
-fetchware's behavior using App::Fetchware's API.
-
-To customize your fetchware file, if fetchware's defaults or its configuration
-subroutines are not enough, then you can use override() to override any of the
-subroutines that fetchware() would normally call. For example, you could
-override the lookup() subroutine, or you could just override one of the
-subroutines lookup() calls. It's very flexible and reusable. See
-L<CUSTOMIZING YOUR FETCHWAREFILE> below for the details.
-
-It's not fancy on purpose, because it is meant to be pragmatic and dead simple
-as well as easy to implement.  
-
-=back
-
-=cut
-
-sub fetchware () {
-    die <<EOD if @_;
-App-Fetchware: Fetchwarefile syntax error. You specified arguments to
-'fetchware;', but 'fetchware;' does not take any arguments, and it is a fatal
-syntax error to specify any. Please remove the arguments to 'fetchware;'. See
-perldoc App::Fetchware.
-EOD
-    # Tell bin/fetchware that fetchware actually executed.
-    _fetchware_executed('FETCHWARE_EXECUTED!!!');
-
-    # Execute the subroutines that implement each piece of fetchware's
-    # functionality.
-    start();
-    lookup();
-    download();
-    verify();
-    unarchive();
-    build();
-    ###BUGALERT### Install should only be called by bin/fetchware when packages are actualy
-    # installed!!!
-    install();
-    end();
-
-    # Return true to caller.
-    return 'fetchware fetched!';
-}
-
-# Undocumented internal subroutine that tells bin/fetchware or any caller that
-# fetchware was executed.
-sub _fetchware_executed {
-    my $did_fetchware_execute = shift;
-
-    my $fetchware_executed;
-    if ($did_fetchware_execute eq 'FETCHWARE_EXECUTED!!!') {
-        $fetchware_executed = 1;
-    } else {
-        return 'Fetchware executed!';
-    }
-}
-
 
 
 
@@ -341,7 +288,8 @@ EOD
     #diag explain $override;
 
     # Call fetchware after overriding what ever subs that need overridden.
-    fetchware;
+    ###BUGALERT### Must rewrite ALL override() support!!!!!!!!!!!
+    #fetchware;
 
     # When $override falls out of scope at the end of 
 
@@ -1797,7 +1745,8 @@ archive it downloaded [$package_path]. The error message is
 [@{[$ae->error()]}].  See perldoc App::Fetchware.
 EOD
 
-    check_archive_files($files);
+    # Return the $build_path
+    return check_archive_files($files);
 }
 
 
