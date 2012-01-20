@@ -25,9 +25,6 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __CONFIG() to access App::Fetchware's internal state
-# variable, so that I can test that the configuration subroutines work properly.
-my $CONFIG = App::Fetchware::__CONFIG();
 
 subtest 'OVERRIDE_BUILD exports what it should' => sub {
     my @expected_overide_build_exports = qw(
@@ -73,12 +70,12 @@ subtest 'test build() build_commands' => sub {
     # Clean up after previous build() run.
     make_clean();
 
-    delete $CONFIG->{build_commands};
+    config_delete('build_commands');
     build_commands './configure', 'make';
     ok(build($build_path), 'checked build() build_command success.');
 
     # Clear $CONFIG of build_commands for next subtest.
-    delete $CONFIG->{build_commands};
+    config_delete('build_commands');
 };
 
 
@@ -96,12 +93,12 @@ subtest 'test build() configure_options' => sub {
     # Clean up after previous build() run.
     make_clean();
     
-    delete $CONFIG->{configure_options};
+    config_delete('configure_options');
     configure_options '--enable-etags', '--enable-tmpdir=/var/tmp';
     ok(build($build_path), 'checked build() configure_options success.');
 
     # Clear $CONFIG of configure_options for next subtest.
-    delete $CONFIG->{configure_options};
+    config_delete('configure_options');
 };
 
 
@@ -119,7 +116,7 @@ subtest 'test build() prefix success' => sub {
     # Clean up after previous build() run.
     make_clean();
     
-    delete $CONFIG->{prefix};
+    config_delete('prefix');
     # prefix only supports one and only one option.
     eval_ok(sub {prefix '/usr/', '--enable-tmpdir=/var/tmp'},
         <<EOD, 'checked build() prefix success.');
@@ -131,7 +128,7 @@ App::Fetchware.
 EOD
 
     # Clear $CONFIG of prefix for next subtest.
-    delete $CONFIG->{prefix};
+    config_delete('prefix');
 };
 
 
@@ -150,12 +147,12 @@ subtest 'test build() make_options success' => sub {
     # Clean up after previous build() run.
     make_clean();
     
-    delete $CONFIG->{make_options};
+    config_delete('make_options');
     make_options '-j', '4';
     ok(build($build_path), 'checked build() make_options success.');
 
     # Clear $CONFIG of configure_options for next subtest.
-    delete $CONFIG->{make_options};
+    config_delete('make_options');
 };
 
 # Call end() to delete temp dir created by start().

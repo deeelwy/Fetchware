@@ -59,6 +59,7 @@ our @EXPORT = qw(
     mirror
     fetchware
     override
+    config
 );
 # These tags go with the override() subroutine, and together allow you to
 # replace some or all of fetchware's default behavior to install unusual
@@ -98,7 +99,10 @@ our %EXPORT_TAGS = (
     TESTING => [qw(
         eval_ok
         skip_all_unless_release_testing
-        clear_CONFIG
+        __clear_CONFIG
+        debug_CONFIG
+        config_replace
+        config_delete
         make_clean
         start
         lookup
@@ -123,20 +127,6 @@ our %EXPORT_TAGS = (
 @{$EXPORT_TAGS{OVERRIDE_ALL}} = map {@{$_}} values %EXPORT_TAGS;
 # *All* entries in @EXPORT_TAGS must also be in @EXPORT_OK.
 our @EXPORT_OK = @{$EXPORT_TAGS{OVERRIDE_ALL}};
-
-
-
-# Hash of configuration variables Fetchwarefiles may use to configure
-# fetchware's default behavior using a simple obvious Moose-like declarative
-# syntax such as configure_prefix '/usr/local'; to make Fetchwarefile's, which
-# are straight up perl .pl files without the extension.
-my %CONFIG;
-# Give fetchware's test suite access to an otherwise private variable. Note the
-# double underscores, which make it *extra* private instead of just private.
-# Note: this subroutine is *not* exported on purpose to make abusing it harder.
-sub __CONFIG {
-    return \%CONFIG;
-}
 
 
 
@@ -367,6 +357,127 @@ EOD
 
 
 
+
+BEGIN { # BEGIN BLOCK due to api subs needing prototypes.
+
+
+{ # Containing bare block for %CONFIG
+    my %CONFIG;
+    
+=item config($config_sub_name, $config_sub_value);
+
+config() stores all of the configuration options that are parsed (actually
+executed) in your Fetchwarefile. They are stored in the %CONFIG variable that is
+lexically only shared with the private __clear_CONFIG() subroutine, which when
+executed simply clears %CONFIG for the next run of App::Fetchware in
+bin/fetchware's upgrade_all() subroutine, which is the only place multiple
+Fetchwarefiles may be parsed in on execution of bin/fetchware.
+
+If config() is given more than 2 args, then the second arg, and all of the other
+arguments are stored in %CONFIG as an C<ARRAY> ref. Also storing a second
+argument where there was a previously defined() argument will cause that
+element of %CONFIG to be promoted to being an C<ARRAY> ref.
+
+=cut
+
+    sub config {
+        my ($config_sub_name, $config_sub_value) = @_;
+
+        # Only one argument just lookup and return it.
+        if (@_ == 1) {
+            ref $CONFIG{$config_sub_name} eq 'ARRAY'
+            ? return @{$CONFIG{$config_sub_name}}
+            : return $CONFIG{$config_sub_name};
+        # More than one argument store the provided values in %CONFIG.
+        # If more than one argument then the rest will be store in an ARRAY ref.
+        } elsif (@_ > 1) {
+            if (ref $CONFIG{$config_sub_name} eq 'ARRAY') {
+                # If config() is provided with more than 2 args, then the second
+                # arg ($config_sub_value) and the third to $#_ args are also
+                # added to %CONFIG.
+                if (@_ > 2) {
+                    push @{$CONFIG{$config_sub_name}}, $config_sub_value, @_[2..$#_]
+                } else {
+                    push @{$CONFIG{$config_sub_name}}, $config_sub_value;
+                }
+            } else {
+                # If there is already a value in that %CONFIG entry then turn it
+                # into an ARRAY ref.
+                if (defined($CONFIG{$config_sub_name})) {
+                    $CONFIG{$config_sub_name}
+                        =
+                        [$CONFIG{$config_sub_name}, $config_sub_value];
+                } else {
+                    $CONFIG{$config_sub_name} = $config_sub_value;
+                }
+            }
+        }
+    }
+
+
+
+=item config_replace($name, $value);
+
+Replaces $name with $value. If C<scalar @_> > 2, then config_replace() will
+replace $name with $value, and @_[2..$#_].
+
+=cut
+
+    sub config_replace {
+        my ($config_sub_name, $config_sub_value) = @_;
+
+        if (@_ == 1) {
+            die <<EOD;
+App::Fetchware: run-time error. config_replace() was called with only one
+argument, but it requres two arguments. Please add the other option. Please see
+perldoc App::Fetchware.
+EOD
+        } elsif (@_ == 2) {
+            $CONFIG{$config_sub_name} = $config_sub_value;
+        } elsif (@_ > 2) {
+            $CONFIG{$config_sub_name} = [$config_sub_value, @_[2..$#_]];
+        }
+    }
+
+
+
+=item config_delete($name);
+
+delete's $name from %CONFIG.
+
+=cut
+
+    sub config_delete {
+        my $config_sub_name = shift;
+
+        delete $CONFIG{$config_sub_name};
+    }
+
+
+=item __clear_CONFIG();
+
+Clears the %CONFIG variable that is shared between this subroutine and config().
+
+=cut
+
+    sub __clear_CONFIG {
+        %CONFIG = ();
+    }
+
+
+=item debug_CONFIG();
+
+Data::Dumper::Dumper()'s %CONFIG and prints it.
+
+=cut
+
+    sub debug_CONFIG {
+        print Dumper(\%CONFIG);
+    }
+
+} # Ending bare block for %CONFIG
+
+
 =head1 App::Fetchware API SUBROUTINES
 
 These subroutines constitute App::Fetchware's API that C<Fetchwarefile>'s may
@@ -439,8 +550,6 @@ make_config_sub() except for fetchware() and override().
 
 =cut
 
-BEGIN { # BEGIN BLOCK due to api subs needing prototypes.
-###BUGALERT### Replace BEGIN & eval's with AUTOLOAD???
     my @api_functions = (
         [ filter => 'ONE' ],
         [ temp_dir => 'ONE' ],
@@ -467,6 +576,7 @@ BEGIN { # BEGIN BLOCK due to api subs needing prototypes.
     for my $api_function (@api_functions) {
         make_config_sub(@{$api_function});
     }
+
 
     sub make_config_sub {
         my ($name, $one_or_many_values) = @_;
@@ -497,14 +607,14 @@ EOD
 sub $name (@) {
     my $value = shift;
     
-    die <<EOD if defined $CONFIG{$name};
+    die <<EOD if defined config('$name');
 App-Fetchware: internal syntax error: $name was called more than once in this
 Fetchwarefile. Currently only mirror supports being used more than once in a
 Fetchwarefile, but you have used $name more than once. Please remove all calls
 to $name but one. See perldoc App::Fetchware.
 EOD
     unless (@_) {
-        $CONFIG{$name} = $value;
+        config('$name', $value);
     } else {
         die <<EOD;
 App-Fetchware: internal syntax error. $name was called with more than one
@@ -529,16 +639,16 @@ EOD
 sub $name (@) {
     my $value = shift;
     
-    die <<EOD if defined $CONFIG{$name};
+    die <<EOD if defined config('$name');
 App-Fetchware: internal syntax error: $name was called more than once in this
 Fetchwarefile. Currently only mirror supports being used more than once in a
 Fetchwarefile, but you have used $name more than once. Please remove all calls
 to $name but one. See perldoc App::Fetchware.
 EOD
     unless (@_) {
-        $CONFIG{$name} = $value;
+        config('$name', $value);
     } else {
-        $CONFIG{$name} = [$value, @_];
+        config('$name', $value, @_);
     }
 }
 1; # return true from eval
@@ -554,19 +664,21 @@ EOD
 sub $name (@) {
     my $value = shift;
 
-    if (defined $CONFIG{$name} and ref $CONFIG{$name} ne 'ARRAY') {
+    if (defined config('$name') and ref config('$name') ne 'ARRAY') {
         die <<EOD;
-App-Fetchware: internal operation error!!! $CONFIG{$name} is *not* undef or an array
+App-Fetchware: internal operation error!!! @{[config('$name')]} is *not* undef or an array
 ref!!! This simply should never happen, but it did somehow. This is most likely
 a bug, so please report it. Thanks. See perldoc App::Fetchware.
 EOD
     }
 
-    push @{$CONFIG{$name}}, $value;
-
     # Support multiple arguments specified on the same line. like:
     # mirror 'http://djfjf.com/a', 'ftp://kdjfjkl.net/b';
-    push @{$CONFIG{$name}}, @_ if @_;
+    unless (@_) {
+        config('$name', $value);
+    } else {
+        config('$name', $value, @_);
+    }
 }
 1; # return true from eval
 EOE
@@ -580,7 +692,7 @@ EOD
 sub $name (@) {
     my $value = shift;
 
-    die <<EOD if defined $CONFIG{$name};
+    die <<EOD if defined config('$name');
 App-Fetchware: internal syntax error: $name was called more than once in this
 Fetchwarefile. Currently only mirror supports being used more than once in a
 Fetchwarefile, but you have used $name more than once. Please remove all calls
@@ -596,7 +708,7 @@ EOD
     }
 
     unless (@_) {
-        $CONFIG{$name} = $value;
+        config('$name', $value);
     } else {
         die <<EOD;
 App-Fetchware: internal syntax error. $name was called with more than one
@@ -618,7 +730,10 @@ EOD
         }
     }
 
+
 } # End BEGIN BLOCK.
+
+
 
 =item start()
 
@@ -753,7 +868,7 @@ are right it does nothing, but return.
 =cut
 
 sub check_lookup_config {
-    if (not defined $CONFIG{lookup_url}) {
+    if (not defined config('lookup_url')) {
         die <<EOD;
 App-Fetchware: run-time syntax error: your Fetchwarefile did not specify a
 lookup_url. lookup_url is a required configuration option, and must be
@@ -763,8 +878,8 @@ EOD
     }
 
     # Only test lookup_method if it has been defined.
-    if (defined $CONFIG{lookup_method}) {
-        given ($CONFIG{lookup_method}) {
+    if (defined config('lookup_method')) {
+        given (config('lookup_method')) {
             when ('timestamp') {
                 # Do nothing
             } when ('versionstring') {
@@ -798,7 +913,7 @@ type 'ftp' will be the output of Net::Ftp's dir() method.
 
 sub download_directory_listing {
 
-    return download_dirlist($CONFIG{lookup_url});
+    return download_dirlist(config('lookup_url'));
 }
 
 
@@ -819,7 +934,7 @@ timestamps that make up the directory listing.
 sub parse_directory_listing {
     my ($directory_listing) = @_;
 
-    given ($CONFIG{lookup_url}) {
+    given (config('lookup_url')) {
         when (m!^ftp://!) {
             return ftp_parse_filelist($directory_listing);
         } when (m!^http://!) {
@@ -848,7 +963,7 @@ sub determine_download_url {
 
     # Base lookup algorithm on lookup_method configuration sub if it was
     # specified.
-    given ($CONFIG{lookup_method}) {
+    given (config('lookup_method')) {
         when ('timestamp') {
             return lookup_by_timestamp($filename_listing);
         } when ('versionstring') {
@@ -1079,8 +1194,8 @@ sub lookup_determine_downloadurl {
     # timestamps, and then by filetype like below is not enough to determine,
     # which file to download, so filter was invented to fix this problem by
     # letting Fetchwarefile's specify which version of the software to download.
-    if (defined $CONFIG{filter}) {
-        @$file_listing = grep { $_->[0] =~ /$CONFIG{filter}/ } @$file_listing;
+    if (defined config('filter')) {
+        @$file_listing = grep { $_->[0] =~ /@{[config('filter')]}/ } @$file_listing;
     }
 
     # Skip any filenames with win32 in them on non-Windows systems.
@@ -1095,32 +1210,34 @@ sub lookup_determine_downloadurl {
     # latest version is.  These files come from each software distributions
     # mirror scripts, so they should be more accurate than either of my lookup
     # algorithms. Both Apache and the Linux kernel maintain these files.
-    $_->[0] =~ /^(:?latest|current)[_-]is(.*)$/i for @$file_listing;
+    $_->[0] =~ /^(:?latest|current)[_-]is[_-]?(.*)$/i for @$file_listing;
     my $latest_version = $1;
     diag("latestver[$latest_version]");
     @$file_listing = grep { $_->[0] =~ /$latest_version/ } @$file_listing
-        if defined$latest_version;
+        if defined $latest_version;
 
     # Determine the $download_url based on the sorted @$file_listing by
     # finding a downloadable file (a tarball or zip archive).
     # Furthermore, choose them based on best compression to worst to save some
     # bandwidth.
     for my $fl (@$file_listing) {
+        use Test::More;
+        diag explain $fl;
         given ($fl->[0]) {
             when (/\.tar\.xz$/) {
-                return "$CONFIG{lookup_url}/$fl->[0]";
+                return "@{[config('lookup_url')]}/$fl->[0]";
             } when (/\.txz$/) {
-                return "$CONFIG{lookup_url}/$fl->[0]";
+                return "@{[config('lookup_url')]}/$fl->[0]";
             } when (/\.tar\.bz2$/) {
-                return "$CONFIG{lookup_url}/$fl->[0]";
+                return "@{[config('lookup_url')]}/$fl->[0]";
             } when (/\.tbz$/) {
-                return "$CONFIG{lookup_url}/$fl->[0]";
+                return "@{[config('lookup_url')]}/$fl->[0]";
             } when (/\.tar\.gz$/) {
-                return "$CONFIG{lookup_url}/$fl->[0]";
+                return "@{[config('lookup_url')]}/$fl->[0]";
             } when (/\.tgz$/) {
-                return "$CONFIG{lookup_url}/$fl->[0]";
+                return "@{[config('lookup_url')]}/$fl->[0]";
             } when (/\.zip$/) {
-                return "$CONFIG{lookup_url}/$fl->[0]";
+                return "@{[config('lookup_url')]}/$fl->[0]";
             }
         }
     }
@@ -1162,7 +1279,7 @@ sub download {
 
     my $downloaded_file_path = download_file($download_url);
 
-    return determine_package_path($CONFIG{TempDir}, $downloaded_file_path);
+    return determine_package_path(config('temp_dir'), $downloaded_file_path);
 }
 
 
@@ -1195,6 +1312,7 @@ $package_path is returned to caller.
 
 sub determine_package_path {
     my ($tempdir, $filename) = @_;
+    diag explain \@_;
 
     # return $package_path, which stores the full path of where the file
     # HTTP::Tiny downloaded.
@@ -1235,7 +1353,7 @@ sub verify {
     my ($download_url, $package_path) = @_;
 
     my $retval;
-    given ($CONFIG{verify_method}) {
+    given (config('verify_method')) {
         when (undef) {
             # if gpg fails try
             # sha and if it fails try
@@ -1258,13 +1376,13 @@ sub verify {
                     warn $md5_err if $md5_err;
                 }
                 if (! $retval or $md5_err) {
-                    die <<EOD unless $CONFIG{verify_failure_ok};
+                    die <<EOD unless config('verify_failure_ok');
 App-Fetchware: run-time error. Fetchware failed to verify your downloaded
 software package. You can rerun fetchware with the --force option or add
 [verify_failure_ok 'True';] to your Fetchwarefile. See perldoc App::Fetchware.
 EOD
                 }
-                if ($CONFIG{verify_failure_ok}) {
+                if (config('verify_failure_ok')) {
                         warn <<EOW;
 App-Fetchware: run-time warning. Fetchware failed to verify the integrity of you
 downloaded file [$package_path]. This is ok, because you asked Fetchware to
@@ -1277,21 +1395,21 @@ EOW
             }
         } when (/gpg/i) {
             gpg_verify($download_url)
-                or die <<EOD unless $CONFIG{verify_failure_ok};
+                or die <<EOD unless config('verify_failure_ok');
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
 package with gpg or openpgp, but they both failed. See the warning above for
 their error message. See perldoc App::Fetchware.
 EOD
         } when (/sha1?/i) {
             sha1_verify($download_url, $package_path)
-                or die <<EOD unless $CONFIG{verify_failure_ok};
+                or die <<EOD unless config('verify_failure_ok');
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
 package with sha, but it failed. See the warning above for their error message.
 See perldoc App::Fetchware.
 EOD
         } when (/md5/i) {
             md5_verify($download_url, $package_path)
-                or die <<EOD unless $CONFIG{verify_failure_ok};
+                or die <<EOD unless config('verify_failure_ok');
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
 package with md5, but it failed. See the warning above for their error message.
 See perldoc App::Fetchware.
@@ -1300,7 +1418,7 @@ EOD
             die <<EOD;
 App-Fetchware: run-time error. Your fetchware file specified a wrong
 verify_method option. The only supported types are 'gpg', 'sha', 'md5', but you
-specified [$CONFIG{verify_method}]. See perldoc App::Fetchware.
+specified [@{[config('verify_method')]}]. See perldoc App::Fetchware.
 EOD
         }
     }
@@ -1534,8 +1652,8 @@ sub digest_verify {
 ##subify get_sha_sum()
     my $digest_file;
     # Obtain a sha sum file.
-    if (defined $CONFIG{"${digest_type}_url"}) {
-        $digest_file = download_file($CONFIG{"${digest_type}_url"});
+    if (defined config("${digest_type}_url")) {
+        $digest_file = download_file(config("${digest_type}_url"));
     } else {
         eval {
             $digest_file = download_file("$download_url.$digest_ext");
@@ -1807,12 +1925,9 @@ EOD
 
 
     # If build_commands is set, then all other build config options are ignored.
-    if (defined $CONFIG{build_commands}) {
+    if (defined config('build_commands')) {
         # Support multiple options like build_command './configure', 'make';
-        for my $build_command
-            (ref $CONFIG{build_commands} eq 'ARRAY'
-                ? @{$CONFIG{build_commands}}
-                : $CONFIG{build_commands}) {
+        for my $build_command (config('build_commands')) {
             # Dequote build_commands they just get in the way.
             my $dequoted_commands = $build_command;
             $dequoted_commands =~ s/'|"//g;
@@ -1826,22 +1941,18 @@ EOD
         }
     # Otherwise handle the other options properly.
     } elsif (
-        defined $CONFIG{configure_options}
-        or defined $CONFIG{prefix}
-        or defined $CONFIG{make_options}
+        defined config('configure_options')
+        or defined config('prefix')
+        or defined config('make_options')
     ) {
         my $configure = './configure';
-        if ($CONFIG{configure_options}) {
+        if (config('configure_options')) {
             # Support multiple options like configure_options '--prefix', '.';
-            for my $configure_option
-                (ref $CONFIG{configure_options} eq 'ARRAY'
-                ? @{$CONFIG{configure_options}}
-                : $CONFIG{configure_options}) {
-
+            for my $configure_option (config('configure_options')) {
                 $configure .= " $configure_option";
                 diag("configureopts[$configure]");
             }
-        } elsif ($CONFIG{prefix}) {
+        } elsif (config('prefix')) {
             if ($configure =~ /--prefix/) {
                 die <<EOD;
 App-Fetchware: run-time error. You specified both the --prefix option twice.
@@ -1849,7 +1960,7 @@ Once in 'prefix' and once in 'configure_options'. You may only specify prefix
 once in either configure option. See perldoc App::Fetchware.
 EOD
             } else {
-                $configure .= " --prefix=$CONFIG{prefix}";
+                $configure .= " --prefix=@{[config('prefix')]}";
                 diag("prefixaddingprefix[$configure]");
             }
         }
@@ -1860,13 +1971,10 @@ EOD
         systemx($cmd, @options);
 
         # Next, make.
-        if (defined $CONFIG{make_options}) {
+        if (defined config('make_options')) {
             my @make_options;
             # Support multiple options like make_options '-j', '4';
-            for my $make_option
-                (ref $CONFIG{make_options} eq 'ARRAY'
-                ? @{$CONFIG{make_options}}
-                : $CONFIG{make_options}) {
+            for my $make_option (config('make_options')) {
                 push @make_options, $make_option;
             }
 
@@ -1914,14 +2022,11 @@ fetchware's output.
 
 sub install {
     # Skip installation if the user requests it.
-    return 'installation skipped!' if $CONFIG{no_install};
+    return 'installation skipped!' if config('no_install');
 
-    if (defined $CONFIG{install_commands}) {
+    if (defined config('install_commands')) {
         # Support multiple options like install_commands 'make', 'install';
-        for my $install_command
-            (ref $CONFIG{install_commands} eq 'ARRAY'
-                ? @{$CONFIG{install_commands}}
-                : $CONFIG{install_commands}) {
+        for my $install_command (config('install_commands')) {
             # Dequote install_commands they just get in the way.
             my $dequoted_commands = $install_command;
             $dequoted_commands =~ s/'|"//g;
@@ -1934,8 +2039,8 @@ sub install {
             }
         }
     } else {
-        if (defined $CONFIG{make_options}) {
-            systemx('make', 'install', $CONFIG{make_options})
+        if (defined config('make_options')) {
+            systemx('make', 'install', config('make_options'))
         } else {
             systemx('make', 'install');
         }
@@ -2055,19 +2160,6 @@ sub skip_all_unless_release_testing {
             ne '***setting this will install software on your computer!!!!!!!***';
 }
 
-
-=item clear_CONFIG()
-
-Clears App::Fetchware's internal %CONFIG globalish (file scoped lexical) variable.
-This subroutine should never actually be executed in a Fetchwarefile, because
-its sole purpose is to clear %CONFIG between tests being run in Fetchware's test
-suite.
-
-=cut
-
-sub clear_CONFIG {
-    %CONFIG = ();
-}
 
 =item make_clean
 

@@ -24,9 +24,6 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __CONFIG() to access App::Fetchware's internal state
-# variable, so that I can test that the configuration subroutines work properly.
-my $CONFIG = App::Fetchware::__CONFIG();
 
 subtest 'OVERRIDE_LOOKUP exports what it should' => sub {
     my @expected_overide_lookup_exports = qw(
@@ -75,9 +72,9 @@ EOS
 
     # Change lookup_method to test the other 2 branches of the check_method failure
     # code.
-    $CONFIG->{lookup_method} = 'timestamp';
+    config_replace('lookup_method', 'timestamp');
     ok(eval {check_lookup_config(); 1;}, "checked check_lookup_config() 'timestamp'");
-    $CONFIG->{lookup_method} = 'versionstring';
+    config_replace('lookup_method', 'versionstring');
     ok(eval {check_lookup_config(); 1;}, "checked check_lookup_config() 'versionstring'");
 };
 
@@ -90,7 +87,7 @@ subtest 'test download_directory_listing()' => sub {
         $ENV{FETCHWARE_HTTP_LOOKUP_URL}
     ) {
         # Clear %CONFIG, so I can call lookup_url again.
-        clear_CONFIG();
+        __clear_CONFIG();
         # Set download type.
         # Make this a FETCHWARE_FTP_REMOTE env var in frt().
         lookup_url $lookup_url;
@@ -110,7 +107,7 @@ subtest 'test ftp_parse_filelist()' => sub {
     skip_all_unless_release_testing();
 
     # Clear %CONFIG, so I can call lookup_url again.
-    clear_CONFIG();
+    __clear_CONFIG();
     # Set download type.
     # Make this a FETCHWARE_FTP_REMOTE env var in frt().
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
@@ -152,7 +149,7 @@ subtest 'test parse_directory_listing()' => sub {
     skip_all_unless_release_testing();
 
     # Clear App::Fetchware's %CONFIG variable.
-    clear_CONFIG();
+    __clear_CONFIG();
 
     ###BUGALERT### Add loop after http_parse_listing() is finished to test this
     #sub's http functionality too.
@@ -176,7 +173,7 @@ subtest 'test lookup_determine_downloadurl()' => sub {
     skip_all_unless_release_testing();
 
     # Clear App::Fetchware's %CONFIG variable.
-    clear_CONFIG();
+    __clear_CONFIG();
     
     ###BUGALERT### NOTE THIS TEST IS BRITLE, AND DEPENDS ON YOU SELECTING AN
     #APACHE LOOKUP_URL. THIS ISN'T THAT BIG A DEAL, BECAUSE THIS TEST WILL ONLY
@@ -188,6 +185,7 @@ subtest 'test lookup_determine_downloadurl()' => sub {
 
     # Test lookup_determine_downloadurl() with 'CURRENT_IS_VER_NO' in the
     # file listing.
+    ###BUGALERT### Refactor out static crap like $current_file_list.
     my $current_file_list =
     [
         [ 'CURRENT-IS-2.2.21', '999910051831' ],
@@ -247,7 +245,7 @@ subtest 'test determine_download_url()' => sub {
     skip_all_unless_release_testing();
 
     # Clear App::Fetchware's %CONFIG variable.
-    clear_CONFIG();
+    __clear_CONFIG();
 
     # This must be set for lookup() to work on Apache's mirror format.
     filter 'httpd-2.2';
@@ -265,7 +263,7 @@ subtest 'test determine_download_url()' => sub {
     
     # Clear App::Fetchware's %CONFIG variable so I can test it with custom
     # lookup_methods.
-    clear_CONFIG();
+    __clear_CONFIG();
 
     # This must be set for lookup() to work on Apache's mirror format.
     filter 'httpd-2.2';
@@ -291,7 +289,7 @@ subtest 'test lookup()' => sub {
     skip_all_unless_release_testing();
 
     # Clear App::Fetchware's %CONFIG variable.
-    clear_CONFIG();
+    __clear_CONFIG();
 
     # This must be set for lookup() to work on Apache's mirror format.
     filter 'httpd-2.2';

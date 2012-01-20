@@ -29,10 +29,6 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __CONFIG() to access App::Fetchware's internal state
-# variable, so that I can test that the configuration subroutines work properly.
-my $CONFIG = App::Fetchware::__CONFIG();
-
 
 subtest 'test start()' => sub {
     skip_all_unless_release_testing();

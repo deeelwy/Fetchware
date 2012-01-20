@@ -25,9 +25,6 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __CONFIG() to access App::Fetchware's internal state
-# variable, so that I can test that the configuration subroutines work properly.
-my $CONFIG = App::Fetchware::__CONFIG();
 
 subtest 'OVERRIDE_INSTALL exports what it should' => sub {
     my @expected_overide_install_exports = qw(
@@ -72,7 +69,7 @@ subtest 'test install() make_options success' => sub {
 
     make_options '-j4';
     ok(install(), 'checked install() make_options success.');
-    delete $CONFIG->{make_options};
+    config_delete('make_options');
 };
 
 
@@ -82,10 +79,10 @@ subtest 'test install() install_commands success' => sub {
     install_commands 'make install';
     ok(install(), 'checked install() make_options success.');
 
-    delete $CONFIG->{install_commands};
+    config_delete('install_commands');
     install_commands 'make install', 'make clean';
     ok(install(), 'checked install() install_commands success.');
-    delete $CONFIG->{install_commands};
+    config_delete('install_commands');
 };
 
 

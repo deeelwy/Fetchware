@@ -11,7 +11,7 @@ use File::Spec::Functions 'devnull';
 use File::Copy 'cp';
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '7'; #Update if this changes.
+use Test::More 0.98;# tests => '7'; #Update if this changes.
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -28,9 +28,6 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __CONFIG() to access App::Fetchware's internal state
-# variable, so that I can test that the configuration subroutines work properly.
-my $CONFIG = App::Fetchware::__CONFIG();
 
 
 subtest 'OVERRIDE_VERIFY exports what it should' => sub {
@@ -159,7 +156,7 @@ EOE
 };
 
 
-subtest 'test verify()' => sub {
+#subtest 'test verify()' => sub {
     skip_all_unless_release_testing();
 
     # test verify_method
@@ -168,7 +165,7 @@ subtest 'test verify()' => sub {
     # test md5 verify_method
     # Specify a DownloadURL to test some gpg_verify() guessing magic.
     for my $verify_method (qw(gpg sha md5)) {
-        verify_method "$verify_method";
+        config_replace('verify_method', "$verify_method");
         eval {verify($download_url, $package_path)};
 
         unless ($@) {
@@ -176,7 +173,6 @@ subtest 'test verify()' => sub {
         } else {
             fail("checked verify() verify_method $verify_method");
         }
-        delete $CONFIG->{verify_method}; # clear verify_method so I can all it again.
     }
 
 
@@ -214,6 +210,8 @@ subtest 'test verify()' => sub {
     }
 
 
+    # Clear CONFIG for next run.
+    __clear_CONFIG();
 
     # test verify failure with verify_failure_ok Off.
     eval_ok(sub {verify('ftp://fake.url/doesnt/exist.ever',
@@ -226,7 +224,7 @@ EOE
     # test verify_failure_ok
     ###BUGALERT### Must test success & failure with this option.
     verify_failure_ok 'On';
-    diag("vfo[$CONFIG->{verify_failure_ok}]");
+    diag("vfo[@{[config('verify_failure_ok')]}]");
     is(verify('ftp://fake.url/doesnt/exist.ever', $package_path),
         'warned due to verify_failure_ok',
         'checked verify() verify_failure_ok');
@@ -239,9 +237,9 @@ App-Fetchware: run-time error. Your fetchware file specified a wrong
 verify_method option. The only supported types are 'gpg', 'sha', 'md5', but you
 specified [invalid]. See perldoc App::Fetchware.
 EOE
-    delete $CONFIG->{verify_method};
+    config_delete('verify_method');
 
-};
+#};
 
 
 # Call end() to delete temp dir created by start().
@@ -249,4 +247,4 @@ end();
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-#done_testing();
+done_testing();

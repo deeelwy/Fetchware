@@ -28,9 +28,6 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __CONFIG() to access App::Fetchware's internal state
-# variable, so that I can test that the configuration subroutines work properly.
-my $CONFIG = App::Fetchware::__CONFIG();
 
 
 subtest 'OVERRIDE_DOWNLOAD exports what it should' => sub {
@@ -67,7 +64,7 @@ subtest 'test download()' => sub {
         $ENV{FETCHWARE_HTTP_DOWNLOAD_URL}) {
         # manually set $CONFIG{TempDir} to cwd().
         my $cwd = cwd();
-        $CONFIG->{TempDir} = $cwd;
+        config_replace('temp_dir', "$cwd");
 
         # Determine $filename for is() test below.
         my ($scheme, $auth, $path, $query, $frag) = uri_split($url);
