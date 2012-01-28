@@ -1,5 +1,5 @@
 #!perl
-# Fetchware-override.t tests App::Fetchware's override() subroutine.
+# App-Fetchware-override.t tests App::Fetchware's override() subroutine.
 use strict;
 use warnings;
 use diagnostics;

@@ -1,5 +1,5 @@
 #!perl
-# Fetchware-fetchware.t tests App::Fetchware's build() subroutine, which builds
+# App-Fetchware-build.t tests App::Fetchware's build() subroutine, which builds
 # your software.
 use strict;
 use warnings;

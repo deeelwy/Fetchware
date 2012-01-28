@@ -1,5 +1,5 @@
 #!perl
-# Fetchware-fetchware.t tests App::Fetchware's unarchive() subroutine, which
+# App-Fetchware-unarchive.t tests App::Fetchware's unarchive() subroutine, which
 # unzips or untars your downloaded archived software.
 use strict;
 use warnings;

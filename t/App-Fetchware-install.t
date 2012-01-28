@@ -1,5 +1,5 @@
 #!perl
-# Fetchware-fetchware.t tests App::Fetchware's install() subroutine, which
+# App-Fetchware-install.t tests App::Fetchware's install() subroutine, which
 # installs your software.
 use strict;
 use warnings;

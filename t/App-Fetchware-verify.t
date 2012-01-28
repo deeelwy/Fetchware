@@ -1,5 +1,5 @@
 #!perl
-# Fetchware-fetchware.t tests App::Fetchware's verify() subroutine, which gpg
+# App-Fetchware-verify.t tests App::Fetchware's verify() subroutine, which gpg
 # verifies your downloaded archive if possible. If not it will also try md5/sha.
 use strict;
 use warnings;

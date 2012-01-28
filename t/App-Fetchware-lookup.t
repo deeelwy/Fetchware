@@ -1,5 +1,5 @@
 #!perl
-# Fetchware-lookup.t tests App::Fetchware's lookup() subroutine, which
+# App-Fetchware-lookup.t tests App::Fetchware's lookup() subroutine, which
 # determines if a new version of your program is available.
 use strict;
 use warnings;

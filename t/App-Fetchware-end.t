@@ -1,5 +1,5 @@
 #!perl
-# Fetchware-start.t tests App::Fetchware's start() subroutine, which
+# App-Fetchware-end.t tests App::Fetchware's end() subroutine, which
 # determines if a new version of your program is available.
 use strict;
 use warnings;
@@ -9,9 +9,7 @@ use 5.010;
 # Test::More version 0.98 is needed for proper subtest support.
 use Test::More 0.98 tests => '2'; #Update if this changes.
 
-use File::Spec::Functions qw(splitpath catfile);
-use URI::Split 'uri_split';
-use Cwd 'cwd';
+use File::Temp 'tempdir';
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -29,17 +27,24 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
+# Use extra private sub __CONFIG() to access App::Fetchware's internal state
+# variable, so that I can test that the configuration subroutines work properly.
+my $CONFIG = App::Fetchware::__CONFIG();
 
-subtest 'test start()' => sub {
+
+subtest 'test end()' => sub {
     skip_all_unless_release_testing();
 
-    my $temp_dir = start();
+    my $tempdir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+    diag("td[$tempdir]");
 
-    ok(-e $temp_dir, 'check start() success');
-    
-    # chdir() so File::Temp can delete the tempdir.
-    chdir();
+    ok(-e $tempdir, 'checked end() tempdir creationg');
 
+    end();
+
+    ok( (not -e $tempdir) , 'checked end() success');
+
+    done_testing();
 };
 
 

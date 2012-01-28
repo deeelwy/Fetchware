@@ -1,5 +1,5 @@
 #!perl
-# Fetchware-util.t tests App::Fetchware's utility subroutines, which
+# App-Fetchware-util.t tests App::Fetchware's utility subroutines, which
 # provied helper functions such as testing & file & dirlist downloading.
 use strict;
 use warnings;

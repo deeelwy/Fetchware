@@ -1,6 +1,6 @@
 #!perl
-# Fetchware-config-file.t tests App::Fetchware's configuration file subroutines
-# except for fetchware which deserves its own test file.
+# App-Fetchware-config-file.t tests App::Fetchware's configuration file
+# subroutines except for fetchware which deserves its own test file.
 
 use strict;
 use warnings;
