@@ -40,6 +40,7 @@ use Exporter qw( import );
 # Fetchwarefile that fetchware simply executes. The magic is in the fetchware()
 # and override() subroutines.
 our @EXPORT = qw(
+    program
     filter
     temp_dir
     user
@@ -152,6 +153,7 @@ subroutines as Fetchwarefile configuration syntax.
 =item 'ONE' Fetchwarefile API Subroutines.
 
 =over
+=item program $value;
 =item filter $value;
 =item temp_dir $value;
 =item user $value;
@@ -499,6 +501,7 @@ make_config_sub() except for fetchware() and override().
 =cut
 
     my @api_functions = (
+        [ program => 'ONE' ],
         [ filter => 'ONE' ],
         [ temp_dir => 'ONE' ],
         [ user => 'ONE' ],
