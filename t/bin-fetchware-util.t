@@ -9,7 +9,7 @@ use 5.010;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98;# tests => '7'; #Update if this changes.
+use Test::More 0.98 tests => '7'; #Update if this changes.
 
 use App::Fetchware qw(:TESTING config);
 use Cwd 'cwd';
@@ -237,7 +237,7 @@ subtest 'check copy_fpkg_to_fpkg_database()' => sub {
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-done_testing();
+#done_testing();
 
 
 sub create_test_fetchwarefile {
