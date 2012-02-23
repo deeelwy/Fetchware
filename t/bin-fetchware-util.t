@@ -60,8 +60,8 @@ EOF
     eval_ok(sub {eval_config_file('doesntexist.ever-anywhere')},
         <<EOE, 'checked eval_config_file() failed open');
 fetchware: run-time error. fetchware failed to open the Fetchwarefile you
-specified on the command line [doesntexist.ever-anywhere]. Please check permissions and try
-again. See perldoc App::Fetchware. The system error was [No such file or directory].
+specified on the command line [doesntexist.ever-anywhere]. Please check permissions
+and try again. See perldoc App::Fetchware. The system error was [No such file or directory].
 EOE
 
     ###BUGALERT### How do I test the unlink()ing of the provided filename? Give
@@ -77,14 +77,6 @@ EOS
         'checked eval_config_file() failed to execute Fetchwarefile');
 
 };
-
-
-
-##TODO##subtest 'test eval_config_file(Fetchware Package)' => sub {
-##TODO##    skip_all_unless_release_testing();
-##TODO##
-##TODO##
-##TODO##};
 
 
 subtest 'test create_fetchware_package()' => sub {

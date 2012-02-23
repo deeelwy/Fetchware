@@ -895,63 +895,25 @@ on.
 =cut
 
 
-=item eval_config_file($filename);
+=item eval_config_file($fetchwarefile_path);
 
-Eval's the $filename, which is either a Fetchwarefile, or a fetchware package
-ending in .fpkg. If its a fetchware package the Fetchwarefile is extracted from
-it.
+Eval's the $fetchwarefile_path to effectively "parse" it.
 
 Returns true on success and dies with an error message if it fails.
 
 =cut
 
 sub eval_config_file {
-    my $filename = shift;
-
-    # If the file specified was a fetchware package (ends in .fpkg), then
-    #extract out Fetchwarefile, and use that as the fetchwarefile.
-    my $fetchwarefile;
-    if ($filename =~ /\.fpkg$/) {
-        my $no_extenstion_fetchwarefile = $filename =~ s/\.fpkg$//;
-        my $package_path = "$no_extenstion_fetchwarefile.tar.gz";
-        mv($filename, $package_path) or die <<EOD;
-fetchware: run-time error. Fetchware failed to rename $filename to 
-"$no_extenstion_fetchwarefile.tar.gz", which it must do before it unarchives
-your fetchware package, which is just a .tar.gz. Os error [$!]
-EOD
-        
-        my $tar = Archive::Tar->new();
-
-        $tar->read($package_path) or die <<EOD;
-fetchware: run-time error. fetchware failed to read in the fetchware archive you
-specified [$package_path]. The error message from Archive::Tar was:
-[@{[$tar->error()]}].
-EOD
-
-        # extract the Fetchwarefile the the cwd.
-        $tar->extract_file('Fetchwarefile');
-
-        # Set $fetchwarefile to what the fetchwarefile is.
-        my $fpkg_fetchwarefile = catfile(curdir(), 'Fetchwarefile');
-
-            die <<EOD unless -e $fpkg_fetchwarefile;
-fetchware: run-time error. You ran 'fetchware install some-package.fpkg', and
-the fetchware package your provided is not a proper fetchware package, because
-it does not containt a Fetchwarefile in its root directory. Please see perldoc
-App::Fetchware.
-EOD
-        # Set $filename to $fpkg_fetchwarefile so the shared code with non .fpkg
-        # options will open, slurp, and parse the file for us.
-        $filename = $fpkg_fetchwarefile;
-    }
+    my $fetchwarefile_path = shift;
 
     ###BUGALERT### Need security checking code!!!!!!!!!!
-    open my $fh, '<', $filename or die <<EOD;
+    open my $fh, '<', $fetchwarefile_path or die <<EOD;
 fetchware: run-time error. fetchware failed to open the Fetchwarefile you
-specified on the command line [$filename]. Please check permissions and try
-again. See perldoc App::Fetchware. The system error was [$!].
+specified on the command line [$fetchwarefile_path]. Please check permissions
+and try again. See perldoc App::Fetchware. The system error was [$!].
 EOD
 
+    my $fetchwarefile;
     {
         local $/;
         undef $/;
@@ -959,18 +921,18 @@ EOD
     }
 
     # Delete unneeded on-disk cwd()/Fetchwarefile.
-    if (-e $filename) {
-        unlink $filename or die <<EOD;
+    if (-e $fetchwarefile_path) {
+        unlink $fetchwarefile_path or die <<EOD;
 fetchware: run-time error. fetchware failed to unlink the Fetchwarefile it
-extracted from your Fetchware package [$filename]. Os error [$!].
+extracted from your Fetchware package [$fetchwarefile_path]. Os error [$!].
 EOD
     }
 
     eval $fetchwarefile;
     die <<EOD if $@;
 fetchware: run-time error. fetchware failed to execute the Fetchwarefile
-[$filename] you provieded on the command line or that was packaged with your
-Fetchware package (*.fpkg). The error was [$@].
+[$fetchwarefile_path] you provieded on the command line or that was packaged
+with your Fetchware package (*.fpkg). The error was [$@].
 EOD
 
     return 'Evaled config file successfully';
