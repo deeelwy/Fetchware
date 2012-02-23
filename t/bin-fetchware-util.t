@@ -38,7 +38,7 @@ BEGIN {
 }
 
 
-subtest 'test eval_config_file(Fetchwarefile)' => sub {
+subtest 'test parse_fetchwarefile(Fetchwarefile)' => sub {
     skip_all_unless_release_testing();
 
     my $correct_fetchwarefile = <<EOF;
@@ -50,15 +50,15 @@ EOF
 
     # Use a scalar ref instead of a real file to avoid having to write and read
     # files unnecessarily.
-    ok(eval_config_file(\ $correct_fetchwarefile),
-        'checked eval_config_file() success');
+    ok(parse_fetchwarefile(\ $correct_fetchwarefile),
+        'checked parse_fetchwarefile() success');
 
     test_config({program => 'who cares',
             lookup_url => 'http://doesnt.exist/anywhere'},
-        'checked eval_config_file() success CONFIG');
+        'checked parse_fetchwarefile() success CONFIG');
     
-    eval_ok(sub {eval_config_file('doesntexist.ever-anywhere')},
-        <<EOE, 'checked eval_config_file() failed open');
+    eval_ok(sub {parse_fetchwarefile('doesntexist.ever-anywhere')},
+        <<EOE, 'checked parse_fetchwarefile() failed open');
 fetchware: run-time error. fetchware failed to open the Fetchwarefile you
 specified on the command line [doesntexist.ever-anywhere]. Please check permissions
 and try again. See perldoc App::Fetchware. The system error was [No such file or directory].
@@ -72,9 +72,9 @@ EOE
 for {
 EOS
 
-    eval_ok(sub {eval_config_file(\ $syntax_errors)},
+    eval_ok(sub {parse_fetchwarefile(\ $syntax_errors)},
         qr/fetchware failed to execute the Fetchwarefile/,
-        'checked eval_config_file() failed to execute Fetchwarefile');
+        'checked parse_fetchwarefile() failed to execute Fetchwarefile');
 
 };
 

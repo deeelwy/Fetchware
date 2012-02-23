@@ -29,7 +29,7 @@ use File::Find 'find';
 use Exporter 'import';
 our %EXPORT_TAGS  = (
     TESTING => [qw(
-        eval_config_file    
+        parse_fetchwarefile    
         create_fetchware_package
         fetchware_database_path
         determine_fetchware_package_path
@@ -117,7 +117,7 @@ sub cmd_install {
     # If no Fetchwarefile or *.fpkg was specified, then pretend the user ran
     # new() instead of install().
     if (defined($filename)) {
-        eval_config_file($filename);
+        parse_fetchwarefile($filename);
 
         # Run the :FETCHWARE subroutines to do everything to install the
         # program.
@@ -769,7 +769,7 @@ sub upgrade {
 
     my $fetchwarefile_path = extract_fetchwarefile($fetchware_package_path, cwd());
     
-    eval_config_file($fetchwarefile_path);
+    parse_fetchwarefile($fetchwarefile_path);
 
     my $latest_url_path = lookup();
 
@@ -895,7 +895,7 @@ on.
 =cut
 
 
-=item eval_config_file($fetchwarefile_path);
+=item parse_fetchwarefile($fetchwarefile_path);
 
 Eval's the $fetchwarefile_path to effectively "parse" it.
 
@@ -903,7 +903,7 @@ Returns true on success and dies with an error message if it fails.
 
 =cut
 
-sub eval_config_file {
+sub parse_fetchwarefile {
     my $fetchwarefile_path = shift;
 
     ###BUGALERT### Need security checking code!!!!!!!!!!
