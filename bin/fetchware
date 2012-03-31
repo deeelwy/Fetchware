@@ -4,10 +4,10 @@ use warnings;
 # Enable Perl 6 knockoffs.
 use 5.010;
 
-# I know lowercase name are reserved for pragma's, but other programs do this
+# I know lowercase names are reserved for pragma's, but other programs do this
 # such as perlbrew and dzil. It makes loading this program for testing very easy
-# with C<use lib 'bin'; require fetchware; fetchware->import();>, and it bypasses a limitation in dzil
-# regarding creating the POD properly.
+# with C<use lib 'bin'; require fetchware; fetchware->import();>, and it
+# bypasses a limitation in dzil regarding creating the POD properly.
 package fetchware;
 
 # Use Getopt::Long for options parsing beyond fetchware's simple commands such
@@ -16,25 +16,29 @@ use Getopt::Long qw(:config bundling pass_through);
 use App::Fetchware qw(:FETCHWARE);
 use Archive::Tar;
 use File::Copy qw(mv cp);
-use File::Spec::Functions qw(curdir catfile tmpdir splitpath splitdir);
+use File::Spec::Functions qw(curdir catdir catfile catpath tmpdir splitpath splitdir rel2abs);
 use Cwd 'cwd';
+use File::Path 'make_path';
 use Term::UI;
 use Term::ReadLine;
 use File::Temp 'tempfile';
 use Perl::OSType 'is_os_type';
 use File::HomeDir;
 use File::Find 'find';
+use File::Temp qw(tempdir tempfile);
 
 # Setup exports, which are only meant to ease testing.
 use Exporter 'import';
 our %EXPORT_TAGS  = (
     TESTING => [qw(
+        create_test_fetchwarefile
         parse_fetchwarefile    
         create_fetchware_package
         fetchware_database_path
         determine_fetchware_package_path
         extract_fetchwarefile
         copy_fpkg_to_fpkg_database
+        cmd_install
     )]
 );
 our @EXPORT_OK = @{$EXPORT_TAGS{TESTING}};
@@ -44,6 +48,9 @@ our @EXPORT_OK = @{$EXPORT_TAGS{TESTING}};
 run() unless caller();
 
 sub run {
+    ###BUGALERT### Inside run() is where the %SIG signal handler stuff should go
+    #SIGTERM & SIGINT for ctrl-c!!! A fetchware cleanup command in cause of
+    #SIGKILL???
     my $verbose;
     my $dry_run;
 
@@ -939,7 +946,7 @@ EOD
 }
 
 
-=item create_fetchware_package($fetchwarefile_path, $unarchived_pachage_path);
+=item create_fetchware_package($fetchwarefile_path, $unarchived_package_path);
 
 Creates a fetchware package, ending in .fpkg, using $unarchived_package_path, as
 the directory to archive. Also, adds the C<Fetchwarefile> indicated by the
@@ -950,32 +957,95 @@ Returns the full pathname to the fetchware package that was created.
 =cut
 
 sub create_fetchware_package {
-    my ($fetchwarefile_path, $unarchived_pachage_path) = @_;
+    my ($fetchwarefile_path, $unarchived_package_path) = @_;
 
-    cp($fetchwarefile_path, $unarchived_pachage_path) or die <<EOD;
+    diag("FWF!it exists") if -e $fetchwarefile_path;
+    diag("FWF!it DOES NOT exist!!!") unless -e $fetchwarefile_path;
+    diag("it exists") if -e $unarchived_package_path;
+    diag("it DOES NOT exist!!!") unless -e $unarchived_package_path;
+##TEST##    # Support $fetchwarefile_path's that don't end with a filename of
+##TEST##    # 'Fetchware'.
+##TEST##    my $fetchwarefile_filename = ( splitpath($fetchwarefile_path) )[2];
+##TEST##    unless ($fetchwarefile_filename eq 'Fetchwarefile') {
+##TEST##        my $fuckthis = catfile($unarchived_package_path, 'Fetchwarefile');
+##TEST##        diag("FUCKTHIS[$fuckthis]");
+##TEST##        $unarchived_package_path = $fuckthis;
+##TEST##    }
+
+    cp($fetchwarefile_path, $unarchived_package_path) or die <<EOD;
 fetchware: run-time error. Fetchware failed to copy the Fetchwarefile you
 specified [$fetchwarefile_path] on the command line or was contained in the
 fetchware package you specified to the newly created fetchware package. Please
-see perldoc App::Fetchware.
+see perldoc App::Fetchware. OS error [$!].
 EOD
 
-    # Add Archive::Tar archiving code, and obtain and return the path of the
-    # newly created fetchware package.
-    my $last_dir = ( splitdir($unarchived_pachage_path) )[-1];
+    # Turn something like /tmp/fetchware-djdjkd8382/package-1.2/Fetchware (with
+    # the "Fetchwarefile" filename only sometimes being there) into just
+    # "package-1.2"
+    diag("UPP[$unarchived_package_path]");
+    my ($vol, $dirs, $file_or_dir) = splitpath($unarchived_package_path);
+    diag("DIRS[$dirs]");
+    diag("FOD[$file_or_dir]");
+    my $last_dir;
+    if (-f catpath($vol, $dirs, $file_or_dir)) {
+        diag("FILE");
+        $last_dir = ( splitdir($dirs) )[-1];
+    } elsif (-d catpath($vol, $dirs, $file_or_dir)) {
+        diag("DIR");
+        $last_dir = $file_or_dir;
+    } else {
+        die <<EOD;
+fetchware: Unexpected input error! The internal variable \$file_or_dir
+[$file_or_dir] was *not* a file or a directory, which means it's something weird
+like a symlink, fifo, named pipe, unix domain socket, or device file. This
+simply shouldn't happen. Please report this as a bug, and be sure to include
+your Fetchwarefile and/or fetchware package.
+EOD
+    }
+    diag("LASTDIR[$last_dir]");
     my $fetchware_package_name = "$last_dir.fpkg";
 
+##TEST##    # Chdir to the parent dir of the archive dir's path, so that File::Find will
+##TEST##    # return relative paths, because Archive::Tar may include the full albsolute
+##TEST##    # path, which is not what I want.
+##TEST##    my $previous_working_dir = cwd();
+##TEST##    ###BUGALERT### Every use of splitpath & catpath that ignore $volume is a
+##TEST##    #BUG!!! Note: $volume is '' on *nix, so I can simply *always* use it, and
+##TEST##    #File::Spec will just do the right thing.
+##TEST##    my ($vol, $directories, $unarchive_rel_path) = splitpath($unarchived_package_path);
+##TEST##    my @dirs = splitdir($directories);
+##TEST##    my $archive_parent_dir = catdir(@dirs);
+##TEST##diag("APD[$archive_parent_dir]");
+##TEST##diag("URP[$unarchive_rel_path]");
+##TEST##    chdir $archive_parent_dir or die <<EOD;
+##TEST##fetchware: run-time error. Fetchware failed to change its directory to
+##TEST##[$archive_parent_dir]. OS error [$!].
+##TEST##EOD
     # Determine @file_list, because Archive::Tar does not just automatically
     # include *all* files like bin/tar does.
     my @file_list;
-    find({wanted => sub {
+    find(sub {
             push @file_list, $File::Find::name;
-        }, no_chdir => 1}, '.');
+##TEST##        }, $unarchive_rel_path);
+        }, $unarchived_package_path);
+    ### cp command above puts ./Fetchwarefile in archive!
+    # Add Fetchwarefile to file list.
+    #unshift @file_list, './Fetchwarefile';
+    use Test::More;
+    #diag('FILELIST!!!');
+    #diag explain \@file_list;
     Archive::Tar->create_archive($fetchware_package_name, COMPRESS_GZIP, @file_list)
         or die <<EOD;
 fetchware: run-time error. fetchware failed to create the fetchwarefile package
 it was supposed to create at [$fetchware_package_name]. The Archive::Tar error
 was [@{[Archive::Tar::error()]}]. Please see perldoc fetchware.
 EOD
+
+##TEST##    # chdir() back like I never even chdir()d.
+##TEST##    chdir $previous_working_dir or die <<EOD;
+##TEST##fetchware: run-time error. Fetchware failed to change its directory to
+##TEST##[$archive_parent_dir]. OS error [$!].
+##TEST##EOD
 
     # Return a fullpath version of $fetchware_package_name.
     return catfile(cwd(), $fetchware_package_name);

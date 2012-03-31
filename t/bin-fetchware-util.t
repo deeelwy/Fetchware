@@ -9,13 +9,12 @@ use 5.010;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '7'; #Update if this changes.
+use Test::More 0.98;# tests => '7'; #Update if this changes.
 
 use App::Fetchware qw(:TESTING config);
 use Cwd 'cwd';
 use File::Spec::Functions qw(catfile splitpath);
 use Perl::OSType 'is_os_type';
-use File::Temp 'tempdir';
 
 # Crank up security to 11.
 File::Temp->safe_level( File::Temp::HIGH );
@@ -38,48 +37,48 @@ BEGIN {
 }
 
 
-subtest 'test parse_fetchwarefile(Fetchwarefile)' => sub {
-    skip_all_unless_release_testing();
+##TEST##subtest 'test parse_fetchwarefile(Fetchwarefile)' => sub {
+##TEST##    skip_all_unless_release_testing();
+##TEST##
+##TEST##    my $correct_fetchwarefile = <<EOF;
+##TEST##use App::Fetchware;
+##TEST##program 'who cares';
+##TEST##
+##TEST##lookup_url 'http://doesnt.exist/anywhere';
+##TEST##EOF
+##TEST##
+##TEST##    # Use a scalar ref instead of a real file to avoid having to write and read
+##TEST##    # files unnecessarily.
+##TEST##    ok(parse_fetchwarefile(\ $correct_fetchwarefile),
+##TEST##        'checked parse_fetchwarefile() success');
+##TEST##
+##TEST##    test_config({program => 'who cares',
+##TEST##            lookup_url => 'http://doesnt.exist/anywhere'},
+##TEST##        'checked parse_fetchwarefile() success CONFIG');
+##TEST##    
+##TEST##    eval_ok(sub {parse_fetchwarefile('doesntexist.ever-anywhere')},
+##TEST##        <<EOE, 'checked parse_fetchwarefile() failed open');
+##TEST##fetchware: run-time error. fetchware failed to open the Fetchwarefile you
+##TEST##specified on the command line [doesntexist.ever-anywhere]. Please check permissions
+##TEST##and try again. See perldoc App::Fetchware. The system error was [No such file or directory].
+##TEST##EOE
+##TEST##
+##TEST##    ###BUGALERT### How do I test the unlink()ing of the provided filename? Give
+##TEST##    #a filename that has read perms, but no delete perms?
+##TEST##
+##TEST##    my $syntax_errors = <<EOS;
+##TEST### J Random syntax error.
+##TEST##for {
+##TEST##EOS
+##TEST##
+##TEST##    eval_ok(sub {parse_fetchwarefile(\ $syntax_errors)},
+##TEST##        qr/fetchware failed to execute the Fetchwarefile/,
+##TEST##        'checked parse_fetchwarefile() failed to execute Fetchwarefile');
+##TEST##
+##TEST##};
 
-    my $correct_fetchwarefile = <<EOF;
-use App::Fetchware;
-program 'who cares';
 
-lookup_url 'http://doesnt.exist/anywhere';
-EOF
-
-    # Use a scalar ref instead of a real file to avoid having to write and read
-    # files unnecessarily.
-    ok(parse_fetchwarefile(\ $correct_fetchwarefile),
-        'checked parse_fetchwarefile() success');
-
-    test_config({program => 'who cares',
-            lookup_url => 'http://doesnt.exist/anywhere'},
-        'checked parse_fetchwarefile() success CONFIG');
-    
-    eval_ok(sub {parse_fetchwarefile('doesntexist.ever-anywhere')},
-        <<EOE, 'checked parse_fetchwarefile() failed open');
-fetchware: run-time error. fetchware failed to open the Fetchwarefile you
-specified on the command line [doesntexist.ever-anywhere]. Please check permissions
-and try again. See perldoc App::Fetchware. The system error was [No such file or directory].
-EOE
-
-    ###BUGALERT### How do I test the unlink()ing of the provided filename? Give
-    #a filename that has read perms, but no delete perms?
-
-    my $syntax_errors = <<EOS;
-# J Random syntax error.
-for {
-EOS
-
-    eval_ok(sub {parse_fetchwarefile(\ $syntax_errors)},
-        qr/fetchware failed to execute the Fetchwarefile/,
-        'checked parse_fetchwarefile() failed to execute Fetchwarefile');
-
-};
-
-
-subtest 'test create_fetchware_package()' => sub {
+#subtest 'test create_fetchware_package()' => sub {
     skip_all_unless_release_testing();
 
     my $fetchwarefile_path = create_test_fetchwarefile('# Fake Fetchwarefile for testing');
@@ -92,7 +91,7 @@ subtest 'test create_fetchware_package()' => sub {
         'checked create_fetchware_package() success');
 
     # Delete generated files.
-    ok(unlink('Fetchwarefile', 'App-Fetchware.fpkg') == 2,
+    ok(unlink('App-Fetchware.fpkg') == 1,
         'checked create_fetchware_package() delete generated files');
 
     eval_ok(sub {create_fetchware_package('doesntexist.ever-anywhere', cwd())},
@@ -100,166 +99,144 @@ subtest 'test create_fetchware_package()' => sub {
 fetchware: run-time error. Fetchware failed to copy the Fetchwarefile you
 specified [doesntexist.ever-anywhere] on the command line or was contained in the
 fetchware package you specified to the newly created fetchware package. Please
-see perldoc App::Fetchware.
+see perldoc App::Fetchware. OS error [No such file or directory].
 EOE
 
-};
-
-
-subtest 'check fetchware_database_path()' => sub {
-    skip_all_unless_release_testing();
-
-    if (is_os_type('Unix', $^O)) {
-        # If we're effectively root use a "system" directory.
-        if ($> == 0) {
-            is(fetchware_database_path(), '/var/log/fetchware',
-                'checked fetchware_database_path() as root');
-        # else use a "user" directory.
-        } else {
-            is(fetchware_database_path(), '/home/dly/.local/share/Perl/dist/fetchware',
-                'checked fetchware_database_path() as user');
-        }
-    } elsif ($^O eq "MSWin32") {
-        # Load main Windows module to use to see if we're Administrator or not.
-        BEGIN {
-            if ($^O eq "MSWin32")
-            {
-                require Win32;
-                Module->import();  # assuming you would not be passing arguments to "use Module"
-            }
-        }
-        if (Win32::IsAdminUser()) {
-            is(fetchware_database_path(), 'C:\fetchware',
-                'checked fetchware_database_path() as Administrator on Win32');
-        } else {
-            ###BUGALERT### Add support for this test on Windows!
-            fail('Must add support for non-admin on Windows!!!');
-        }
-    # Fall back on File::HomeDir's recommendation if not "Unix" or windows.
-    } else {
-            ###BUGALERT### Add support for everything else too!!!
-            fail('Must add support for your OS!!!');
-    }
-    
-};
-
-
-subtest 'check determine_fetchware_package_path()' => sub {
-    skip_all_unless_release_testing();
-
-    # Write some test files to my fetchware_database_path() to test determining
-    # if they're there or not.
-    my $fetchware_db_path = fetchware_database_path();
-    my @test_files = qw(fake-apache fake-apache2 mariadb qmail nginx);
-    for my $file (@test_files) {
-        ok(open( my $fh, '>', catfile($fetchware_db_path, $file)),
-            "check determine_fetchware_package_path() test file creation [$file]");
-        print $fh "# Meaningless test Fetchwarefile $file";
-        close $fh;
-    }
-
-    # Now test multiple results with one query.
-    is(determine_fetchware_package_path('apache'), 2,
-        "checked determine_fetchware_package_path() multiple values");
-
-    # Remove both apache's from further tests, because it will return 2 instead
-    # of a single scalar like the test assumes.
-    my @apacheless_test_files = grep { $_ !~ /apache/ } @test_files;
-
-    for my $file (@apacheless_test_files) {
-        like(determine_fetchware_package_path($file), qr/$file/,
-            "checked determine_fetchware_package_path() [$file] success");
-    }
-
-
-};
-
-
-subtest 'check extract_fetchwarefile()' => sub {
-    skip_all_unless_release_testing();
-
-    my $test_string = '# Fake Fetchwarefile just for testing';
-    my $fetchwarefile_path = create_test_fetchwarefile($test_string);
-
-    # Create a test fetchware package to text extract_fetchwarefile().
-    my $fetchware_package_path = create_fetchware_package($fetchwarefile_path, cwd());
-
-    ok(unlink('Fetchwarefile'),
-        'checked extract_fetchwarefile() delete test Fetchwarefile');
-
-    diag("TFPP[$fetchware_package_path]");
-    is( ( splitpath(extract_fetchwarefile($fetchware_package_path, cwd())) )[2],
-        'Fetchwarefile', 'checked extract_fetchwarefile() success');
-    my $fh;
-    ok(open($fh, '<', './Fetchwarefile'),
-        'checked extract_fetchwarefile() success open Fetchwarefile');
-    my $got_fetchwarefile;
-    {
-        local $/;
-        undef $/;
-        $got_fetchwarefile = <$fh>;
-    }
-    diag("GF[$got_fetchwarefile]");
-    is($got_fetchwarefile, $test_string,
-        q{checked extract_fetchwarefile() success Fetchwarefile's match});
-
-    # Delete generated files.
-    ok(unlink('Fetchwarefile', 'App-Fetchware.tar.gz'),
-        'checked extract_fetchwarefile() delete generated files');
-};
-
-
-
-subtest 'check copy_fpkg_to_fpkg_database()' => sub {
-    skip_all_unless_release_testing();
-
-    # Build a fetchwarefile package needed, so I can test installing it.
-    my $test_string = '# Fake Fetchwarefile just for testing';
-    my $fetchwarefile_path = create_test_fetchwarefile($test_string);
-    my $fetchware_package_path = create_fetchware_package($fetchwarefile_path, cwd());
-
-    copy_fpkg_to_fpkg_database($fetchware_package_path);
-
-    # Get filename from the test packages original path.
-    my ($fetchware_package_filename) = ( splitpath($fetchware_package_path) )[2];
-
-    ok(-e catfile(fetchware_database_path(), $fetchware_package_filename),
-        'check copy_fpkg_to_fpkg_database() success');
-
-    ###BUGALERT### Use Sub::Override to override fetchware_package_path(), so I
-    #can override its behavior and test this subroutine for failure.
-
-    # Delete generated files.
-    ok(unlink('Fetchwarefile', 'App-Fetchware.fpkg'),
-        'checked extract_fetchwarefile() delete generated files');
-};
+#};
+##TEST##
+##TEST##
+##TEST##subtest 'check fetchware_database_path()' => sub {
+##TEST##    skip_all_unless_release_testing();
+##TEST##
+##TEST##    if (is_os_type('Unix', $^O)) {
+##TEST##        # If we're effectively root use a "system" directory.
+##TEST##        if ($> == 0) {
+##TEST##            is(fetchware_database_path(), '/var/log/fetchware',
+##TEST##                'checked fetchware_database_path() as root');
+##TEST##        # else use a "user" directory.
+##TEST##        } else {
+##TEST##            is(fetchware_database_path(), '/home/dly/.local/share/Perl/dist/fetchware',
+##TEST##                'checked fetchware_database_path() as user');
+##TEST##        }
+##TEST##    } elsif ($^O eq "MSWin32") {
+##TEST##        # Load main Windows module to use to see if we're Administrator or not.
+##TEST##        BEGIN {
+##TEST##            if ($^O eq "MSWin32")
+##TEST##            {
+##TEST##                require Win32;
+##TEST##                Module->import();  # assuming you would not be passing arguments to "use Module"
+##TEST##            }
+##TEST##        }
+##TEST##        if (Win32::IsAdminUser()) {
+##TEST##            is(fetchware_database_path(), 'C:\fetchware',
+##TEST##                'checked fetchware_database_path() as Administrator on Win32');
+##TEST##        } else {
+##TEST##            ###BUGALERT### Add support for this test on Windows!
+##TEST##            fail('Must add support for non-admin on Windows!!!');
+##TEST##        }
+##TEST##    # Fall back on File::HomeDir's recommendation if not "Unix" or windows.
+##TEST##    } else {
+##TEST##            ###BUGALERT### Add support for everything else too!!!
+##TEST##            fail('Must add support for your OS!!!');
+##TEST##    }
+##TEST##    
+##TEST##};
+##TEST##
+##TEST##
+##TEST##subtest 'check determine_fetchware_package_path()' => sub {
+##TEST##    skip_all_unless_release_testing();
+##TEST##
+##TEST##    # Write some test files to my fetchware_database_path() to test determining
+##TEST##    # if they're there or not.
+##TEST##    my $fetchware_db_path = fetchware_database_path();
+##TEST##    my @test_files = qw(fake-apache fake-apache2 mariadb qmail nginx);
+##TEST##    for my $file (@test_files) {
+##TEST##        ok(open( my $fh, '>', catfile($fetchware_db_path, $file)),
+##TEST##            "check determine_fetchware_package_path() test file creation [$file]");
+##TEST##        print $fh "# Meaningless test Fetchwarefile $file";
+##TEST##        close $fh;
+##TEST##    }
+##TEST##
+##TEST##    # Now test multiple results with one query.
+##TEST##    is(determine_fetchware_package_path('apache'), 2,
+##TEST##        "checked determine_fetchware_package_path() multiple values");
+##TEST##
+##TEST##    # Remove both apache's from further tests, because it will return 2 instead
+##TEST##    # of a single scalar like the test assumes.
+##TEST##    my @apacheless_test_files = grep { $_ !~ /apache/ } @test_files;
+##TEST##
+##TEST##    for my $file (@apacheless_test_files) {
+##TEST##        like(determine_fetchware_package_path($file), qr/$file/,
+##TEST##            "checked determine_fetchware_package_path() [$file] success");
+##TEST##    }
+##TEST##
+##TEST##
+##TEST##};
+##TEST##
+##TEST##
+##TEST##subtest 'check extract_fetchwarefile()' => sub {
+##TEST##    skip_all_unless_release_testing();
+##TEST##
+##TEST##    my $test_string = '# Fake Fetchwarefile just for testing';
+##TEST##    my $fetchwarefile_path = create_test_fetchwarefile($test_string);
+##TEST##
+##TEST##    # Create a test fetchware package to text extract_fetchwarefile().
+##TEST##    my $fetchware_package_path = create_fetchware_package($fetchwarefile_path, cwd());
+##TEST##
+##TEST##    ok(unlink('Fetchwarefile'),
+##TEST##        'checked extract_fetchwarefile() delete test Fetchwarefile');
+##TEST##
+##TEST##    diag("TFPP[$fetchware_package_path]");
+##TEST##    is( ( splitpath(extract_fetchwarefile($fetchware_package_path, cwd())) )[2],
+##TEST##        'Fetchwarefile', 'checked extract_fetchwarefile() success');
+##TEST##    my $fh;
+##TEST##    ok(open($fh, '<', './Fetchwarefile'),
+##TEST##        'checked extract_fetchwarefile() success open Fetchwarefile');
+##TEST##    my $got_fetchwarefile;
+##TEST##    {
+##TEST##        local $/;
+##TEST##        undef $/;
+##TEST##        $got_fetchwarefile = <$fh>;
+##TEST##    }
+##TEST##    diag("GF[$got_fetchwarefile]");
+##TEST##    is($got_fetchwarefile, $test_string,
+##TEST##        q{checked extract_fetchwarefile() success Fetchwarefile's match});
+##TEST##
+##TEST##    # Delete generated files.
+##TEST##    ok(unlink('App-Fetchware.tar.gz'),
+##TEST##        'checked extract_fetchwarefile() delete generated files');
+##TEST##};
+##TEST##
+##TEST##
+##TEST##
+##TEST##subtest 'check copy_fpkg_to_fpkg_database()' => sub {
+##TEST##    skip_all_unless_release_testing();
+##TEST##
+##TEST##    # Build a fetchwarefile package needed, so I can test installing it.
+##TEST##    my $test_string = '# Fake Fetchwarefile just for testing';
+##TEST##    my $fetchwarefile_path = create_test_fetchwarefile($test_string);
+##TEST##    my $fetchware_package_path = create_fetchware_package($fetchwarefile_path, cwd());
+##TEST##
+##TEST##    copy_fpkg_to_fpkg_database($fetchware_package_path);
+##TEST##
+##TEST##    # Get filename from the test packages original path.
+##TEST##    my ($fetchware_package_filename) = ( splitpath($fetchware_package_path) )[2];
+##TEST##
+##TEST##    ok(-e catfile(fetchware_database_path(), $fetchware_package_filename),
+##TEST##        'check copy_fpkg_to_fpkg_database() success');
+##TEST##
+##TEST##    ###BUGALERT### Use Sub::Override to override fetchware_package_path(), so I
+##TEST##    #can override its behavior and test this subroutine for failure.
+##TEST##
+##TEST##    # Delete generated files.
+##TEST##    ok(unlink('Fetchwarefile', 'App-Fetchware.fpkg'),
+##TEST##        'checked extract_fetchwarefile() delete generated files');
+##TEST##};
 
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-#done_testing();
-
-
-sub create_test_fetchwarefile {
-    my $fetchwarefile_content = shift;
-
-    # Use a temp dir outside of the installation directory 
-    my $tempdir = tempdir ('fetchware-XXXXXXXXXXX', TMPDIR => 1, CLEANUP => 1);
-    my $fetchwarefile_path = catfile($tempdir, 'Fetchwarefile');
-
-    # Create a fake Fetchwarefile for our fake fetchware package.
-    my $write_fh;
-    ok(open($write_fh, '>', $fetchwarefile_path),
-        'checked create_fetchware_package() open file');
-    
-    # Put test stuff in Fetchwarefile.
-    print $write_fh "$fetchwarefile_content";
-
-    # Close the file in case it bothers Archive::Tar reading it.
-    close $write_fh;
-
-    return $fetchwarefile_path;
-}
+done_testing();
 
 
 sub test_config {
