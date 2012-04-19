@@ -16,7 +16,8 @@ use Getopt::Long qw(:config bundling pass_through);
 use App::Fetchware qw(:FETCHWARE);
 use Archive::Tar;
 use File::Copy qw(mv cp);
-use File::Spec::Functions qw(curdir catdir catfile catpath tmpdir splitpath splitdir rel2abs);
+use File::Spec::Functions qw(curdir catdir catfile catpath tmpdir splitpath
+splitdir rel2abs abs2rel updir);
 use Cwd 'cwd';
 use File::Path 'make_path';
 use Term::UI;
@@ -26,6 +27,8 @@ use Perl::OSType 'is_os_type';
 use File::HomeDir;
 use File::Find 'find';
 use File::Temp qw(tempdir tempfile);
+use Fcntl qw(S_ISDIR S_ISREG);
+use Path::Class;
 
 # Setup exports, which are only meant to ease testing.
 use Exporter 'import';
@@ -72,24 +75,30 @@ sub run {
     #
     # Below the first argument to fetchware is used to determine what fetchware
     # does.  If nothing is specified then help is printed.
+    ###BUGALERT### Add a loop around @ARGV to support multiple Fetchwarefiles
+    #or fetchware packages ending in .fpkg.
     eval { # Trap any fatal errors.
-        given ($ARGV[0]) {
+        given (shift @ARGV) {
             when('install') {
-                cmd_install(); # install() was taken by App::Fetchware!.
+                cmd_install(@ARGV); # install() was taken by App::Fetchware!.
             } when('uninstall') {
-                uninstall();
+                uninstall(@ARGV);
             } when('new') {
-                new();
+                new(@ARGV);
             } when('upgrade') {
-                upgrade();
+                upgrade(@ARGV);
             } when('upgrade-all') {
-                upgrade_all();
+                upgrade_all(@ARGV);
             } when('help') {
-                help();
+                help(@ARGV);
             } default {
-                help();
+                help(@ARGV);
             }
         }
+        # Exit success, because if any of the main subroutines run into any
+        # problems they die() exceptions, which get caught in eval above, and
+        # warn()ed below, and fetchware exits 1 for failure.
+        exit 0;
     };
     # If a fatal error was thrown print it to STDERR and exit indicating failure.
     if ($@) {
@@ -113,28 +122,47 @@ command line.
 
 cmd_install() implements fetchware's install command, which installs a package
 based on the specified Fetchwarefile or fetchware package. If no filename was
-provided then, cmd_install() calls new() to create and install a new fetchware
-package.
+provided or the filename doesn't exist then, cmd_install() calls new() to create
+and install a new fetchware package.
 
 =cut
 
 sub cmd_install {
-    my $filename = pop @ARGV;
+    ###BUGALERT### After verifying basic functionality of cmd_install wrap
+    #subroutine contents in a for my $filename (pop @ARGV) loop to try to
+    #install all given arguments that arn't command line options as parsed by
+    #GetOpt::Long.
+    my $filename = shift;
 
     # If no Fetchwarefile or *.fpkg was specified, then pretend the user ran
     # new() instead of install().
-    if (defined($filename)) {
-        parse_fetchwarefile($filename);
-
+    if (defined($filename) and -e $filename) {
         # Run the :FETCHWARE subroutines to do everything to install the
         # program.
         ###BUGALERT### Needs support for override(), which I'll add later.
         ###BUGALERT### Add printing messages about what fetchware is doing, and
         #support -q and -v and -D.
-        start();
-        my $download_url = lookup();
 
-        my $package_path = download($download_url);
+        # Absolutize $filename so it can survive start() chdir()ing into a temp
+        # dir.
+        $filename = rel2abs($filename);
+
+        my $temp_dir = start();
+
+        my $fetchwarefile_path;
+        if ($filename =~ /\.fpkg$/) {
+            $fetchwarefile_path = extract_fetchwarefile($filename, cwd());            
+            parse_fetchwarefile($fetchwarefile_path);
+        } else {
+            parse_fetchwarefile($filename);
+            $fetchwarefile_path = $filename;
+        }
+
+        my $download_url = lookup();
+        diag("DUDUDUDUDUDUDU[$download_url]");
+
+        my $package_path = download($temp_dir, $download_url);
+        diag("PPPPPPPPPPP[$package_path]");
 
         verify($download_url, $package_path);
 
@@ -144,17 +172,23 @@ sub cmd_install {
 
         install();
 
-        ###BUGALERT### create_fetchware_package() is being called wrong. FIXIT!
-        my $fetchwarefile_path = create_fetchware_package();
+        my $fetchware_package_path
+            =
+            create_fetchware_package($fetchwarefile_path, cwd());
 
-        install_fetchware_package($fetchwarefile_path);
+        copy_fpkg_to_fpkg_database($fetchware_package_path);
 
         end();
 
-        # Exit program indicating success.
-        exit 0;
+        # Return the path of the created and installed fetchware package.
+        return catfile(fetchware_database_path(),
+            ( splitpath($fetchware_package_path) )[2] );
     } else {
-        new();
+        ###BUGALERT### Replace with warn for proposed for loop above to work???
+        die <<EOD;
+fetchware: You called fetchware install incorrectly. You must also specify
+either a Fetchwarefile or a fetchware package that ends with [.fpkg].
+EOD
     }
 }
 
@@ -759,6 +793,8 @@ well.
 
 sub upgrade {
     my $filename = shift;
+    ###BUGALERT### Just call cmd_install() after the if new version has been
+    #released check!
     ###BUGALERT### Double check the crazy code below!
     ###BUGALERT### Shouldn't this command and the others like it loop over @ARGV
     #and upgrade all provide options!!!
@@ -809,9 +845,12 @@ sub upgrade {
             =
             create_fetchware_package($fetchwarefile_path, cwd());
 
-        install_fetchware_package($fetchware_package_path);
+        copy_fpkg_to_fpkg_database($fetchware_package_path);
 
         end();
+
+        # Return the path of the created and installed fetchware package.
+        return fetchware_database_path() . ( splitpath($fetchware_package_path) )[2];
     } else {
         ###BUGALERT### Add verbose, quite, and debug statement saying that the
         #installed version is the latest version.
@@ -853,7 +892,7 @@ sub help {
 	say <<'HELP';
 
 fetchware is a package manager for source code distributions. It gives you the
-ability to install, uninstall , and even upgrade your source code distributions
+ability to install, uninstall, and even upgrade your source code distributions
 just like you can with your binary packages using yum, apt-get, or slackpkg.
 
 To create a new package just use fetchware's "new" command such as:
@@ -910,6 +949,7 @@ Returns true on success and dies with an error message if it fails.
 
 =cut
 
+
 sub parse_fetchwarefile {
     my $fetchwarefile_path = shift;
 
@@ -925,14 +965,6 @@ EOD
         local $/;
         undef $/;
         $fetchwarefile = <$fh>;
-    }
-
-    # Delete unneeded on-disk cwd()/Fetchwarefile.
-    if (-e $fetchwarefile_path) {
-        unlink $fetchwarefile_path or die <<EOD;
-fetchware: run-time error. fetchware failed to unlink the Fetchwarefile it
-extracted from your Fetchware package [$fetchwarefile_path]. Os error [$!].
-EOD
     }
 
     eval $fetchwarefile;
@@ -954,101 +986,109 @@ $fetchwarefile_path argument to the fethware package that is created.
 
 Returns the full pathname to the fetchware package that was created.
 
+Note: I must chdir to the parent directory of the current cwd(), because I
+changed create_fetchware_package() to assume that it is already in the
+correct directory, which is fair, because it's meant to be run *after*
+start() and the other main fetchware subroutines have been run.
+
 =cut
 
 sub create_fetchware_package {
     my ($fetchwarefile_path, $unarchived_package_path) = @_;
 
+    # chdir() to my cwd's parent directory, because my cwd is currently on linux
+    # /tmp/fetchware-kd883ejfe/program-1.2, and I need the program-1.2 part to
+    # be in the archive's @file_list.
+    my $previous_cwd = cwd();
+    my $new_dir = dir(cwd())->parent();
+    chdir($new_dir) or die <<EOD;
+fetchware: run-time error. Fetchware failed to change it's working directory to
+[$new_dir] from [$previous_cwd]. The os error was [$!].
+EOD
+
     diag("FWF!it exists") if -e $fetchwarefile_path;
     diag("FWF!it DOES NOT exist!!!") unless -e $fetchwarefile_path;
     diag("it exists") if -e $unarchived_package_path;
+    diag("CWD[@{[cwd()]}]");
     diag("it DOES NOT exist!!!") unless -e $unarchived_package_path;
-##TEST##    # Support $fetchwarefile_path's that don't end with a filename of
-##TEST##    # 'Fetchware'.
-##TEST##    my $fetchwarefile_filename = ( splitpath($fetchwarefile_path) )[2];
-##TEST##    unless ($fetchwarefile_filename eq 'Fetchwarefile') {
-##TEST##        my $fuckthis = catfile($unarchived_package_path, 'Fetchwarefile');
-##TEST##        diag("FUCKTHIS[$fuckthis]");
-##TEST##        $unarchived_package_path = $fuckthis;
-##TEST##    }
+my $FFP = catfile($unarchived_package_path, 'Fetchwarefile');
+diag("FFP[$FFP]");
+    # Only copy the Fetchwarefile if one in the right directory doesn't already
+    # exist, because fetchware package's will already have a Fetchwarefile in
+    # the right place.
+    unless (-e catfile(cwd(), 'Fetchwarefile')) {
+        # Support $fetchwarefile_path's that don't end with a filename of
+        # 'Fetchware'.
+        my $fetchwarefile_filename = ( splitpath($fetchwarefile_path) )[2];
+        unless ($fetchwarefile_filename eq 'Fetchwarefile') {
+            my $renamed_cwd
+                =
+                catfile(cwd(), 'Fetchwarefile');
+            cp($fetchwarefile_path, $renamed_cwd)
+                or goto CPERR;
+        } else {
+            cp($fetchwarefile_path, cwd())
+                or goto CPERR;
+        }
+    }
 
-    cp($fetchwarefile_path, $unarchived_package_path) or die <<EOD;
-fetchware: run-time error. Fetchware failed to copy the Fetchwarefile you
-specified [$fetchwarefile_path] on the command line or was contained in the
-fetchware package you specified to the newly created fetchware package. Please
-see perldoc App::Fetchware. OS error [$!].
-EOD
 
     # Turn something like /tmp/fetchware-djdjkd8382/package-1.2/Fetchware (with
     # the "Fetchwarefile" filename only sometimes being there) into just
     # "package-1.2"
-    diag("UPP[$unarchived_package_path]");
-    my ($vol, $dirs, $file_or_dir) = splitpath($unarchived_package_path);
-    diag("DIRS[$dirs]");
-    diag("FOD[$file_or_dir]");
-    my $last_dir;
-    if (-f catpath($vol, $dirs, $file_or_dir)) {
-        diag("FILE");
-        $last_dir = ( splitdir($dirs) )[-1];
-    } elsif (-d catpath($vol, $dirs, $file_or_dir)) {
-        diag("DIR");
-        $last_dir = $file_or_dir;
-    } else {
-        die <<EOD;
-fetchware: Unexpected input error! The internal variable \$file_or_dir
-[$file_or_dir] was *not* a file or a directory, which means it's something weird
-like a symlink, fifo, named pipe, unix domain socket, or device file. This
-simply shouldn't happen. Please report this as a bug, and be sure to include
-your Fetchwarefile and/or fetchware package.
-EOD
-    }
-    diag("LASTDIR[$last_dir]");
+    my $pc = dir($unarchived_package_path);
+    my $last_dir = $pc->dir_list(-1, 1);
+    diag("LASTLASTDIR[$last_dir]");
     my $fetchware_package_name = "$last_dir.fpkg";
+    # Calculate the full absolute path of the fetchware package I create below.
+    my $fetchware_package_full_path = catfile(cwd(), $fetchware_package_name);
 
-##TEST##    # Chdir to the parent dir of the archive dir's path, so that File::Find will
-##TEST##    # return relative paths, because Archive::Tar may include the full albsolute
-##TEST##    # path, which is not what I want.
-##TEST##    my $previous_working_dir = cwd();
-##TEST##    ###BUGALERT### Every use of splitpath & catpath that ignore $volume is a
-##TEST##    #BUG!!! Note: $volume is '' on *nix, so I can simply *always* use it, and
-##TEST##    #File::Spec will just do the right thing.
-##TEST##    my ($vol, $directories, $unarchive_rel_path) = splitpath($unarchived_package_path);
-##TEST##    my @dirs = splitdir($directories);
-##TEST##    my $archive_parent_dir = catdir(@dirs);
-##TEST##diag("APD[$archive_parent_dir]");
-##TEST##diag("URP[$unarchive_rel_path]");
-##TEST##    chdir $archive_parent_dir or die <<EOD;
-##TEST##fetchware: run-time error. Fetchware failed to change its directory to
-##TEST##[$archive_parent_dir]. OS error [$!].
-##TEST##EOD
     # Determine @file_list, because Archive::Tar does not just automatically
     # include *all* files like bin/tar does.
     my @file_list;
     find(sub {
             push @file_list, $File::Find::name;
-##TEST##        }, $unarchive_rel_path);
         }, $unarchived_package_path);
-    ### cp command above puts ./Fetchwarefile in archive!
+
+    # Convert absolute filenames into relative filenames, because Archive::Tar
+    # will use the exact filenames that you provide, so I need to remove the
+    # unnneeded machine specific paths from the paths that will be stored in the
+    # fetchware package.
+    $_ = abs2rel($_) for @file_list;
+diag("CWDCWD[@{[cwd()]}]");
+
     # Add Fetchwarefile to file list.
-    #unshift @file_list, './Fetchwarefile';
+    ###BUGALERT### Add the gpg stuff to to cache lookups for keys.
+    unshift @file_list, './Fetchwarefile';
     use Test::More;
     #diag('FILELIST!!!');
     #diag explain \@file_list;
-    Archive::Tar->create_archive($fetchware_package_name, COMPRESS_GZIP, @file_list)
+    Archive::Tar->create_archive($fetchware_package_full_path, COMPRESS_GZIP, @file_list)
         or die <<EOD;
 fetchware: run-time error. fetchware failed to create the fetchwarefile package
 it was supposed to create at [$fetchware_package_name]. The Archive::Tar error
 was [@{[Archive::Tar::error()]}]. Please see perldoc fetchware.
 EOD
 
-##TEST##    # chdir() back like I never even chdir()d.
-##TEST##    chdir $previous_working_dir or die <<EOD;
-##TEST##fetchware: run-time error. Fetchware failed to change its directory to
-##TEST##[$archive_parent_dir]. OS error [$!].
-##TEST##EOD
+
+    # chdir() back to original directory.
+    chdir($previous_cwd) or die <<EOD;
+fetchware: run-time error. Fetchware failed to change its working directory from
+[@{[cwd()]}] to [$previous_cwd]. The os error was [$!].
+EOD
 
     # Return a fullpath version of $fetchware_package_name.
-    return catfile(cwd(), $fetchware_package_name);
+    return $fetchware_package_full_path;
+
+
+    # Use old school C-style error handling to avoid copying and pasting this
+    # error message.
+    CPERR: die <<EOD;
+fetchware: run-time error. Fetchware failed to copy the Fetchwarefile you
+specified [$fetchwarefile_path] on the command line or was contained in the
+fetchware package you specified to the newly created fetchware package. Please
+see perldoc App::Fetchware. OS error [$!].
+EOD
 }
 
 
@@ -1141,10 +1181,10 @@ sub determine_fetchware_package_path {
 =item extract_fetchwarefile($fetchware_package_path, $extract_it_here);
 
 Extracts out the Fetchwarefile of the provided fetchware package as specified by
-$fetchware_package_path, and writes the Fetchwarefile to
-C<$extract_it_here/Fetchwarefile>. Throws an exception if it fails.
+$fetchware_package_path, and returns the content of the file as a scalar. Throws
+an exception if it fails.
 
-Returns $fetchwarefile_path, which is C<catfile($extract_it_here, 'Fetchwarefile')>
+Returns $fetchwarefile_content.
 
 =cut
 
@@ -1153,10 +1193,15 @@ sub extract_fetchwarefile {
 
     # Rename fetchwarefile package (.fpkg) to a regular old .tar.gz to avoid
     # confusing Archive::Tar.
+    my $fetchware_tar_gz_path = $fetchware_package_path;
     if ($fetchware_package_path =~ /\.fpkg$/) {
-        my $fetchware_tar_gz_path = $fetchware_package_path;
         $fetchware_tar_gz_path =~ s/\.fpkg$/.tar.gz/;
-        mv($fetchware_package_path, $fetchware_tar_gz_path);
+        mv($fetchware_package_path, $fetchware_tar_gz_path) or die <<EOD;
+fetchware: run-time error. An internal move operation failed when
+extract_fetchwarefile() attempted to rename the [$fetchware_package_path] from
+*.fpkg to *.tar.gz, so that Archive::Tar can unarchive the archive. The OS error
+was [$!].
+EOD
 
         # Overwrite $fetchware_package_path, because Archive::Tar demands a
         # .tar.gz or tgz extenstion .fpkg won't work.
@@ -1172,14 +1217,22 @@ sub extract_fetchwarefile {
     my $fetchwarefile_path = catfile($extract_it_here, 'Fetchwarefile');
 
     diag("WTFIS[$fetchwarefile_path]");
-    $tar->extract_file('./Fetchwarefile', $fetchwarefile_path)
+    $tar->extract('./Fetchwarefile')
         or die <<EOD;
 fetchware: run-time error. fetchware failed to extract your fetchware package's
 Fetchwarefile from the argument you specified on the command line [@ARGV].
 Archive::Tar error [@{[$tar->error()]}]. Please see perldoc App::Fetchware.
 EOD
 
-
+    # Stay tidy by renaming $fetchware_package_path back to a fetchware package
+    # ending in .fpkg.
+    $tar->clear();
+    mv($fetchware_tar_gz_path, $fetchware_package_path) or die <<EOD;
+fetchware: run-time error. An internal move operation failed when
+extract_fetchwarefile() attempted to rename the [$fetchware_package_path] from
+*.tar.gz back to *.fpkg, so that Archive::Tar can unarchive the archive. The OS
+error was [$!].
+EOD
 
     return $fetchwarefile_path;
 }
@@ -1189,8 +1242,10 @@ EOD
 
 Installs (just copies) the specified fetchware package to the fetchware
 database, which is /var/log/fetchware on UNIX, C:\FETCHWARE on Windows with
-root or Administrator, or $HOME/.fetchware if run as a user on Windows. All
-others are whatever C<File::HomeDir> says.
+root or Administrator. All others are whatever C<File::HomeDir> says.
+
+Creates the directory the fetchware database is stored in if it does not already
+exist.
 
 =cut
 
@@ -1199,12 +1254,57 @@ sub copy_fpkg_to_fpkg_database {
 
     my $fetchware_db_path = fetchware_database_path();
 
+    unless (-e $fetchware_db_path) {
+        # Just use make_path() from File::Path to avoid having to check if
+        # directories that contain the fetchware db directory have been created
+        # or not. I doubt /var and /var/log won't exist on *nix systems, but
+        # they probably don't on Mac OSX, which is kinda *nix.
+        make_path($fetchware_db_path) or die <<EOD;
+fetchware: run-time error. fetchware failed to create the directory that it
+needs to store its database of installed packages in [$fetchware_db_path].
+Library function error [$@].
+EOD
+    }
     cp($fetchwarefile_path, $fetchware_db_path) or die <<EOD;
 fetchware: run-time error. fetchware failed to copy the specified
 fetchware package path [$fetchwarefile_path] to [$fetchware_db_path]. Please
 see perldoc App::Fetchware.
 EOD
 }
+
+
+###BUGALERT### uninstall() will need a rm_fpkg_from_fpkg_database() subroutine.
+
+
+###BUGALERT### Create a head1 for this TEST SUBROUTINE.
+
+=item create_test_fetchwarefile($fetchwarefile_content);
+
+Writes the provided $fetchwarefile_content to a C<Fetchwarefile> inside a
+tempdir, and returns the $fetchwarefile_path.
+
+=cut
+
+sub create_test_fetchwarefile {
+    my $fetchwarefile_content = shift;
+
+    # Use a temp dir outside of the installation directory 
+    my ($fh, $fetchwarefile_path) = tempfile('fetchware-XXXXXXXXXXX', TMPDIR => 1,);
+
+    # Create a fake Fetchwarefile for our fake fetchware package.
+    my $write_fh;
+    ok(open($write_fh, '>', $fetchwarefile_path),
+        'checked create_fetchware_package() open file');
+    
+    # Put test stuff in Fetchwarefile.
+    print $write_fh "$fetchwarefile_content";
+
+    # Close the file in case it bothers Archive::Tar reading it.
+    close $write_fh;
+
+    return $fetchwarefile_path;
+}
+
 
 
 1;

@@ -71,6 +71,7 @@ our %EXPORT_TAGS = (
         lookup
         download
         verify
+        unarchive
         build
         install
         end
@@ -698,6 +699,9 @@ EOD
 Creates a temp directory using File::Temp, and sets that directory up so that it
 will be deleted by File::Temp when fetchware closes.
 
+Returns the $temp_file that start() creates, so everything else has access to
+the directory they should use for storing file operations.
+
 =cut
 
 sub start {
@@ -1226,11 +1230,11 @@ bugs Net::FTP or HTTP::Tiny impose.
 =cut
 
 sub download {
-    my $download_url = shift;
+    my ($temp_dir, $download_url) = @_;
 
     my $downloaded_file_path = download_file($download_url);
 
-    return determine_package_path(config('temp_dir'), $downloaded_file_path);
+    return determine_package_path($temp_dir, $downloaded_file_path);
 }
 
 
@@ -1728,7 +1732,11 @@ sub unarchive {
     ###BUGALERT### fetchware needs Archive::Zip, which is *not* one of
     #Archive::Extract's dependencies.
     diag("PP[$package_path]");
-    my $ae = Archive::Extract->new(archive => "$package_path");
+    my $ae = Archive::Extract->new(archive => "$package_path") or die <<EOD;
+App-Fetchware: internal error. Archive::Extract->new() as called by unarchive()
+failed to create a new Archive::Extract object. This is a fatal error. The
+archive in question was [$package_path].
+EOD
 
 ###BUGALERT### Files are listed *after* they're extracted, because
 #Archive::Extract *only* extracts files and then lets you see what files were
