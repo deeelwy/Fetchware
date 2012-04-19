@@ -1,0 +1,6 @@
+#!/bin/sh
+
+# A Test ./configure file for testing Fetchware's install, upgrade, and so on
+# functionality.
+
+echo "fetchware: ./configure ran successfully!"

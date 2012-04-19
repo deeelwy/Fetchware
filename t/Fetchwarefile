@@ -1,0 +1,7 @@
+# test-dist is a fake "test distribution" mean for testing fetchware's basic installing, upgrading, and
+# so on functionality.
+use App::Fetchware;
+
+program 'test-dist';
+
+lookup_url 'file://t';
