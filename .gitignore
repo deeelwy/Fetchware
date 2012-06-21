@@ -1,3 +1,4 @@
 *~
 *.sw*
 *.fpkg
+test-dist*.tar.gz
