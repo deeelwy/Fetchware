@@ -8,4 +8,4 @@ install:
 	sh -c 'echo "fetchware: make install ran successfully!"'
 
 build-package:
-	tar --create --gzip --verbose --file ../test-dist-1.00.fpkg --directory .. Fetchwarefile test-dist-1.00
+	sh -c '(cd .. && tar --create --gzip --verbose --file test-dist-1.00.fpkg  ./Fetchwarefile test-dist-1.00)'
