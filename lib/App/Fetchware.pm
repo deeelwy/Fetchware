@@ -4,11 +4,13 @@ package App::Fetchware;
 
 # CPAN modules making Fetchwarefile better.
 use File::Temp 'tempdir';
-use File::Spec::Functions qw(catfile splitpath updir splitdir file_name_is_absolute);
+use File::Spec::Functions qw(catfile catdir splitpath updir splitdir
+    file_name_is_absolute);
 use Path::Class;
 use Data::Dumper;
 use Net::FTP;
 use HTTP::Tiny;
+use File::Copy 'cp';
 use HTML::TreeBuilder;
 use Scalar::Util 'blessed';
 ###BUGALERT### Replace IPC::System::Simple with App::Cmd, because App::Cmd is one of
@@ -689,6 +691,9 @@ EOD
 } # End BEGIN BLOCK.
 
 
+# $original_cwd is a globalish lexical variable that stores fetchware's original
+# working directory for later use if its needed.
+my $original_cwd;
 
 =item start()
 
@@ -734,7 +739,8 @@ exception was [$exception]. See perldoc App::Fetchware.
 EOD
 
     use Cwd;
-    diag("cwd[@{[cwd()]}]");
+    $original_cwd = cwd();
+    diag("cwd[@{[$original_cwd]}]");
     # Change directory to $CONFIG{TempDir} to make unarchiving and building happen
     # in a temporary directory, and to allow for multiple concurrent fetchware
     # runs at the same time.
@@ -782,6 +788,7 @@ values will result in fetchware die()ing with an error message.
 =cut
 
 sub lookup {
+diag "lookup_url[@{[config('lookup_url')]}]";
     # die if lookup_url wasn't specified.
     # die if lookup_method was specified wrong.
     check_lookup_config();
@@ -882,7 +889,7 @@ sub get_directory_listing {
         } when (m!^http://!) {
             return download_dirlist(config('lookup_url'));
         } when (m!^file://!) {
-            list_file_dirlist(config('lookup_url'));
+            return list_file_dirlist(config('lookup_url'));
         }
     }
 }
@@ -905,6 +912,10 @@ timestamps that make up the directory listing.
 
 sub parse_directory_listing {
     my ($directory_listing) = @_;
+
+diag "pdl file listing";
+diag explain $directory_listing;
+diag "end pdl";
 
     given (config('lookup_url')) {
         when (m!^ftp://!) {
@@ -938,14 +949,23 @@ what OS I'm running on.
 sub list_file_dirlist {
     my $local_lookup_url = shift;
 
+diag "before[$local_lookup_url]";
     $local_lookup_url =~ s!^file://!!; # Strip scheme garbage.
+diag "after[$local_lookup_url]";
+
+    # Prepend $original_cwd if $local_lookup_url is a relative path.
+    unless (file_name_is_absolute($local_lookup_url)) {
+        $local_lookup_url =  catdir($original_cwd, $local_lookup_url);
+    }
 
     my @file_listing;
     for my $file (glob "$local_lookup_url/*") {
-        next if -d $file; # Skip directories.
+diag "lfdfile[$file]";
         push @file_listing, $file;
     }
-
+diag "lfd file_listing";
+diag explain \@file_listing;
+diag "end lfd file_listing";
     return \@file_listing;
 }
 
@@ -966,6 +986,9 @@ use to download the archive of your program.
 
 sub determine_download_url {
     my $filename_listing = shift;
+diag "ddurl file listing";
+diag explain $filename_listing;
+diag "end ddurl";
 
     # Base lookup algorithm on lookup_method configuration sub if it was
     # specified.
@@ -1171,6 +1194,9 @@ filename, which should be the latest version of your program.
 
 sub  lookup_by_timestamp {
     my $file_listing = shift;
+diag "lbt file listing";
+diag explain $file_listing;
+diag "end lbt";
     
     # Sort the timstamps to determine the latest one. The one with the higher
     # numbers, and put $b before $a to put the "bigger", later versions before
@@ -1230,6 +1256,11 @@ files.
 sub lookup_determine_downloadurl {
     my $file_listing = shift;
 
+use Test::More;
+diag "file_listing";
+diag explain $file_listing;
+diag "endfilelisting";
+
     # First grep @$file_listing for $CONFIG{filter} if $CONFIG{filter} is defined.
     # This is done, because some distributions have multiple versions of the
     # same program in one directory, so sorting by version numbers or
@@ -1280,6 +1311,8 @@ sub lookup_determine_downloadurl {
                 return "@{[config('lookup_url')]}/$fl->[0]";
             } when (/\.zip$/) {
                 return "@{[config('lookup_url')]}/$fl->[0]";
+            } when (/\.fpkg$/) {
+                return "@{[config('lookup_url')]}/$fl->[0]";
             }
         }
     }
@@ -1317,11 +1350,28 @@ bugs Net::FTP or HTTP::Tiny impose.
 =cut
 
 sub download {
+    ###BUGALERT### Why does download() need $temp_dir as an argument????
     my ($temp_dir, $download_url) = @_;
 
-    my $downloaded_file_path = download_file($download_url);
+    my $downloaded_file_path;
+    given ($download_url) {
+        # When a ftp or http scheme download the file.
+        when ($_ =~ m!^(ftp://|http://)!) {
+            $downloaded_file_path = download_file($download_url);
+            return determine_package_path($temp_dir, $downloaded_file_path);
+        # When a local file just copy it with File::Copy's cp().
+        } when ($_ =~ m!^file://!) {
+            $download_url =~ s!^file://!!; # Strip useless URL scheme.
+            cp($download_url, $temp_dir) or die <<EOD;
+App::Fetchware: run-time error. Fetchware failed to copy the download URL
+[$download_url] to the working directory [@{[cwd()]}]. Os error [$!].
+EOD
+            $downloaded_file_path = catdir($temp_dir,
+                file($download_url)->basename());
+            return $downloaded_file_path;
+        }
+    }
 
-    return determine_package_path($temp_dir, $downloaded_file_path);
 }
 
 

@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '4'; #Update if this changes.
+use Test::More 0.98 tests => '5'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile);
 use URI::Split 'uri_split';
@@ -46,6 +46,7 @@ subtest 'OVERRIDE_DOWNLOAD exports what it should' => sub {
 
 
 subtest 'test determine_package_path()' => sub {
+    skip_all_unless_release_testing();
     my $cwd = cwd();
     diag("cwd[$cwd]");
 
@@ -69,7 +70,7 @@ subtest 'test download()' => sub {
         # Determine $filename for is() test below.
         my ($scheme, $auth, $path, $query, $frag) = uri_split($url);
         my ($volume, $directories, $filename) = splitpath($path);
-        is(download($url), catfile($cwd, $filename),
+        is(download($cwd, $url), catfile($cwd, $filename),
             'checked download() success.');
 
         ok(-e $filename, 'checked download() file exists success');
@@ -77,6 +78,24 @@ subtest 'test download()' => sub {
 
     }
 
+};
+
+
+subtest 'test download() local file success' => sub {
+    # manually set $CONFIG{TempDir} to cwd().
+    my $cwd = cwd();
+    config_replace('temp_dir', "$cwd");
+
+    my $url = "file://t/test-dist-1.00.fpkg";
+
+    # Determine $filename for is() test below.
+    my ($scheme, $auth, $path, $query, $frag) = uri_split($url);
+    my ($volume, $directories, $filename) = splitpath($path);
+    is(download($cwd, $url), catfile($cwd, $filename),
+        'checked download() local file success.');
+
+    ok(-e $filename, 'checked download() file exists success');
+    ok(unlink $filename, 'checked deleting downloaded file');
 };
 
 
