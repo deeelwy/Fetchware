@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '12'; #Update if this changes.
+use Test::More 0.98 tests => '14'; #Update if this changes.
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -28,11 +28,13 @@ my $class = 'App::Fetchware';
 subtest 'OVERRIDE_LOOKUP exports what it should' => sub {
     my @expected_overide_lookup_exports = qw(
         check_lookup_config
-        download_directory_listing
+        get_directory_listing
         parse_directory_listing
+        list_file_dirlist
         determine_download_url
         ftp_parse_filelist
         http_parse_filelist
+        file_parse_filelist
         lookup_by_timestamp
         lookup_by_versionstring
         lookup_determine_downloadurl
@@ -79,7 +81,7 @@ EOS
 };
 
 
-subtest 'test download_directory_listing()' => sub {
+subtest 'test get_directory_listing()' => sub {
     skip_all_unless_release_testing();
 
     for my $lookup_url (
@@ -92,14 +94,36 @@ subtest 'test download_directory_listing()' => sub {
         # Make this a FETCHWARE_FTP_REMOTE env var in frt().
         lookup_url $lookup_url;
 
-        # Do needed operations before I can test download_directory_listing().
+        # Do needed operations before I can test get_directory_listing().
         check_lookup_config();
 
-        # Test download_directory_listing().
+        # Test get_directory_listing().
         $lookup_url =~ m!^(ftp|http)(:?://.*)?!;
         my $scheme = $1;
-        ok(download_directory_listing(), "checked download_directory_listing() $scheme success");
+        ok(get_directory_listing(),
+            "checked get_directory_listing() $scheme success");
     }
+};
+
+
+subtest 'test list_file_dirlist()' => sub {
+    skip_all_unless_release_testing();
+
+    # Get a dirlisting for fetchware's testing directory, because it *has* to
+    # exist.
+    my $dirlist = list_file_dirlist('file://t');
+
+    # Check if a known directory is *not* in the listing.
+    ok( ! grep /test-dist-1\.00[^\.tar\.gz]/, @$dirlist,
+        'checked list_file_dirlist() directory removal');
+
+    # Check if known files are in the t directory. Regexes are used in case
+    # files are changed or added, so I don't have to constantly update a silly
+    # listing of all the files in the t directory.
+    ok( grep m!^t/App-Fetchware-!, @$dirlist,
+        'checked list_file_dirlist() for App-Fetchware tests.');
+    ok( grep m!^t/bin-fetchware-!, @$dirlist,
+        'checked list_file_dirlist() for bin-fetchware tests.');
 };
 
 
@@ -112,10 +136,11 @@ subtest 'test ftp_parse_filelist()' => sub {
     # Make this a FETCHWARE_FTP_REMOTE env var in frt().
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
 
-    my $directory_listing = download_directory_listing();
+    my $directory_listing = get_directory_listing();
     
     my $filename_listing = ftp_parse_filelist($directory_listing);
 
+diag explain $filename_listing;
     is_deeply($filename_listing, test_filename_listing(),
         'checked ftp_parse_listing() success');
     pass('fixin it');
@@ -145,19 +170,32 @@ subtest 'test http_parse_filelist()' => sub {
 };
 
 
-subtest 'test parse_directory_listing()' => sub {
+subtest 'test file_parse_filelist()' => sub {
     skip_all_unless_release_testing();
 
-    # Clear App::Fetchware's %CONFIG variable.
-    __clear_CONFIG();
+    # Use list_file_dirlist() to create the needed list of files and parse them.
+    my $dirlist = file_parse_filelist(list_file_dirlist('file://t'));
 
+    # Do a few greps to test list_file_dirlist() generated the proper output.
+    ok( grep({ $_->[0] =~ /^(App-Fetchware|bin-fetchware)/ } @{$dirlist}),
+        'checked file_parse_filelist() file success.');
+    ok( grep({ $_->[1] =~ /^\d+-\d+-\d+-\d+-\d+-\d+$/ } @{$dirlist}),
+        'checked file_parse_filelist() timestamp success.');
+
+};
+
+
+subtest 'test parse_directory_listing()' => sub {
+    skip_all_unless_release_testing(); ##TEST##
+    # Clear App::Fetchware's %CONFIG variable.
+    __clear_CONFIG(); ##TEST##
     ###BUGALERT### Add loop after http_parse_listing() is finished to test this
     #sub's http functionality too.
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
 
     # Do the stuff parse_directory_listing() depends on.
     check_lookup_config();
-    my $directory_listing = download_directory_listing();
+    my $directory_listing = get_directory_listing();
 
     ###BUGALERT### NOTE THIS TEST IS BRITLE, BUT IT WILL ONLY BE RUN WHEN I
     #RELEASE A NEW VERSION OF FETCHWARE. FIX WITH SUB::OVERRIDE??
@@ -225,7 +263,7 @@ subtest 'test lookup_by_timestamp()' => sub {
     skip_all_unless_release_testing();
 
     is(lookup_by_timestamp(test_filename_listing('no current')),
-        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.22.tar.bz2',
         'check lookup_by_timestamp() success.');
 
 };
@@ -235,10 +273,11 @@ subtest 'test lookup_by_versionstring()' => sub {
     skip_all_unless_release_testing();
 
     is(lookup_by_versionstring(test_filename_listing('no current')),
-        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.22.tar.bz2',
         'check lookup_by_versionstring() success.');
 
 }; 
+
 
 subtest 'test determine_download_url()' => sub {
     ###BUGALERT### Double-check which subtests actually need to be skipped.
@@ -254,11 +293,11 @@ subtest 'test determine_download_url()' => sub {
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
 
     check_lookup_config();
-    my $directory_listing = download_directory_listing();
+    my $directory_listing = get_directory_listing();
     my $filename_listing = parse_directory_listing($directory_listing);
     
     is(determine_download_url($filename_listing),
-        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.22.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
     
     # Clear App::Fetchware's %CONFIG variable so I can test it with custom
@@ -274,11 +313,11 @@ subtest 'test determine_download_url()' => sub {
     lookup_method 'versionstring';
 
     check_lookup_config();
-    $directory_listing = download_directory_listing();
+    $directory_listing = get_directory_listing();
     $filename_listing = parse_directory_listing($directory_listing);
     
     is(determine_download_url($filename_listing),
-        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.22.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
 
 };
@@ -298,7 +337,7 @@ subtest 'test lookup()' => sub {
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
 
     is(lookup(),
-        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.22.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
 
 };
@@ -315,51 +354,54 @@ subtest 'test lookup()' => sub {
 sub test_filename_listing {
     my $no_current = shift;
 
+
     my $filename_listing = 
     [
         [ 'Announcement2.0.html', '201010190000' ],
         [ 'Announcement2.0.txt', '201010190000' ],
-        [ 'Announcement2.2.html', '999909140621' ],
-        [ 'Announcement2.2.txt', '999909140621' ],
-        [ 'Announcement2.3.txt', '999912191335' ],
+        [ 'Announcement2.2.html', '999901311919' ],
+        [ 'Announcement2.2.txt', '999901311919' ],
+        [ 'Announcement2.4.html', '999904171216' ],
+        [ 'Announcement2.4.txt', '999904171230' ],
         [ 'CHANGES_2.0', '201010180000' ],
         [ 'CHANGES_2.0.64', '201010180000' ],
-        [ 'CHANGES_2.2', '999909121702' ],
-        [ 'CHANGES_2.2.21', '999909121702' ],
-        [ 'CHANGES_2.3', '999912191335' ],
-        [ 'CHANGES_2.3.16', '999912191335' ],
-        [ 'CURRENT-IS-2.2.21', '999910051831' ],
+        [ 'CHANGES_2.2', '999901311919' ],
+        [ 'CHANGES_2.2.22', '999901302206' ],
+        [ 'CHANGES_2.4', '999904151233' ],
+        [ 'CHANGES_2.4.2', '999904151233' ],
+        [ 'CURRENT-IS-2.4.2', '999904171218' ],
         [ 'HEADER.html', '200910030000' ],
-        [ 'KEYS', '999908310511' ],
+        [ 'KEYS', '999903251459' ],
         [ 'README.html', '200910030000' ],
-        [ 'binaries', '201105110000' ],
-        [ 'docs', '201012110000' ],
-        [ 'flood', '200912080000' ],
+        [ 'binaries', '999903031938' ],
+        [ 'docs', '999903031938' ],
+        [ 'flood', '999903031938' ],
         [ 'httpd-2.0.64-win32-src.zip', '201010180000' ],
         [ 'httpd-2.0.64-win32-src.zip.asc', '201010180000' ],
         [ 'httpd-2.0.64.tar.bz2', '201010180000' ],
         [ 'httpd-2.0.64.tar.bz2.asc', '201010180000' ],
         [ 'httpd-2.0.64.tar.gz', '201010180000' ],
         [ 'httpd-2.0.64.tar.gz.asc', '201010180000' ],
-        [ 'httpd-2.2.21-win32-src.zip', '999909121702' ],
-        [ 'httpd-2.2.21-win32-src.zip.asc', '999909121702' ],
-        [ 'httpd-2.2.21.tar.bz2', '999909121702' ],
-        [ 'httpd-2.2.21.tar.bz2.asc', '999909121702' ],
-        [ 'httpd-2.2.21.tar.gz', '999909121702' ],
-        [ 'httpd-2.2.21.tar.gz.asc', '999909121702' ],
-        [ 'httpd-2.3.16-beta-deps.tar.bz2', '999912191335' ],
-        [ 'httpd-2.3.16-beta-deps.tar.bz2.asc', '999912191335' ],
-        [ 'httpd-2.3.16-beta-deps.tar.gz', '999912191335' ],
-        [ 'httpd-2.3.16-beta-deps.tar.gz.asc', '999912191335' ],
-        [ 'httpd-2.3.16-beta.tar.bz2', '999912191335' ],
-        [ 'httpd-2.3.16-beta.tar.bz2.asc', '999912191335' ],
-        [ 'httpd-2.3.16-beta.tar.gz', '999912191335' ],
-        [ 'httpd-2.3.16-beta.tar.gz.asc', '999912191335' ],
-        [ 'libapreq', '201104270000' ],
-        [ 'mod_fcgid', '201011230000' ],
-        [ 'mod_ftp', '200912080000' ],
-        [ 'patches', '999910051427' ]
+        [ 'httpd-2.2.22-win32-src.zip', '999901302206' ],
+        [ 'httpd-2.2.22-win32-src.zip.asc', '999901302206' ],
+        [ 'httpd-2.2.22.tar.bz2', '999901302206' ],
+        [ 'httpd-2.2.22.tar.bz2.asc', '999901302206' ],
+        [ 'httpd-2.2.22.tar.gz', '999901302206' ],
+        [ 'httpd-2.2.22.tar.gz.asc', '999901302206' ],
+        [ 'httpd-2.4.2-deps.tar.bz2', '999904151233' ],
+        [ 'httpd-2.4.2-deps.tar.bz2.asc', '999904151233' ],
+        [ 'httpd-2.4.2-deps.tar.gz', '999904151233' ],
+        [ 'httpd-2.4.2-deps.tar.gz.asc', '999904151233' ],
+        [ 'httpd-2.4.2.tar.bz2', '999904151233' ],
+        [ 'httpd-2.4.2.tar.bz2.asc', '999904151233' ],
+        [ 'httpd-2.4.2.tar.gz', '999904151233' ],
+        [ 'httpd-2.4.2.tar.gz.asc', '999904151233' ],
+        [ 'libapreq', '999903031938' ],
+        [ 'mod_fcgid', '999904231119' ],
+        [ 'mod_ftp', '999903031938' ],
+        [ 'patches', '999903031938' ]
     ];
+
 
     if (not $no_current) {
         return $filename_listing;

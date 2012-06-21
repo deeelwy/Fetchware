@@ -5,6 +5,7 @@ package App::Fetchware;
 # CPAN modules making Fetchwarefile better.
 use File::Temp 'tempdir';
 use File::Spec::Functions qw(catfile splitpath updir splitdir file_name_is_absolute);
+use Path::Class;
 use Data::Dumper;
 use Net::FTP;
 use HTTP::Tiny;
@@ -78,11 +79,13 @@ our %EXPORT_TAGS = (
     )],
     OVERRIDE_LOOKUP => [qw(
         check_lookup_config
-        download_directory_listing
+        get_directory_listing
         parse_directory_listing
+        list_file_dirlist
         determine_download_url
         ftp_parse_filelist
         http_parse_filelist
+        file_parse_filelist
         lookup_by_timestamp
         lookup_by_versionstring
         lookup_determine_downloadurl
@@ -769,6 +772,8 @@ C<lookup_url> is a web browser like URL such as C<http://host.com/a/b/c/path>,
 and it B<must> be a directory listing B<not> a actual file. This directory
 listing must be a listing of all of the available versions of the program this
 Fetchwarefile belongs to.
+
+Only ftp://, http://, and file:// URL scheme's are supported.
 =back
 
 C<lookup_method> can be either C<'timestamp'> or C<'versionstring'>, any other
@@ -780,8 +785,8 @@ sub lookup {
     # die if lookup_url wasn't specified.
     # die if lookup_method was specified wrong.
     check_lookup_config();
-    # obtain directory listing for ftp or http. (a sub for each.)
-    my $directory_listing = download_directory_listing();
+    # obtain directory listing for file, ftp, or http. (a sub for each.)
+    my $directory_listing = get_directory_listing();
     # parse the directory listing's format based on ftp or http.
     # ftp: just use Net::Ftp's dir command to get a "long" listing.
     # http: use regex hackery or *html:linkextractor*.
@@ -851,32 +856,44 @@ EOD
 }
 
 
-=item download_directory_listing()
+=item get_directory_listing()
 
 Downloads a directory listing that lookup() uses to determine what the latest
 version of your program is. It is returned.
 
 =over
 =item SIDE EFFECTS
-determine_directory_listing() returns a SCALAR REF of the output of HTTP::Tiny
+get_directory_listing() returns a SCALAR REF of the output of HTTP::Tiny
 or a ARRAY REF for Net::Ftp downloading that listing. Note: the output is
 different for each download type. Type 'http' will have HTML crap in it, and
 type 'ftp' will be the output of Net::Ftp's dir() method.
+
+Type 'file' will just be a listing of files in the provided C<lookup_url>
+directory.
 =back
 
 =cut
 
-sub download_directory_listing {
+sub get_directory_listing {
 
-    return download_dirlist(config('lookup_url'));
+    given (config('lookup_url')) {
+        when (m!^ftp://!) {
+            return download_dirlist(config('lookup_url'));
+        } when (m!^http://!) {
+            return download_dirlist(config('lookup_url'));
+        } when (m!^file://!) {
+            list_file_dirlist(config('lookup_url'));
+        }
+    }
 }
 
 
 =item parse_directory_listing($directory_listing);
 
-Based on URL scheme of C<'http'> or C<'ftp'>, parse_directory_listing() will
-call either ftp_parse_filelist() or http_parse_filelist(). Those subroutines do
-the heavy lifting, and the results are returned.
+Based on URL scheme of C<'file'>, C<'http'>, or C<'ftp'>,
+parse_directory_listing() will call file_parse_filelist(), ftp_parse_filelist(),
+or http_parse_filelist(). Those subroutines do the heavy lifting, and the
+results are returned.
 
 =over
 =item SIDE EFFECTS
@@ -891,11 +908,45 @@ sub parse_directory_listing {
 
     given (config('lookup_url')) {
         when (m!^ftp://!) {
+        ###BUGALERT### *_parse_filelist may not properly skip directories, so a
+        #directory could exist that could wind up being the "latest version"
             return ftp_parse_filelist($directory_listing);
         } when (m!^http://!) {
             return http_parse_filelist($directory_listing);
+        } when (m!^file://!) {
+            return file_parse_filelist($directory_listing);
         }
     }
+}
+
+
+
+=item list_file_dirlist($local_lookup_url)
+
+Glob's provided $local_lookup_url, and builds a directory listing of all files
+in the provided directory. Then list_file_dirlist() returns a list of all of the
+files in the current directory.
+
+=over
+=item SIDE EFFECTS
+Does what ls or dir do, but natively inside perl, so I don't have to worry about
+what OS I'm running on.
+=back
+
+=cut
+
+sub list_file_dirlist {
+    my $local_lookup_url = shift;
+
+    $local_lookup_url =~ s!^file://!!; # Strip scheme garbage.
+
+    my @file_listing;
+    for my $file (glob "$local_lookup_url/*") {
+        next if -d $file; # Skip directories.
+        push @file_listing, $file;
+    }
+
+    return \@file_listing;
 }
 
 
@@ -959,6 +1010,7 @@ Returns a array of arrays of filenames and timestamps.
         Nov => '11',
         Dec => '12',
     );
+
 
     sub  ftp_parse_filelist {
         my $ftp_listing = shift;
@@ -1070,7 +1122,42 @@ EOD
         return \@filename_listing;
     }
 
+
 } # end bare block for %month.
+
+
+
+
+=item file_parse_filelist
+
+Parses the provided filelist by C<stat>ing each file, and creating a properly
+formatted timestamp to return in kdjfkdj format.
+
+Returns an array of arrays of filenames and timestamps.
+
+=cut
+
+sub file_parse_filelist {
+    my $file_listing = shift;
+
+    for my $file (@$file_listing) {
+        my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size, $atime,$mtime,$ctime,
+            $blksize,$blocks)
+            = stat($file);
+        my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
+            localtime($mtime);
+
+        # Replace scalar filename with a arrayref of the filename with its
+        # assocated timestamp for later processing for lookup().
+        # 
+        # Use Path::Class's file() constructor & basename() method to strip out
+        # all unneeded directory information leaving just the file's name.
+        my $pc_file = file $file;
+        $file = [$pc_file->basename(), "$year-$mon-$mday-$hour-$min-$sec"];
+    }
+
+    return $file_listing;
+}
 
 
 =item lookup_by_timestamp($filename_listing)
