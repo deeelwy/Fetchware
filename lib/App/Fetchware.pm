@@ -83,7 +83,6 @@ our %EXPORT_TAGS = (
         check_lookup_config
         get_directory_listing
         parse_directory_listing
-        list_file_dirlist
         determine_download_url
         ftp_parse_filelist
         http_parse_filelist
@@ -133,9 +132,11 @@ our %EXPORT_TAGS = (
         download_dirlist
         ftp_download_dirlist
         http_download_dirlist
+        file_download_dirlist
         download_file
         download_ftp_url
         download_http_url
+        download_file_url
         just_filename
     )],
 );
@@ -883,15 +884,7 @@ directory.
 
 sub get_directory_listing {
 
-    given (config('lookup_url')) {
-        when (m!^ftp://!) {
-            return download_dirlist(config('lookup_url'));
-        } when (m!^http://!) {
-            return download_dirlist(config('lookup_url'));
-        } when (m!^file://!) {
-            return list_file_dirlist(config('lookup_url'));
-        }
-    }
+    return download_dirlist(config('lookup_url'));
 }
 
 
@@ -928,45 +921,6 @@ diag "end pdl";
             return file_parse_filelist($directory_listing);
         }
     }
-}
-
-
-
-=item list_file_dirlist($local_lookup_url)
-
-Glob's provided $local_lookup_url, and builds a directory listing of all files
-in the provided directory. Then list_file_dirlist() returns a list of all of the
-files in the current directory.
-
-=over
-=item SIDE EFFECTS
-Does what ls or dir do, but natively inside perl, so I don't have to worry about
-what OS I'm running on.
-=back
-
-=cut
-
-sub list_file_dirlist {
-    my $local_lookup_url = shift;
-
-diag "before[$local_lookup_url]";
-    $local_lookup_url =~ s!^file://!!; # Strip scheme garbage.
-diag "after[$local_lookup_url]";
-
-    # Prepend $original_cwd if $local_lookup_url is a relative path.
-    unless (file_name_is_absolute($local_lookup_url)) {
-        $local_lookup_url =  catdir($original_cwd, $local_lookup_url);
-    }
-
-    my @file_listing;
-    for my $file (glob "$local_lookup_url/*") {
-diag "lfdfile[$file]";
-        push @file_listing, $file;
-    }
-diag "lfd file_listing";
-diag explain \@file_listing;
-diag "end lfd file_listing";
-    return \@file_listing;
 }
 
 
@@ -1176,7 +1130,7 @@ sub file_parse_filelist {
         # Use Path::Class's file() constructor & basename() method to strip out
         # all unneeded directory information leaving just the file's name.
         my $pc_file = file $file;
-        $file = [$pc_file->basename(), "$year-$mon-$mday-$hour-$min-$sec"];
+        $file = [$pc_file->basename(), "$year$mon$mday$hour$min$sec"];
     }
 
     return $file_listing;
@@ -1202,6 +1156,9 @@ diag "end lbt";
     # numbers, and put $b before $a to put the "bigger", later versions before
     # the "lower" older versions.
     # Sort based on timestamp, which is $file_listing->[0..whatever][1].
+    ###BUGALERT### Must convert the *_parse_filelist() subs to create *ONLY*
+    #numeric timestamps without any hyphens or switch to cmp and sort them
+    #ASCIIbetically.
     @$file_listing = sort { $b->[1] <=> $a->[1] } @$file_listing;
 
     # Manage duplicate timestamps apropriately including .md5, .asc, .txt files.
@@ -1260,7 +1217,6 @@ use Test::More;
 diag "file_listing";
 diag explain $file_listing;
 diag "endfilelisting";
-
     # First grep @$file_listing for $CONFIG{filter} if $CONFIG{filter} is defined.
     # This is done, because some distributions have multiple versions of the
     # same program in one directory, so sorting by version numbers or
@@ -1283,7 +1239,7 @@ diag "endfilelisting";
     # latest version is.  These files come from each software distributions
     # mirror scripts, so they should be more accurate than either of my lookup
     # algorithms. Both Apache and the Linux kernel maintain these files.
-    $_->[0] =~ /^(:?latest|current)[_-]is[_-]?(.*)$/i for @$file_listing;
+    $_->[0] =~ /^(?:latest|current)[_-]is[_-](.*)$/i for @$file_listing;
     my $latest_version = $1;
     diag("latestver[$latest_version]");
     @$file_listing = grep { $_->[0] =~ /$latest_version/ } @$file_listing
@@ -1315,6 +1271,11 @@ diag "endfilelisting";
                 return "@{[config('lookup_url')]}/$fl->[0]";
             }
         }
+##DELME##        if (config('lookup_url') =~ m!^file://!) {
+##DELME##        # Must prepend scheme, so that download() knows how to retrieve this
+##DELME##        # file with download_file(), which requires a URL that must begin
+##DELME##        # with a scheme, and file:// is the scheme for local files.
+##DELME##        $fl->[0] =~ s/"file://$fl->[0]";
     }
     die <<EOD;
 App-Fetchware: run-time error. Fetchware failed to determine what URL it should
@@ -1353,25 +1314,8 @@ sub download {
     ###BUGALERT### Why does download() need $temp_dir as an argument????
     my ($temp_dir, $download_url) = @_;
 
-    my $downloaded_file_path;
-    given ($download_url) {
-        # When a ftp or http scheme download the file.
-        when ($_ =~ m!^(ftp://|http://)!) {
-            $downloaded_file_path = download_file($download_url);
-            return determine_package_path($temp_dir, $downloaded_file_path);
-        # When a local file just copy it with File::Copy's cp().
-        } when ($_ =~ m!^file://!) {
-            $download_url =~ s!^file://!!; # Strip useless URL scheme.
-            cp($download_url, $temp_dir) or die <<EOD;
-App::Fetchware: run-time error. Fetchware failed to copy the download URL
-[$download_url] to the working directory [@{[cwd()]}]. Os error [$!].
-EOD
-            $downloaded_file_path = catdir($temp_dir,
-                file($download_url)->basename());
-            return $downloaded_file_path;
-        }
-    }
-
+    my $downloaded_file_path = download_file($download_url);
+    return determine_package_path($temp_dir, $downloaded_file_path);
 }
 
 
@@ -1567,6 +1511,9 @@ sub gpg_verify {
 
     # Download Signature using lookup_url.
     my $sig_file;
+    ###BUGALERT### Should the eval{} be inside the for loop, so that the code
+    #will actually try multiple times instead of exiting the loop on the first
+    #failure, and not even trying the other two.
     eval {
         for my $ext (qw(asc sig sign)) {
             $sig_file = download_file("$download_url.$ext");
@@ -1869,11 +1816,24 @@ sub unarchive {
     ###BUGALERT### fetchware needs Archive::Zip, which is *not* one of
     #Archive::Extract's dependencies.
     diag("PP[$package_path]");
-    my $ae = Archive::Extract->new(archive => "$package_path") or die <<EOD;
+    my $ae;
+    unless ($package_path =~ m!.fpkg$!) {
+        $ae = Archive::Extract->new(archive => "$package_path") or die <<EOD;
 App-Fetchware: internal error. Archive::Extract->new() as called by unarchive()
 failed to create a new Archive::Extract object. This is a fatal error. The
 archive in question was [$package_path].
 EOD
+    ###BUGALERT### Include a workaround for Archive::Extract's caveat that uses
+    #the file's extension to determine how to unarchive it by manually telling
+    #it that fpkg's are actually .tar.gz's.
+    } else {
+        $ae = Archive::Extract->new(archive => "$package_path",
+            type => 'tgz') or die <<EOD;
+App-Fetchware: internal error. Archive::Extract->new() as called by unarchive()
+failed to create a new Archive::Extract object. This is a fatal error. The
+archive in question was [$package_path].
+EOD
+    }
 
 ###BUGALERT### Files are listed *after* they're extracted, because
 #Archive::Extract *only* extracts files and then lets you see what files were
@@ -2177,19 +2137,14 @@ calls C<File::Temp>'s internalish File::Temp::cleanup() subroutine.
 =cut
 
 sub end {
-    # chdir to our home directory, so File::Temp can delete the tempdir. This is
-    # necessary, because operating systems do not allow you to delete a
+    # chdir to $original_cwd directory, so File::Temp can delete the tempdir. This
+    # is necessary, because operating systems do not allow you to delete a
     # directory that a running program has as its cwd.
-    # Determines where to chdir() to so File::Temp can delete fetchware's temp
-    # directior $CONFIG{TempDir}.
-    my $home = $ENV{HOME} // updir();
 
-    my $error = <<EOS;
-App-Fetchware: run-time error. Fetchware failed to chdir() to [$home]. See
+    chdir($original_cwd) or die <<EOD;
+App-Fetchware: run-time error. Fetchware failed to chdir() to [$original_cwd]. See
 perldoc App::Fetchware.
-EOS
-
-    chdir($home) or die $error;
+EOD
 
     # Call File::Temp's cleanup subrouttine to delete fetchware's temp
     # directory.
@@ -2296,6 +2251,8 @@ sub download_dirlist {
             $dirlist = ftp_download_dirlist($url);
         } when (m!^http://.*$!) {
             $dirlist = http_download_dirlist($url);
+        } when (m!^file://.*$!) {
+          $dirlist = file_download_dirlist($url);
         } default {
             die <<EOD;
 App-Fetchware: run-time syntax error: the url parameter your provided in
@@ -2401,6 +2358,45 @@ EOD
 }
 
 
+=item file_download_dirlist($local_lookup_url)
+
+Glob's provided $local_lookup_url, and builds a directory listing of all files
+in the provided directory. Then list_file_dirlist() returns a list of all of the
+files in the current directory.
+
+=over
+=item SIDE EFFECTS
+Does what ls or dir do, but natively inside perl, so I don't have to worry about
+what OS I'm running on.
+=back
+
+=cut
+
+sub file_download_dirlist {
+    my $local_lookup_url = shift;
+
+diag "before[$local_lookup_url]";
+    $local_lookup_url =~ s!^file://!!; # Strip scheme garbage.
+diag "after[$local_lookup_url]";
+
+    # Prepend $original_cwd if $local_lookup_url is a relative path.
+    unless (file_name_is_absolute($local_lookup_url)) {
+diag "origcwd[$original_cwd]";
+        $local_lookup_url =  catdir($original_cwd, $local_lookup_url);
+    }
+
+    my @file_listing;
+    for my $file (glob "$local_lookup_url/*") {
+diag "lfdfile[$file]";
+        push @file_listing, $file;
+    }
+diag "lfd file_listing";
+diag explain \@file_listing;
+diag "end lfd file_listing";
+    return \@file_listing;
+}
+
+
 
 =item download_file($url)
 
@@ -2419,6 +2415,8 @@ sub download_file {
             $filename = download_ftp_url($url);
         } when (m!^http://!) {
             $filename = download_http_url($url);
+        } when (m!^file://!) {
+            $filename = download_file_url($url);   
         } default {
             die <<EOD;
 App-Fetchware: run-time syntax error: the url parameter your provided in
@@ -2568,6 +2566,31 @@ EOS
     # The caller needs the $filename to determine the $package_path later.
     diag("httpFILE[$filename]");
     return $filename;
+}
+
+
+
+=item download_file_url($url);
+
+Uses File::Copy to copy ("download") the local file to the current working
+directory.
+
+=cut
+
+sub download_file_url {
+    my $url = shift;
+
+    $url =~ s!^file://!!; # Strip useless URL scheme.
+    
+    # Download the file:// URL to the current directory, which should already be
+    # in $temp_dir, because of start()'s chdir().
+    cp(catdir($original_cwd, $url), cwd()) or die <<EOD;
+App::Fetchware: run-time error. Fetchware failed to copy the download URL
+[$url] to the working directory [@{[cwd()]}]. Os error [$!].
+EOD
+
+    # Return just file filename of the downloaded file.
+    return file($url)->basename();
 }
 
 

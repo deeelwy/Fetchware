@@ -8,12 +8,13 @@ use 5.010;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '4'; #Update if this changes.
+use Test::More 0.98 tests => '5'; #Update if this changes.
 
 use App::Fetchware qw(:TESTING config);
 use Cwd 'cwd';
 use File::Copy 'mv';
 use File::Spec::Functions qw(catfile splitpath);
+use Path::Class;
 
 
 # Set PATH to a known good value.
@@ -88,8 +89,26 @@ subtest 'test cmd_install(*.fpkg)' => sub {
     is($new_fetchware_package_path, $fetchware_package_path,
         'checked cmd_install(*.fpkg) success.');
 
-    ok(-e $fetchware_package_path,
-        'check cmd_install(*.fpkg) exists success.');
+    ok(unlink file($new_fetchware_package_path)->basename(),
+        'check cmd_install(*.fpkg) cleanup success.');
+};
+
+
+subtest 'test test-dist.fpkg cmd_install' => sub {
+    # Actually test during user install!!!
+
+    # Clear App::Fetchware's internal configuration information, which I must do
+    # if I parse more than one Fetchwarefile in a running of fetchware.
+    __clear_CONFIG();
+
+    my $test_dist_path = 't/test-dist-1.00.fpkg';
+
+    my $install_success = cmd_install($test_dist_path);
+    diag("IS[$install_success");
+
+    ok($install_success,
+        'check test-dist.fpkg cmd_install');
+
 };
 
 

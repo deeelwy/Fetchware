@@ -1194,19 +1194,19 @@ sub extract_fetchwarefile {
     # Rename fetchwarefile package (.fpkg) to a regular old .tar.gz to avoid
     # confusing Archive::Tar.
     my $fetchware_tar_gz_path = $fetchware_package_path;
-    if ($fetchware_package_path =~ /\.fpkg$/) {
-        $fetchware_tar_gz_path =~ s/\.fpkg$/.tar.gz/;
-        mv($fetchware_package_path, $fetchware_tar_gz_path) or die <<EOD;
-fetchware: run-time error. An internal move operation failed when
-extract_fetchwarefile() attempted to rename the [$fetchware_package_path] from
-*.fpkg to *.tar.gz, so that Archive::Tar can unarchive the archive. The OS error
-was [$!].
-EOD
-
-        # Overwrite $fetchware_package_path, because Archive::Tar demands a
-        # .tar.gz or tgz extenstion .fpkg won't work.
-        $fetchware_package_path =~ s/\.fpkg$/.tar.gz/
-    }
+##TEST##    if ($fetchware_package_path =~ /\.fpkg$/) {
+##TEST##        $fetchware_tar_gz_path =~ s/\.fpkg$/.tar.gz/;
+##TEST##        mv($fetchware_package_path, $fetchware_tar_gz_path) or die <<EOD;
+##TEST##fetchware: run-time error. An internal move operation failed when
+##TEST##extract_fetchwarefile() attempted to rename the [$fetchware_package_path] from
+##TEST##*.fpkg to *.tar.gz, so that Archive::Tar can unarchive the archive. The OS error
+##TEST##was [$!].
+##TEST##EOD
+##TEST##
+##TEST##        # Overwrite $fetchware_package_path, because Archive::Tar demands a
+##TEST##        # .tar.gz or tgz extenstion .fpkg won't work.
+##TEST##        $fetchware_package_path =~ s/\.fpkg$/.tar.gz/
+##TEST##    }
 
     my $tar = Archive::Tar->new();
 

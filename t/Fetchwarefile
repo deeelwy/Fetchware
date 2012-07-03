@@ -4,4 +4,7 @@ use App::Fetchware;
 
 program 'test-dist';
 
+# Need to filter out the cruft.
+filter 'test-dist';
+
 lookup_url 'file://t';

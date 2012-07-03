@@ -7,7 +7,8 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '14'; #Update if this changes.
+use Test::More 0.98 tests => '13'; #Update if this changes.
+use File::Spec::Functions qw(rel2abs);
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -17,7 +18,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 
 # Test if I can load the module "inside a BEGIN block so its functions are exported
 # and compile-time, and prototypes are properly honored."
-BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_LOOKUP :TESTING)); }
+BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_LOOKUP :TESTING :UTIL)); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
 diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
@@ -30,7 +31,6 @@ subtest 'OVERRIDE_LOOKUP exports what it should' => sub {
         check_lookup_config
         get_directory_listing
         parse_directory_listing
-        list_file_dirlist
         determine_download_url
         ftp_parse_filelist
         http_parse_filelist
@@ -106,27 +106,6 @@ subtest 'test get_directory_listing()' => sub {
 };
 
 
-subtest 'test list_file_dirlist()' => sub {
-    skip_all_unless_release_testing();
-
-    # Get a dirlisting for fetchware's testing directory, because it *has* to
-    # exist.
-    my $dirlist = list_file_dirlist('file://t');
-
-    # Check if a known directory is *not* in the listing.
-    ok( ! grep /test-dist-1\.00[^\.tar\.gz]/, @$dirlist,
-        'checked list_file_dirlist() directory removal');
-
-    # Check if known files are in the t directory. Regexes are used in case
-    # files are changed or added, so I don't have to constantly update a silly
-    # listing of all the files in the t directory.
-    ok( grep m!^t/App-Fetchware-!, @$dirlist,
-        'checked list_file_dirlist() for App-Fetchware tests.');
-    ok( grep m!^t/bin-fetchware-!, @$dirlist,
-        'checked list_file_dirlist() for bin-fetchware tests.');
-};
-
-
 subtest 'test ftp_parse_filelist()' => sub {
     skip_all_unless_release_testing();
 
@@ -174,10 +153,11 @@ subtest 'test file_parse_filelist()' => sub {
     skip_all_unless_release_testing();
 
     # Use list_file_dirlist() to create the needed list of files and parse them.
-    my $dirlist = file_parse_filelist(list_file_dirlist('file://t'));
+    my $test_path = rel2abs('t');
+    my $dirlist = file_parse_filelist(download_dirlist("file://$test_path"));
 
     # Do a few greps to test list_file_dirlist() generated the proper output.
-    ok( grep({ $_->[0] =~ /^(App-Fetchware|bin-fetchware)/ } @{$dirlist}),
+    ok( grep({ $_->[0] =~ /(App-Fetchware|bin-fetchware)/ } @{$dirlist}),
         'checked file_parse_filelist() file success.');
     ok( grep({ $_->[1] =~ /^\d+-\d+-\d+-\d+-\d+-\d+$/ } @{$dirlist}),
         'checked file_parse_filelist() timestamp success.');

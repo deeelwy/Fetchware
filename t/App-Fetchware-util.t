@@ -7,9 +7,9 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '8'; #Update if this changes.
+use Test::More 0.98 tests => '10'; #Update if this changes.
 
-use File::Spec::Functions qw(splitpath catfile);
+use File::Spec::Functions qw(splitpath catfile rel2abs);
 use URI::Split 'uri_split';
 use Cwd 'cwd';
 
@@ -36,9 +36,11 @@ subtest 'UTIL exports what it should' => sub {
         download_dirlist
         ftp_download_dirlist
         http_download_dirlist
+        file_download_dirlist
         download_file
         download_ftp_url
         download_http_url
+        download_file_url
         just_filename
     );
     # sort them to make the testing their equality very easy.
@@ -109,6 +111,28 @@ subtest 'test http_download_dirlist()' => sub {
 ##HOWTOTEST##See man App::Fetchware.
 ##HOWTOTEST##EOS
 
+};
+
+
+subtest 'test file_download_dirlist()' => sub {
+    skip_all_unless_release_testing();
+
+    # Get a dirlisting for fetchware's testing directory, because it *has* to
+    # exist.
+    my $test_path = rel2abs('t');
+    my $dirlist = file_download_dirlist("file://$test_path");
+diag explain $dirlist;
+    # Check if a known directory is *not* in the listing.
+    ok( ! grep /test-dist-1\.00[^\.tar\.gz]/, @$dirlist,
+        'checked file_download_dirlist() directory removal');
+
+    # Check if known files are in the t directory. Regexes are used in case
+    # files are changed or added, so I don't have to constantly update a silly
+    # listing of all the files in the t directory.
+    ok( grep m!t/App-Fetchware-!, @$dirlist,
+        'checked file_download_dirlist() for App-Fetchware tests.');
+    ok( grep m!t/bin-fetchware-!, @$dirlist,
+        'checked file_download_dirlist() for bin-fetchware tests.');
 };
 
 
@@ -204,6 +228,19 @@ subtest 'test download_http_url()' => sub {
 
 ##HOWTOTEST## How do you test close failing? I don't know if you can easily.
 
+};
+
+
+subtest 'test download_file_url' => sub {
+    skip_all_unless_release_testing();
+
+    my $filename = download_file_url('file://t/test-dist-1.00.fpkg');
+
+    is($filename, 'test-dist-1.00.fpkg',
+        'checked download_file_url() success.');
+
+    # Delete useless copied file.
+    ok(unlink $filename, 'checked download_file_url() cleanup.');
 };
 
 
