@@ -43,8 +43,8 @@ our %EXPORT_TAGS  = (
         copy_fpkg_to_fpkg_database
         cmd_install
         cmd_uninstall
-        look
-        list
+        cmd_look
+        cmd_list
     )]
 );
 our @EXPORT_OK = @{$EXPORT_TAGS{TESTING}};
@@ -93,19 +93,19 @@ sub run {
             } when('uninstall') {
                 cmd_uninstall(@ARGV);
             } when('new') {
-                new(@ARGV);
+                cmd_new(@ARGV);
             } when('upgrade') {
-                upgrade(@ARGV);
+                cmd_upgrade(@ARGV);
             } when('upgrade-all') {
-                upgrade_all(@ARGV);
+                cmd_upgrade_all(@ARGV);
             } when('list') {
-                list(@ARGV);
+                cmd_list(@ARGV);
             } when('look') {
-                look(@ARGV);
+                cmd_look(@ARGV);
             } when('help') {
-                help(@ARGV);
+                cmd_help(@ARGV);
             } default {
-                help(@ARGV);
+                cmd_help(@ARGV);
             }
         }
         # Exit success, because if any of the main subroutines run into any
@@ -309,11 +309,11 @@ EOD
 
 
 
-=head2 new()
+=head2 cmd_new()
 
-new() implements fetchware's new command. See L<whereeverthehell> for detailed
+cmd_new() implements fetchware's new command. See L<whereeverthehell> for detailed
 documentation for the specifics of the new command. This chunk of POD is about
-its implementation. new() calls a bunch of helper subroutines that implement the
+its implementation. cmd_new() calls a bunch of helper subroutines that implement the
 algorithm fetchware uses to build new Fetchwarefiles automagically for the user.
 The algorithm is dead stupid:
 
@@ -324,12 +324,12 @@ The algorithm is dead stupid:
 =item 4. Ask other questions as needed.
 =back
 
-new() uses Term::UI, which in turn uses Term::ReadLine to implement the
+cmd_new() uses Term::UI, which in turn uses Term::ReadLine to implement the
 character basesd question and anwser wizard interface.
 
 =cut
 
-sub new {
+sub cmd_new {
     my $term = Term::ReadLine->new('Fetchware new');
 
     my $now = localtime;
@@ -382,14 +382,14 @@ EOF
 
 
 
-=head1 new() API REFERENCE
+=head1 cmd_new() API REFERENCE
 
-Below are the API routines that new() uses to create the question and answer
+Below are the API routines that cmd_new() uses to create the question and answer
 interface for helping to build new Fetchwarefiles and fetchware packages.
 
 =cut
 
-##BUGALERT### Add POD for new() api subs.
+##BUGALERT### Add POD for cmd_new() api subs.
 
 sub opening_message {
 
@@ -874,7 +874,7 @@ EOP
 }
 
 
-=head2 upgrade()
+=head2 cmd_upgrade()
 
 Subroutine implementing Fetchware's upgrade command. This subroutine and command
 upgrade one and only one package that must be specified on the command line as
@@ -882,7 +882,7 @@ well.
 
 =cut
 
-sub upgrade {
+sub cmd_upgrade {
     my $upgrade_package_path = shift;
     ###BUGALERT### the or --force cmdline option will skip the checking of
     #version numbers, and the one lookup() says to download will be installed
@@ -1007,25 +1007,25 @@ EOD
 }
 
 
-=head2 upgrade_all()
+=head2 cmd_upgrade_all()
 
 Implements the C<fetchware upgrade-all> command, which upgrades all installed
-packages simply by looping over the fetchware database and running upgrade on
-each one.
+packages simply by looping over the fetchware database and running cmd_upgrade()
+on each one.
 
 =cut
 
-sub upgrade_all {
+sub cmd_upgrade_all {
     my $fetchware_db_glob = catfile(fetchware_database_path(), '*');
 
     for my $fetchware_package (glob $fetchware_db_glob) {
-        upgrade($fetchware_package);
+        cmd_upgrade($fetchware_package);
     }
     ###BUGALERT### Add exit 0 at end of each command sub.
 }
 
 
-=head2 look()
+=head2 cmd_look()
 
 Looks up the latest version of the specified Fetchwarefile or fetchware package,
 and downloads, verifies, and unarchives the specified source code distribution,
@@ -1034,18 +1034,19 @@ and then prints out the location of this archive.
 =over
 =item LIMITATION
 
-look() unarchive's the desired source code distribution into the current working
-directory. If this is not acceptable, you'll have to just cd to where you want
-the source distribution unarchived, and then cd back to where you came from. For
-example, you could use a subshell in bash to make the cd temporary:
-
-bash$ (cd where/you/want/it && fetchware look fetchware-package.fpkg)
+cmd_look() unarchive's the desired source code distribution into the same sort
+of temporary directory that fetchware itself uses during regular installs or
+upgrades. This cannot be changed, but after fetchware creates this directory it
+outputs its path, so that you can cd to it, and do whatever you need to it. You
+could also move it to where you want it to be as well. Remember to delete the
+fetchware-$PID-randomeletters style directory that it was stored in, or just run
+fetchware clean when you are finished working with it.
 
 =back
 
 =cut
 
-sub look {
+sub cmd_look {
     my $filename = shift;
 
     if (defined($filename) and -e $filename) {
@@ -1101,7 +1102,7 @@ EOD
 }
 
 
-=head2 list()
+=head2 cmd_list()
 
 Lists B<all> of the packages fetchware has stored in its
 fetchware_database_path().
@@ -1118,7 +1119,7 @@ ramifications. So for now, I'll hold out until I study what ack does.
 
 =cut
 
-sub list {
+sub cmd_list {
     for my $fetchware_package (glob catfile(fetchware_database_path(), '*')) {
         # Clean up $fetchware_package.
         $fetchware_package = file($fetchware_package)->basename();
@@ -1129,7 +1130,7 @@ sub list {
 }
 
 
-=head2 help()
+=head2 cmd_help()
 
 Prints a help message to C<STDOUT> listing usage, all command options, and examples.
 
@@ -1138,7 +1139,7 @@ And then C<exit()> with an exit status of 1.
 =cut
 
 
-sub help {
+sub cmd_help {
 	say <<'HELP';
 
 fetchware is a package manager for source code distributions. It gives you the

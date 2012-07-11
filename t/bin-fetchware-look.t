@@ -34,14 +34,14 @@ BEGIN {
 }
 
 
-# Save cwd to chdir to it later, because look() completes with a changed cwd(),
+# Save cwd to chdir to it later, because cmd_look() completes with a changed cwd(),
 # which messes up the relative path that the next subtest uses, so this lame
 # cwd() and chdir hack is used. I should refactor these out of fetchware's test
 # suite.
 my $original_cwd = cwd();
 
 
-subtest 'test look() success' => sub {
+subtest 'test cmd_look() success' => sub {
     skip_all_unless_release_testing();
 
 my $fetchwarefile = <<EOF;
@@ -59,11 +59,11 @@ EOF
     ok(-e $fetchwarefile_path,
         'check create_test_fetchwarefile() test Fetchwarefile');
 
-    my $build_path = look($fetchwarefile_path);
+    my $build_path = cmd_look($fetchwarefile_path);
 
-    # And then test if look() was successful.
+    # And then test if cmd_look() was successful.
     like($build_path, qr/@{[config('filter')]}/,
-        'check look(Fetchware) success.');
+        'check cmd_look(Fetchware) success.');
 };
 
 
@@ -75,11 +75,11 @@ chdir $original_cwd
 __clear_CONFIG();
 
 
-subtest 'test look() test-dist success' => sub {
-    my $build_path = look('t/test-dist-1.00.fpkg');
+subtest 'test cmd_look() test-dist success' => sub {
+    my $build_path = cmd_look('t/test-dist-1.00.fpkg');
 
     like($build_path, qr//,
-        'check look(test-dist) success.');
+        'check cmd_look(test-dist) success.');
 
 
 };

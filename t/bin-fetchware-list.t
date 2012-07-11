@@ -1,5 +1,5 @@
 #!perl
-# bin-fetchware-list.t tests bin/fetchware's list() subroutine, which
+# bin-fetchware-list.t tests bin/fetchware's cmd_list() subroutine, which
 # lists your installed packages based on fetchware_database_path();
 use strict;
 use warnings;
@@ -37,22 +37,22 @@ BEGIN {
 my $fetchware_package_path;
 
 
-subtest 'test list() success' => sub {
-    # First install a test package to make sure there is something for list() to
-    # find.
+subtest 'test cmd_list() success' => sub {
+    # First install a test package to make sure there is something for cmd_list()
+    # to find.
     cmd_install('t/test-dist-1.00.fpkg');
 diag("CWD[@{[cwd()]}]");
 
     my $stdout;
     my $error;
     {
-        # localize stdout, and open it for reading to test list()'s output.
+        # localize stdout, and open it for reading to test cmd_list()'s output.
         local *STDOUT;
         open STDOUT, '>', \$stdout
-            or $error = "Can't open STDOUTto test list()'s output: $!";
+            or $error = "Can't open STDOUTto test cmd_list()'s output: $!";
 
         # Writes to STDOUT, which is redirected to $stdout above.
-        list();
+        cmd_list();
 
         close STDOUT
             or $error = "WTF! close STDOUT actually failed Huh?!?: $!";
@@ -60,9 +60,9 @@ diag("CWD[@{[cwd()]}]");
     # Catch any errors that will be screwed up, because of STDOUT being stolen.
     fail($error) if defined $error;
 
-    # Test list()'s output.
+    # Test cmd_list()'s output.
         ok(grep { $_ eq 'test-dist-1.00' } (split "\n", $stdout),
-            'checked list() success');
+            'checked cmd_list() success');
 
 # Annoyingly clean up CONFIG. Shouln't end() do this!!!!:)
 __clear_CONFIG();
