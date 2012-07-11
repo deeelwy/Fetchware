@@ -17,7 +17,7 @@ use App::Fetchware qw(:FETCHWARE);
 use Archive::Tar;
 use File::Copy qw(mv cp);
 use File::Spec::Functions qw(curdir catdir catfile catpath tmpdir splitpath
-splitdir rel2abs abs2rel updir);
+splitdir rel2abs abs2rel updir file_name_is_absolute);
 use Cwd 'cwd';
 use File::Path 'make_path';
 use Term::UI;
@@ -42,6 +42,7 @@ our %EXPORT_TAGS  = (
         extract_fetchwarefile
         copy_fpkg_to_fpkg_database
         cmd_install
+        cmd_uninstall
     )]
 );
 our @EXPORT_OK = @{$EXPORT_TAGS{TESTING}};
@@ -78,11 +79,17 @@ sub run {
     ###BUGALERT### Add a loop around @ARGV to support multiple Fetchwarefiles
     #or fetchware packages ending in .fpkg.
     eval { # Trap any fatal errors.
+        ###BUGALERT### Should trapped exceptions with this eval cause fetchware
+        #to cd to $original_cwd and then exit, so that the File::Temp's END
+        #block can delete fetchware's source dir???
+        # Or fetchware could print the path of this source dir and close, and
+        # tell the user that they can clean it up with fetchware clean??
+        # Also, add cmdline options to control what to do when this happens???
         given (shift @ARGV) {
             when('install') {
                 cmd_install(@ARGV); # install() was taken by App::Fetchware!.
             } when('uninstall') {
-                uninstall(@ARGV);
+                cmd_uninstall(@ARGV);
             } when('new') {
                 new(@ARGV);
             } when('upgrade') {
@@ -132,6 +139,7 @@ sub cmd_install {
     #subroutine contents in a for my $filename (pop @ARGV) loop to try to
     #install all given arguments that arn't command line options as parsed by
     #GetOpt::Long.
+    ### Add this loop in run(), so there is just one loop to test.
     my $filename = shift;
 
     # If no Fetchwarefile or *.fpkg was specified, then pretend the user ran
@@ -164,6 +172,8 @@ sub cmd_install {
         my $package_path = download($temp_dir, $download_url);
         diag("PPPPPPPPPPP[$package_path]");
 
+        ###BUGALERT### Add support for caching the key files gpg creates to the
+        #fetchwarefile, and for actually using them later on inside the fpkg.
         verify($download_url, $package_path);
 
         my $build_path = unarchive($package_path);
@@ -194,26 +204,101 @@ EOD
 
 
 
-=head2 uninstall()
+=head2 cmd_uninstall()
 
 Uninstalls the given package. Note the given package does B<not> have to be an
-exact 
+exact match, but it does have to be unique if you have two versions of the same
+software installed such as httpd-2.2 and httpd-2.4. In that case you'd have to
+specify the version number as well.
+
+=over
+=item LIMITATION
+cmd_uninstall() unlike cmd_install() does not accept Fetchwarefiles as an
+argument to uninstall a fetchware package! Instead, you must proved the name and
+perhaps the name and version number of the already installed software package.
+For a list of such package names just run C<fetchware list> to list all
+installed fetchware packages.
+=back
 
 =cut
 
-sub uninstall {
-    my $filename = pop @ARGV;
+sub cmd_uninstall {
+    ###BUGALERT### the or --force cmdline option will skip the checking of
+    #version numbers, and the one lookup() says to download will be installed
+    #regardless.
+    my $uninstall_package_path = shift;
 
-    my $fetchware_package_path = determine_fetchware_package_path($filename);
-
-    my $uninstall_path = unarchive_fetchware_package($fetchware_package_path);
-
-    chdir $uninstall_path or die <<EOD
-Make a sub for chdir!!! maybe old pushd popd???
+    my ($fetchware_package_path, @too_many_fetchware_package_paths) =
+        determine_fetchware_package_path($uninstall_package_path);
+    # Package to upgrade must exist as a fetchware package in the fetchware
+    # database directory.
+    die <<EOD unless defined $fetchware_package_path;
+fetchware: The argument you provided to fetchware upgrade was not found in
+fetchware's package database. To get a list of available packages to upgrade
+just run the fetchware list command to list all installed packages. Select one
+of those to upgrade, and then rerun fetchware upgrade.
 EOD
 
-    ###BUGALERT### Add executing make install & support for a config sub for
-    #this uninstall_commands! Why not install and build get them.
+    ###BUGALERT### Use Term::UI, and output a numbered list for the user to
+    #choose from using a prompt, and then rerun uninstall with that argument.
+    if (@too_many_fetchware_package_paths > 0) {
+        # Print beginning of message to STDERR.
+        warn <<EOW;
+fetchware: Too many installed packages match the argument you provided to the
+upgrade command. Your argument was [$uninstall_package_path], and the multiple
+results it returned were:
+EOW
+
+        # Print modified array values to STDERR.
+        for (@too_many_fetchware_package_paths) {
+            warn file($_)->basename(), "\n";
+        }
+
+        # Print closing of message to STDERR.
+        die <<EOD;
+Choose which package from the list above you want to upgrade, and rerun
+fetchware upgrade using it as the argument for the package you want to upgrade.
+EOD
+    }
+
+    die <<EOD unless $fetchware_package_path =~ /\.fpkg/;
+fetchware: The option you provided to uninstall is not a currently installed
+fetchware package. Please rerun uninstall after determining the proper name for
+the already installed fetchware package. To see a list of already installed
+fetchware packages please try fetchware's list command: fetchware list
+EOD
+
+    my $temp_dir = start();
+
+
+    # Parse out the Fetchwarefile from the fetchware package stored in the
+    # fetchware database directory.
+    my $fetchwarefile_path;
+    if ($fetchware_package_path =~ /\.fpkg$/) {
+        $fetchwarefile_path
+            = extract_fetchwarefile($fetchware_package_path, cwd());            
+        parse_fetchwarefile($fetchwarefile_path);
+    } else {
+        die <<EOD;
+fetchware: fetchware upgrade failed to extract the Fetchwarefile from the
+fetchware package that should be stored in fetchware's database.
+EOD
+    }
+
+    # "Download" the package using a local file:// URL.
+    my $fetchware_url = "file://$fetchware_package_path";
+    my $package_path = download($temp_dir, $fetchware_url);
+
+    my $build_path = unarchive($package_path);
+
+    uninstall($build_path);
+
+    end();
+
+    uninstall_fetchware_package_from_database($fetchware_package_path);
+
+    # Return the name of the uninstalled package.
+    return $uninstall_package_path;
 }
 
 
@@ -792,48 +877,94 @@ well.
 =cut
 
 sub upgrade {
-    my $filename = shift;
-    ###BUGALERT### Just call cmd_install() after the if new version has been
-    #released check!
-    ###BUGALERT### Double check the crazy code below!
-    ###BUGALERT### Shouldn't this command and the others like it loop over @ARGV
-    #and upgrade all provide options!!!
-    $filename // pop @ARGV;
+    my $upgrade_package_path = shift;
+    ###BUGALERT### the or --force cmdline option will skip the checking of
+    #version numbers, and the one lookup() says to download will be installed
+    #regardless.
 
-    # Create a fetchware tempdir in File::Spec->tmpdir(), and chdir() to it.
-    start();
+    my ($fetchware_package_path, @too_many_fetchware_package_paths) =
+        determine_fetchware_package_path($upgrade_package_path);
+    # Package to upgrade must exist as a fetchware package in the fetchware
+    # database directory.
+    die <<EOD unless defined $fetchware_package_path;
+fetchware: The argument you provided to fetchware upgrade was not found in
+fetchware's package database. To get a list of available packages to upgrade
+just run the fetchware list command to list all installed packages. Select one
+of those to upgrade, and then rerun fetchware upgrade.
+EOD
 
-    ###BUGALERT### determine_fetchware_package_path can return with more than a
-    #single result!!! Should I loop over all returned results! Or just pick one.
-    #Nah, determine_fetchware_package_path will return all results, and I will
-    #check for this here, and die with an error message acking the user to come
-    #up with a single, specifc argument!
-    my $fetchware_package_path = determine_fetchware_package_path($filename);
+    ###BUGALERT### Use Term::UI, and output a numbered list for the user to
+    #choose from using a prompt, and then rerun upgrade with that argument.
+    if (@too_many_fetchware_package_paths > 0) {
+        # Print beginning of message to STDERR.
+        warn <<EOW;
+fetchware: Too many installed packages match the argument you provided to the
+upgrade command. Your argument was [$upgrade_package_path], and the multiple
+results it returned were:
+EOW
 
-    my $fetchwarefile_path = extract_fetchwarefile($fetchware_package_path, cwd());
-    
-    parse_fetchwarefile($fetchwarefile_path);
+        # Print modified array values to STDERR.
+        for (@too_many_fetchware_package_paths) {
+            warn file($_)->basename(), '\n';
+        }
 
-    my $latest_url_path = lookup();
+        # Print closing of message to STDERR.
+        die <<EOD;
+Choose which package from the list above you want to upgrade, and rerun
+fetchware upgrade using it as the argument for the package you want to upgrade.
+EOD
+    }
 
-    # Determine the filenames of the latest url path as determined by lookup()
-    # and the currently installed filename.
-    my ($latest_volume, $latest_directories, $latest_filename)
-        =
-        splitpath($latest_url_path);
-    my ($fetchware_volume, $fetchware_directories, $installed_filename)
-        =
-        splitpath($fetchware_package_path);
+    my $temp_dir = start();
 
-    ###BUGALERT###If statement below is WRONG!!! Implement similar or refactor and use the same algorithm that
-    #lookup uses only locally to determine if we need to install the latest
-    #version of if the latest version is already installed.
-    if ($latest_filename eq $installed_filename) {
-        ###BUGALERT### Simply execute cmd_install() instead of this copy and
-        #paste crap!!!
-        my $package_path = download($latest_url_path);
 
-        verify($latest_url_path, $package_path);
+    # Parse out the Fetchwarefile from the fetchware package stored in the
+    # fetchware database directory.
+    my $fetchwarefile_path;
+    if ($upgrade_package_path =~ /\.fpkg$/) {
+        $fetchwarefile_path
+            = extract_fetchwarefile($upgrade_package_path, cwd());            
+        parse_fetchwarefile($fetchwarefile_path);
+    } else {
+        die <<EOD;
+fetchware: fetchware upgrade failed to extract the Fetchwarefile from the
+fetchware package that should be stored in fetchware's database.
+EOD
+    }
+
+    ###BUGALERT### Have lookup() replace the timestamp of what we should
+    #download too to make upgrade() be able to use the lookup_by_timestamp
+    #algorithm too, which is a better default anyway.
+    my $download_url = lookup();
+
+    my $download_url_basename = file($download_url)->basename();
+    my $upgrade_package_path_basename =
+        file(
+            determine_fetchware_package_path($upgrade_package_path)
+        )->basename();
+    $upgrade_package_path_basename =~ s/\.fpkg$//;
+
+    # Transform both competing filenames with presumed f
+    my @file_listing = map { [$_, join '', split /\D+/, $_] }
+        $download_url_basename, $upgrade_package_path_basename;
+    die <<EOD if grep { not defined $_[1] } @file_listing;
+fetchware: Of the installed filename [$upgrade_package_path_basename] and the
+potential replacement filename [$download_url_basename] fetchware cannot tell
+which one is newer, and if a new package is available. Please report this as a
+bug, so I can make fetchware's upgrade functionality more robust.
+EOD
+    @file_listing = sort { $b->[1] <=> $a->[0] } @file_listing;
+    # If the highest sorted, "latest version," filename is the same as the one
+    # lookup() lookedup, then a new version is available, and we should install
+    # it.
+    if ($file_listing[0][0] eq $download_url_basename) {
+
+        my $package_path = download($temp_dir, $download_url);
+        diag("PPPPPPPPPPP[$package_path]");
+
+        ###BUGALERT### Add support for caching the key files gpg creates to the
+        #fetchwarefile, and for actually using them later on inside the fpkg.
+        verify($download_url, $package_path);
 
         my $build_path = unarchive($package_path);
 
@@ -850,13 +981,22 @@ sub upgrade {
         end();
 
         # Return the path of the created and installed fetchware package.
-        return fetchware_database_path() . ( splitpath($fetchware_package_path) )[2];
+        return catfile(fetchware_database_path(),
+            ( splitpath($fetchware_package_path) )[2] );
+
+        return 'Upgrade completed';
     } else {
-        ###BUGALERT### Add verbose, quite, and debug statement saying that the
-        #installed version is the latest version.
-        #And in default output include both latest and installed filenames so
-        #you can easily see if they're the same & in output if a new version is
-        #installed.
+        print <<EOD;
+fetchware: The latest version [$download_url_basename] is the same as
+the currently installed version [$upgrade_package_path_basename]. So no
+upgrade is needed. 
+EOD
+        # Clean up temp dir.
+        end();
+
+        # Exit success! An upgrade isn't needed, because the latest version has
+        # been installed.
+        return 'No upgrade needed!';
     }
 }
 
@@ -876,6 +1016,62 @@ sub upgrade_all {
         upgrade($fetchware_package);
     }
     ###BUGALERT### Add exit 0 at end of each command sub.
+}
+
+
+=head2 look()
+
+Looks up the latest version of the specified Fetchwarefile or fetchware package,
+and downloads, verifies, and unarchives the specified source code distribution,
+and then prints out the location of this archive.
+
+=over
+=item LIMITATION
+
+look() unarchive's the desired source code distribution into the current working
+directory. If this is not acceptable, you'll have to just cd to where you want
+the source distribution unarchived, and then cd back to where you came from. For
+example, you could use a subshell in bash to make the cd temporary:
+
+bash$ (cd where/you/want/it && fetchware look fetchware-package.fpkg)
+
+=back
+
+=cut
+
+sub look {
+    # Copy Fetchwarefile parsing shit
+    # lookup
+    # download
+    # verify
+    # unarchive
+    # print useful message about what the path of the unarchived software dist
+        # is.
+
+}
+
+
+=head2 list()
+
+Lists B<all> of the packages fetchware has stored in its
+fetchware_database_path().
+
+=over
+=item LIMITATION
+
+There is no ability to limit this listing with a
+regex currently, so just pipe it to grep for now. Obviously in the future this
+ability could be added, but I'm currently unclear about its security
+ramifications. So for now, I'll hold out until I study what ack does.
+
+=back
+
+=cut
+
+sub list {
+    for my $fetchware_package (glob catfile(fetchware_database_path(), '*')) {
+        say file($fetchware_package)->basename() =~ s/\.fpkg$//;
+    }
 }
 
 
@@ -1152,29 +1348,34 @@ It should return only one $fetchware_package_path, but it can return multiple
 results. It B<can> return multiple results, because you could have one package
 that contains the name of another package, or you could have two versions of the
 same package installed in different places, and you forgot to specify which
-version.
+version. It dies with an exception if no matches are determined.
 
 =cut
 
 sub determine_fetchware_package_path {
     my $fetchware_package = shift;
-
+diag "FP!!!!!!!!!!![$fetchware_package]";
+my ($package, $filename, $line) = caller;
+diag("Package[$package]Filename[$filename]Line[$line]");
     my $fetchware_db_glob = catfile(fetchware_database_path(), '*');
 
+diag "BEFOREGREP";
+diag explain \(glob $fetchware_db_glob);
     my @fetchware_package_filenames
         =
         grep /$fetchware_package/, glob $fetchware_db_glob;
 
-    if (@fetchware_package_filenames < 2) {
-        my $fetchware_package_path
-            =
-            catfile(fetchware_database_path(), $fetchware_package_filenames[0]);
-        return $fetchware_package_path;
-    } else {
-        $_ = catfile(fetchware_database_path(), $_)
-            for @fetchware_package_filenames;
-        return @fetchware_package_filenames;
-    }
+diag "AFTERGREP";
+diag explain \@fetchware_package_filenames;
+    die <<EOD if @fetchware_package_filenames == 0;
+fetchware: Fetchware failed to determine the fetchware package that is
+associated with the argument that you provided to fetchware
+[$fetchware_package]. In this case, fetchware only allows arguments for
+fetchware packages that have already been installed. Please run fetchware list
+to obtain a list of installed packages to choose from.
+EOD
+
+    return @fetchware_package_filenames;
 }
 
 
@@ -1269,6 +1470,38 @@ EOD
 fetchware: run-time error. fetchware failed to copy the specified
 fetchware package path [$fetchwarefile_path] to [$fetchware_db_path]. Please
 see perldoc App::Fetchware.
+EOD
+}
+
+
+
+
+=item uninstall_fetchware_package_from_database($uninstall_package_name);
+
+Installs (just copies) the specified fetchware package to the fetchware
+database, which is /var/log/fetchware on UNIX, C:\FETCHWARE on Windows with
+root or Administrator. All others are whatever C<File::HomeDir> says.
+
+Creates the directory the fetchware database is stored in if it does not already
+exist.
+
+=cut
+
+sub uninstall_fetchware_package_from_database {
+    my $uninstall_package_name = shift;
+
+    # Don't make preexisting absolute paths absolute again.
+    $uninstall_package_name
+        =
+        catfile(fetchware_database_path(), $uninstall_package_name)
+            unless file_name_is_absolute($uninstall_package_name);
+
+diag("UPN[$uninstall_package_name]");
+    unlink $uninstall_package_name
+        or die <<EOD;
+fetchware: Fetchware successfully uninstalled the fetchware package you
+requested [$uninstall_package_name], but it failed to also delete the
+corresponding fetchware package from its database Os error [$!].
 EOD
 }
 

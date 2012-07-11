@@ -7,6 +7,9 @@ all:
 install:
 	sh -c 'echo "fetchware: make install ran successfully!"'
 
+uninstall:
+	sh -c 'echo "fetchware: make uninstall ran successfully!"'
+
 build-package:
 	sh -c 'echo "Build package and creating md5sum."'
 

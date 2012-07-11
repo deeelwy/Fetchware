@@ -78,6 +78,7 @@ our %EXPORT_TAGS = (
         build
         install
         end
+        uninstall
     )],
     OVERRIDE_LOOKUP => [qw(
         check_lookup_config
@@ -127,6 +128,7 @@ our %EXPORT_TAGS = (
         build
         install
         end
+        uninstall
     )],
     UTIL => [qw(
         download_dirlist
@@ -170,6 +172,7 @@ subroutines as Fetchwarefile configuration syntax.
 =item make_options $value;
 =item build_commands $value;
 =item install_commands $value;
+=item uninstall_commands $value;
 =item lookup_url $value;
 =item lookup_method $value;
 =item gpg_key_url $value;
@@ -513,10 +516,12 @@ make_config_sub() except for fetchware() and override().
         [ temp_dir => 'ONE' ],
         [ user => 'ONE' ],
         [ prefix => 'ONE' ],
+        ###BUGALERT### ONEARREF isn't documented, and may not be needed.
         [ configure_options=> 'ONEARRREF' ],
         [ make_options => 'ONEARRREF' ],
         [ build_commands => 'ONEARRREF' ],
         [ install_commands => 'ONEARRREF' ],
+        [ uninstall_commands => 'ONEARRREF' ],
         [ lookup_url => 'ONE' ],
         [ lookup_method => 'ONE' ],
         [ gpg_key_url => 'ONE' ],
@@ -1182,8 +1187,13 @@ sub  lookup_by_versionstring {
 
     # Implement versionstring algorithm.
     for my $fl (@$file_listing) {
+        # Split each filename on *non digits*
+        ###BUGALERT### Add error checking for if the /D+ split fails to actually
+        #split the string!!!
         my @split_fl = split /\D+/, $fl->[0];
+        # Join each digit into one "super digit"
         $fl->[2] = join '', @split_fl;
+        # And sort below sorts them into highest number first order.
     }
 
     # Sort $file_listing by the versionstring, and but $b in front of $a to get
@@ -1192,6 +1202,8 @@ sub  lookup_by_versionstring {
     @$file_listing = sort { $b->[2] <=> $a->[2] } @$file_listing;
     
 
+    ###BUGALERT### This action at a distance crap should get its own high-level
+    #subroutine at least say determine_downloadurl inside lookup().
     # Manage duplicate timestamps apropriately including .md5, .asc, .txt files.
     # And support some hacks to make lookup() more robust.
     return lookup_determine_downloadurl($file_listing);
@@ -1888,6 +1900,9 @@ sub check_archive_files {
     # Determine if *all* files are in the same directory.
     my %dir;
     for my $path (@$files) {
+##TEST##diag("path[$path]");
+        # Skip Fetchwarefiles.
+        next if $path eq './Fetchwarefile';
 
 ###BUGALERT### Archive::Extract *only* extracts files! $ae->files() is an
 #accessor method to an arrayref of files that it has *already* extracted! This
@@ -1910,10 +1925,18 @@ EOE
         die $error if file_name_is_absolute($path);
 
         my ($volume,$directories,$file) = splitpath($path); 
+##TEST##diag("vol[$volume]dirs[$directories]file[$file]");
         my @dirs = splitdir($directories);
+##TEST##diag("dirssss");
+##TEST##diag explain \@dirs;
+        # Skip empty directories.
+        next unless @dirs;
 
         $dir{$dirs[0]}++;
     }
+
+diag("dirhash");
+diag explain \%dir;
 
     my $i = 0;
     for my $dir (keys %dir) {
@@ -2002,30 +2025,9 @@ EOD
         or defined config('prefix')
         or defined config('make_options')
     ) {
-        my $configure = './configure';
-        if (config('configure_options')) {
-            # Support multiple options like configure_options '--prefix', '.';
-            for my $configure_option (config('configure_options')) {
-                $configure .= " $configure_option";
-                diag("configureopts[$configure]");
-            }
-        } elsif (config('prefix')) {
-            if ($configure =~ /--prefix/) {
-                die <<EOD;
-App-Fetchware: run-time error. You specified both the --prefix option twice.
-Once in 'prefix' and once in 'configure_options'. You may only specify prefix
-once in either configure option. See perldoc App::Fetchware.
-EOD
-            } else {
-                $configure .= " --prefix=@{[config('prefix')]}";
-                diag("prefixaddingprefix[$configure]");
-            }
-        }
-        
-        # Now lets execute the modifed standard commands.
-        # First ./configure.
-        my ($cmd, @options) = split ' ', $configure;
-        systemx($cmd, @options);
+
+        # Set up configure_options and prefix, and then run ./configure.
+        run_configure();
 
         # Next, make.
         if (defined config('make_options')) {
@@ -2049,6 +2051,59 @@ EOD
     return 'build succeeded';
 }
 
+
+=item run_configure()
+
+Runs C<./configure> as part of build() or uninstall(), which also annoying needs
+to run it.
+
+=over
+=item NOTE
+run_configure() is a piece of build() that was chopped out, because uninstall()
+needs to run C<./configure> too. The only reason uninstall() must do this is
+because Autotools uses full paths in the Makefile it creates. Examples from
+Apache are pasted below.
+
+top_srcdir   = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
+top_builddir = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
+srcdir       = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
+builddir     = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
+VPATH        = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
+
+Why arn't relative paths good enough for Autotools?
+=back
+
+=cut
+
+sub run_configure {
+    my $configure = './configure';
+    if (config('configure_options')) {
+        # Support multiple options like configure_options '--prefix', '.';
+        for my $configure_option (config('configure_options')) {
+            $configure .= " $configure_option";
+            diag("configureopts[$configure]");
+        }
+    } elsif (config('prefix')) {
+        if ($configure =~ /--prefix/) {
+            die <<EOD;
+App-Fetchware: run-time error. You specified both the --prefix option twice.
+Once in 'prefix' and once in 'configure_options'. You may only specify prefix
+once in either configure option. See perldoc App::Fetchware.
+EOD
+        } else {
+            $configure .= " --prefix=@{[config('prefix')]}";
+            diag("prefixaddingprefix[$configure]");
+        }
+    }
+    
+    # Now lets execute the modifed standard commands.
+    # First ./configure.
+    my ($cmd, @options) = split ' ', $configure;
+    systemx($cmd, @options);
+
+    # Return success.
+    return 'Configure successful'; 
+}
 
 
 =item install()
@@ -2097,6 +2152,7 @@ sub install {
         }
     } else {
         if (defined config('make_options')) {
+            ###BUGALERT### make_options should go before install!!!
             systemx('make', 'install', config('make_options'))
         } else {
             systemx('make', 'install');
@@ -2105,6 +2161,85 @@ sub install {
 
     # Return success.
     return 'install succeeded';
+}
+
+
+
+
+
+=item uninstall($build_path)
+
+=over
+=item Configuration subroutines used:
+=over
+=item uninstall_commands
+=back
+=back
+
+Cd's to $build_path, and then executes C<make uninstall>, which installs the
+specified software, or executes whatever C<uninstall_commands 'uninstall, commands';>
+if its defined.
+
+=over
+=item LIMITATIONS
+uninstall() like install() inteligently parses C<install_commands> by C<split()ing>
+on C</,\s+/>, and then C<split()ing> again on C<' '>, and then execute them
+using L<IPC::System::Simple>'s systemx().
+
+Also, simply executes the commands you specify or the default ones if you
+specify none. Fetchware will check if the commands you specify exist and are
+executable, but the kernel will do it for you and any errors will be in
+fetchware's output.
+=back
+
+=cut
+
+sub uninstall {
+    my $build_path = shift;
+
+    # chdir to $build_path so make will find the correct make file!.
+    ###BUGALERT### Refactor our chdir to its own subroutine that cmd_install and
+    #uninstall can share.
+    chdir $build_path or die <<EOD;
+fetchware: Failed to uninstall the specified package and specifically to change
+working directory to [$build_path] before running make uninstall or the
+uninstall_commands provided in this package's Fetchwarefile. Os error [$!].
+EOD
+
+    ###BUGALERT### Add msg()s around run_configure. msg() will probably be the
+    #name of the subroutine I write to handle verbose and quiet flags for me.
+
+
+    # Set up configure_options and prefix, and then run ./configure, because
+    # Autotools uses full paths that ./configure sets up, and these paths change
+    # from install time to uninstall time.
+    run_configure();
+
+    if (defined config('uninstall_commands')) {
+        # Support multiple options like install_commands 'make', 'install';
+        for my $uninstall_command (config('uninstall_commands')) {
+            # Dequote uninstall_commands they just get in the way.
+            my $dequoted_commands = $uninstall_command;
+            $dequoted_commands =~ s/'|"//g;
+            # split uninstall_commands on /,\s+/ and execute them.
+            my @uninstall_commands = split /,\s+/, $dequoted_commands;
+
+            for my $uninstall_command (@uninstall_commands) {
+                my ($cmd, @options) = split ' ', $uninstall_command;
+                systemx($cmd, @options);
+            }
+        }
+    } else {
+        if (defined config('make_options')) {
+            ###BUGALERT### make_options should go before install!!!
+            systemx('make', 'uninstall', config('make_options'))
+        } else {
+            systemx('make', 'uninstall');
+        }
+    }
+
+    # Return success.
+    return 'uninstall succeeded';
 }
 
 
@@ -2386,7 +2521,7 @@ diag "origcwd[$original_cwd]";
     }
 
     my @file_listing;
-    for my $file (glob "$local_lookup_url/*") {
+    for my $file (glob catfile($local_lookup_url, '*')) {
 diag "lfdfile[$file]";
         push @file_listing, $file;
     }
@@ -2582,9 +2717,13 @@ sub download_file_url {
 
     $url =~ s!^file://!!; # Strip useless URL scheme.
     
+    # Prepend $original_cwd only if the $url is *not* absolute, which will mess
+    # it up.
+    $url = catdir($original_cwd, $url) unless file_name_is_absolute($url);
+
     # Download the file:// URL to the current directory, which should already be
     # in $temp_dir, because of start()'s chdir().
-    cp(catdir($original_cwd, $url), cwd()) or die <<EOD;
+    cp($url, cwd()) or die <<EOD;
 App::Fetchware: run-time error. Fetchware failed to copy the download URL
 [$url] to the working directory [@{[cwd()]}]. Os error [$!].
 EOD
