@@ -43,6 +43,8 @@ our %EXPORT_TAGS  = (
         copy_fpkg_to_fpkg_database
         cmd_install
         cmd_uninstall
+        look
+        list
     )]
 );
 our @EXPORT_OK = @{$EXPORT_TAGS{TESTING}};
@@ -96,6 +98,10 @@ sub run {
                 upgrade(@ARGV);
             } when('upgrade-all') {
                 upgrade_all(@ARGV);
+            } when('list') {
+                list(@ARGV);
+            } when('look') {
+                look(@ARGV);
             } when('help') {
                 help(@ARGV);
             } default {
@@ -1040,14 +1046,58 @@ bash$ (cd where/you/want/it && fetchware look fetchware-package.fpkg)
 =cut
 
 sub look {
-    # Copy Fetchwarefile parsing shit
-    # lookup
-    # download
-    # verify
-    # unarchive
-    # print useful message about what the path of the unarchived software dist
-        # is.
+    my $filename = shift;
 
+    if (defined($filename) and -e $filename) {
+        # Run the :FETCHWARE subroutines to do everything to install the
+        # program.
+        ###BUGALERT### Needs support for override(), which I'll add later.
+        ###BUGALERT### Add printing messages about what fetchware is doing, and
+        #support -q and -v and -D.
+
+        # Absolutize $filename so it can survive start() chdir()ing into a temp
+        # dir.
+        $filename = rel2abs($filename);
+
+        # Call start() with an option to have it keep the temp dir, and not have
+        # File::Temp clean it up with an END handler.
+        my $temp_dir = start(KeepTempDir => 1);
+
+        my $fetchwarefile_path;
+        if ($filename =~ /\.fpkg$/) {
+            $fetchwarefile_path = extract_fetchwarefile($filename, cwd());            
+            parse_fetchwarefile($fetchwarefile_path);
+        } else {
+            parse_fetchwarefile($filename);
+            $fetchwarefile_path = $filename;
+        }
+
+        my $download_url = lookup();
+        diag("DUDUDUDUDUDUDU[$download_url]");
+
+        my $package_path = download(cwd(), $download_url);
+        diag("PPPPPPPPPPP[$package_path]");
+
+        ###BUGALERT### Add support for caching the key files gpg creates to the
+        #fetchwarefile, and for actually using them later on inside the fpkg.
+        verify($download_url, $package_path);
+
+        my $build_path = unarchive($package_path);
+
+        # end() is *not* run, because the point of look is to lookup, download,
+        # and unarchive, and then actually "look" at the files, and running
+        # end() would delete them.
+        ###BUGALERT### Add message telling user where the $build_path is.
+        #Probably using the to be created msg() function.
+
+        return catfile($temp_dir, $build_path);
+    } else {
+        ###BUGALERT### Replace with warn for proposed for loop above to work???
+        die <<EOD;
+fetchware: You called fetchware look incorrectly. You must specify
+either a Fetchwarefile or a fetchware package that ends with [.fpkg].
+EOD
+    }
 }
 
 
@@ -1070,7 +1120,11 @@ ramifications. So for now, I'll hold out until I study what ack does.
 
 sub list {
     for my $fetchware_package (glob catfile(fetchware_database_path(), '*')) {
-        say file($fetchware_package)->basename() =~ s/\.fpkg$//;
+        # Clean up $fetchware_package.
+        $fetchware_package = file($fetchware_package)->basename();
+        $fetchware_package =~ s/\.fpkg$//;
+
+        say $fetchware_package;
     }
 }
 

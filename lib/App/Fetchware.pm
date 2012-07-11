@@ -719,6 +719,8 @@ the directory they should use for storing file operations.
 =cut
 
 sub start {
+    my %opts = @_;
+
     # Ask for better security.
     File::Temp->safe_level( File::Temp::HIGH );
 
@@ -729,7 +731,12 @@ sub start {
     my $exception;
     my $temp_dir;
     eval {
-        $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+        unless (defined $opts{KeepTempDir}) {
+            $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+        } else {
+            $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1);
+
+        }
 
         # Must chown 700 so gpg's localized keyfiles are good.
         chown 0700, $temp_dir;
@@ -1703,8 +1710,8 @@ sub digest_verify {
 ##subify get_sha_sum()
     my $digest_file;
     # Obtain a sha sum file.
-    if (defined config("${digest_type}_url")) {
-        $digest_file = download_file(config("${digest_type}_url"));
+    if (defined config("${digest_ext}_url")) {
+        $digest_file = download_file(config("${digest_ext}_url"));
     } else {
         eval {
             $digest_file = download_file("$download_url.$digest_ext");
@@ -2289,6 +2296,8 @@ EOD
     # Clear %CONFIG for next run of App::Fetchware.
     # Is this a design defect? It's a pretty lame hack! Does my() do this for
     # me?
+    ###BUGALERT###YYYYYYEEEEEEEEEESSSSSSSSSSSS!!!! It probbly should. It would
+    #remove many calls to __clear_CONFIG() from the test suite.
     #%CONFIG = ();
 }
 
