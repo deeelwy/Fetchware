@@ -918,10 +918,6 @@ timestamps that make up the directory listing.
 sub parse_directory_listing {
     my ($directory_listing) = @_;
 
-diag "pdl file listing";
-diag explain $directory_listing;
-diag "end pdl";
-
     given (config('lookup_url')) {
         when (m!^ftp://!) {
         ###BUGALERT### *_parse_filelist may not properly skip directories, so a
@@ -933,6 +929,9 @@ diag "end pdl";
             return file_parse_filelist($directory_listing);
         }
     }
+diag "pdl file listing";
+diag explain $directory_listing;
+diag "end pdl";
 }
 
 
@@ -952,9 +951,6 @@ use to download the archive of your program.
 
 sub determine_download_url {
     my $filename_listing = shift;
-diag "ddurl file listing";
-diag explain $filename_listing;
-diag "end ddurl";
 
     # Base lookup algorithm on lookup_method configuration sub if it was
     # specified.
@@ -970,6 +966,9 @@ diag "end ddurl";
             return lookup_by_timestamp($filename_listing);
         }
     }
+diag "ddurl file listing";
+diag explain $filename_listing;
+diag "end ddurl";
 }
 
 
@@ -1141,8 +1140,7 @@ sub file_parse_filelist {
         # 
         # Use Path::Class's file() constructor & basename() method to strip out
         # all unneeded directory information leaving just the file's name.
-        my $pc_file = file $file;
-        $file = [$pc_file->basename(), "$year$mon$mday$hour$min$sec"];
+        $file = [file($file)->basename(), [$year,$mon,$mday,$hour,$min,$sec] ];
     }
 
     return $file_listing;
@@ -1160,22 +1158,37 @@ filename, which should be the latest version of your program.
 
 sub  lookup_by_timestamp {
     my $file_listing = shift;
-diag "lbt file listing";
-diag explain $file_listing;
-diag "end lbt";
     
     # Sort the timstamps to determine the latest one. The one with the higher
     # numbers, and put $b before $a to put the "bigger", later versions before
     # the "lower" older versions.
-    # Sort based on timestamp, which is $file_listing->[0..whatever][1].
-    ###BUGALERT### Must convert the *_parse_filelist() subs to create *ONLY*
-    #numeric timestamps without any hyphens or switch to cmp and sort them
-    #ASCIIbetically.
-    @$file_listing = sort { $b->[1] <=> $a->[1] } @$file_listing;
+    # Sort based on timestamp, which is $file_listing->[0..*][1][0..6].
+    # Note: the crazy || ors are to make perl sort each timestamp array first by
+    # year, then month, then day of the month, and so on.
+    my ($year,$mon,$mday,$hour,$min,$sec) = (0,1,2,3,4,5);
+    my @sorted_listing = sort { 
+        $b->[1]->[$year] <=> $a->[1]->[$year]
+        ||
+        $b->[1]->[$mon] <=> $a->[1]->[$mon]
+        ||
+        $b->[1]->[$mday] <=> $a->[1]->[$mday]
+        ||
+        $b->[1]->[$hour] <=> $a->[1]->[$hour]
+        ||
+        $b->[1]->[$min] <=> $a->[1]->[$min]
+        ||
+        $b->[1]->[$sec] <=> $a->[1]->[$sec]
+    } @$file_listing;
+diag "lbt file listing";
+diag explain \@sorted_listing;
+diag "end lbt";
 
     # Manage duplicate timestamps apropriately including .md5, .asc, .txt files.
     # And support some hacks to make lookup() more robust.
-    return lookup_determine_downloadurl($file_listing);
+    ###BUGALERT### Refactor this containing sub to call the sub below, and
+    #another one called lookup_hacks() for example, or perhaps provide a
+    #callback for this :)
+    return lookup_determine_downloadurl(\@sorted_listing);
 }
 
 
@@ -1748,6 +1761,7 @@ EOD
         die <<EOD;
 EOD
     }
+    ###BUGALERT### Why don't I use Digest to support more than just MD5 and SHA!
     #my $digest = Digest->new($digest_type);
     # Digest requires the filehandle to have binmode set.
     binmode $package_fh;

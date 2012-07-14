@@ -17,3 +17,12 @@ build-package:
 
 	sh -c '(cd .. && md5sum test-dist-1.00.fpkg > test-dist-1.00.fpkg.md5)'
 
+	sh -c 'echo "Build package and creating md5sum for upgrade version."'
+
+	sh -c 'cp -R ../test-dist-1.00 ../test-dist-1.01'
+
+	sh -c '(cd .. && tar --create --gzip --verbose --file test-dist-1.00/test-dist-1.01.fpkg  ./Fetchwarefile test-dist-1.01)'
+
+	sh -c 'rm -r ../test-dist-1.01'
+
+	sh -c 'md5sum test-dist-1.01.fpkg > test-dist-1.01.fpkg.md5'

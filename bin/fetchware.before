@@ -193,13 +193,13 @@ sub cmd_install {
             =
             create_fetchware_package($fetchwarefile_path, cwd());
 
-        my $installed_fetchware_package_path
-            = copy_fpkg_to_fpkg_database($fetchware_package_path);
+        copy_fpkg_to_fpkg_database($fetchware_package_path);
 
         end();
 
         # Return the path of the created and installed fetchware package.
-        return $installed_fetchware_package_path;
+        return catfile(fetchware_database_path(),
+            ( splitpath($fetchware_package_path) )[2] );
     } else {
         ###BUGALERT### Replace with warn for proposed for loop above to work???
         die <<EOD;
@@ -876,6 +876,7 @@ EOD
     #download too to make upgrade() be able to use the lookup_by_timestamp
     #algorithm too, which is a better default anyway.
     my $download_url = lookup();
+diag("DDOOWWNNLLOOAADDUURRLL[$download_url]");
 
     my $download_url_basename = file($download_url)->basename();
     my $upgrade_name_basename =
@@ -885,31 +886,34 @@ EOD
     ###BUGALERT### This comparision is quite fragile. Figure out a better way to
     #do this!!!
     $upgrade_name_basename =~ s/\.fpkg$//;
-    $download_url_basename
-        =~ s/(\.(?:zip|tgz|tbz|txz|fpkg)|(?:\.tar\.(gz|bz2|xz|Z)?))$//;
+    $download_url_basename =~ s/\.(zip|tgz|tbz|txz)|(tar\.?(gz|bz2|xz|Z)?)$//;
 
-    # Transform both competing filenames with presumed f
-    my @file_listing = map { [$_, (join '', split /\D+/, $_)] }
-        $download_url_basename, $upgrade_name_basename;
-    die <<EOD if grep { not defined $_->[1] } @file_listing;
-fetchware: Of the installed filename [$upgrade_name_basename] and the
-potential replacement filename [$download_url_basename] fetchware cannot tell
-which one is newer, and if a new package is available. Please report this as a
-bug, so I can make fetchware's upgrade functionality more robust.
-EOD
-    @file_listing = sort { $b->[1] <=> $a->[1] } @file_listing;
-diag("HERE!!!");
-diag(explain(@file_listing));
-diag("ENDHERE!!!");
-    # If the highest sorted, "latest version," filename is the same as the one
-    # lookup() lookedup, then a new version is available, and we should install
-    # it.
-    # Clean up 
-diag("fl00[$file_listing[0][0]");
+##DELME##    # Transform both competing filenames with presumed f
+##DELME##    my @file_listing = map { [$_, (join '', split /\D+/, $_)] }
+##DELME##        $download_url_basename, $upgrade_name_basename;
+##DELME##diag("HERE!!!");
+##DELME##diag(explain(@file_listing));
+##DELME##diag("ENDHERE!!!");
+##DELME##    die <<EOD if grep { not defined $_->[1] } @file_listing;
+##DELME##fetchware: Of the installed filename [$upgrade_name_basename] and the
+##DELME##potential replacement filename [$download_url_basename] fetchware cannot tell
+##DELME##which one is newer, and if a new package is available. Please report this as a
+##DELME##bug, so I can make fetchware's upgrade functionality more robust.
+##DELME##EOD
+##DELME##    @file_listing = sort { $b->[1] <=> $a->[1] } @file_listing;
+##DELME##    # If the highest sorted, "latest version," filename is the same as the one
+##DELME##    # lookup() lookedup, then a new version is available, and we should install
+##DELME##    # it.
+##DELME##    # Clean up 
+##DELME##diag("fl00[$file_listing[0][0]");
 diag("dub[$download_url_basename] upb[$upgrade_name_basename]");
-    if ($file_listing[0][0] eq $download_url_basename
-        # Make cmd_upgrade() not upgrade when the ver
-        and $file_listing[0][0] ne $upgrade_name_basename) {
+    # Upgrade only when the package name to upgrade is *not* the same as the
+    # package name that is already installed.
+    if ($upgrade_name_basename ne $download_url_basename) {
+        
+##DELME##        $file_listing[0][0] eq $download_url_basename
+##DELME##        # Make cmd_upgrade() not upgrade when the ver
+##DELME##        and $file_listing[0][0] ne $upgrade_name_basename) {
 
         my $package_path = download($temp_dir, $download_url);
         diag("PPPPPPPPPPP[$package_path]");
@@ -936,15 +940,16 @@ diag("dub[$download_url_basename] upb[$upgrade_name_basename]");
         # package database at the same time.
         uninstall_fetchware_package_from_database($fetchware_package_path);
 
-        my $installed_fetchware_package_path
-            = copy_fpkg_to_fpkg_database($updated_fetchware_package_path);
+        copy_fpkg_to_fpkg_database($updated_fetchware_package_path);
 
         end();
 
         # Return the path of the created and installed fetchware package.
-        return $installed_fetchware_package_path;
+        return catfile(fetchware_database_path(),
+            ( splitpath($updated_fetchware_package_path) )[2] );
+
+        return 'Upgrade completed';
     } else {
-        ###BUGALERT### Replace this print() with msg() after you implement it.
         print <<EOD;
 fetchware: The latest version [$download_url_basename] is the same as
 the currently installed version [$upgrade_name_basename]. So no
@@ -953,9 +958,9 @@ EOD
         # Clean up temp dir.
         end();
 
-        # Return success! An upgrade isn't needed, because the latest version
-        # has been installed.
-        return 'No upgrade needed.';
+        # Exit success! An upgrade isn't needed, because the latest version has
+        # been installed.
+        return 'No upgrade needed!';
     }
 }
 
@@ -1481,12 +1486,10 @@ root or Administrator. All others are whatever C<File::HomeDir> says.
 Creates the directory the fetchware database is stored in if it does not already
 exist.
 
-Returns the full path of the copied fetchware package.
-
 =cut
 
 sub copy_fpkg_to_fpkg_database {
-    my $fetchware_package_path = shift;
+    my $fetchwarefile_path = shift;
 
     my $fetchware_db_path = fetchware_database_path();
 
@@ -1501,16 +1504,11 @@ needs to store its database of installed packages in [$fetchware_db_path].
 Library function error [$@].
 EOD
     }
-    cp($fetchware_package_path, $fetchware_db_path) or die <<EOD;
+    cp($fetchwarefile_path, $fetchware_db_path) or die <<EOD;
 fetchware: run-time error. fetchware failed to copy the specified
-fetchware package path [$fetchware_package_path] to [$fetchware_db_path]. Please
+fetchware package path [$fetchwarefile_path] to [$fetchware_db_path]. Please
 see perldoc App::Fetchware.
 EOD
-    
-    # Return the full path to the fetchware package that has been copied.
-    my $fetchware_package_path_basename
-        = dir($fetchware_package_path)->basename();
-    return catfile($fetchware_db_path, $fetchware_package_path_basename);
 }
 
 
