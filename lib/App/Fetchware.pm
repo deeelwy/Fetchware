@@ -1140,7 +1140,9 @@ sub file_parse_filelist {
         # 
         # Use Path::Class's file() constructor & basename() method to strip out
         # all unneeded directory information leaving just the file's name.
-        $file = [file($file)->basename(), [$year,$mon,$mday,$hour,$min,$sec] ];
+        # Add all of the timestamp numbers together, so that only one numberical
+        # sort is needed instead of a descending list of numerical sorts.
+        $file = [file($file)->basename(), $year+$mon+$mday+$hour+$min+$sec ];
     }
 
     return $file_listing;
@@ -1165,20 +1167,7 @@ sub  lookup_by_timestamp {
     # Sort based on timestamp, which is $file_listing->[0..*][1][0..6].
     # Note: the crazy || ors are to make perl sort each timestamp array first by
     # year, then month, then day of the month, and so on.
-    my ($year,$mon,$mday,$hour,$min,$sec) = (0,1,2,3,4,5);
-    my @sorted_listing = sort { 
-        $b->[1]->[$year] <=> $a->[1]->[$year]
-        ||
-        $b->[1]->[$mon] <=> $a->[1]->[$mon]
-        ||
-        $b->[1]->[$mday] <=> $a->[1]->[$mday]
-        ||
-        $b->[1]->[$hour] <=> $a->[1]->[$hour]
-        ||
-        $b->[1]->[$min] <=> $a->[1]->[$min]
-        ||
-        $b->[1]->[$sec] <=> $a->[1]->[$sec]
-    } @$file_listing;
+    my @sorted_listing = sort { $b->[1] <=> $a->[1] } @$file_listing;
 diag "lbt file listing";
 diag explain \@sorted_listing;
 diag "end lbt";
