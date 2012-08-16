@@ -2279,6 +2279,12 @@ end() is called after all of the other main fetchware subroutines such as
 lookup() are called. It's job is to cleanup after everything else. It just
 calls C<File::Temp>'s internalish File::Temp::cleanup() subroutine.
 
+It also calls the very internal only __clear_CONFIG() subroutine that clears
+App::Fetchware's internal %CONFIG variable used to hold your parsed
+Fetchwarefile. 
+
+###BUGALERT### Just take %CONFIG OO!!! App::Fetchware::Config!!! Problem solved.
+
 =cut
 
 sub end {
@@ -2301,7 +2307,8 @@ EOD
     # me?
     ###BUGALERT###YYYYYYEEEEEEEEEESSSSSSSSSSSS!!!! It probbly should. It would
     #remove many calls to __clear_CONFIG() from the test suite.
-    #%CONFIG = ();
+###BUGALERT### Just take %CONFIG OO!!! App::Fetchware::Config!!! Problem solved.
+    __clear_CONFIG();
 }
 
 
