@@ -1132,8 +1132,6 @@ sub file_parse_filelist {
         my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size, $atime,$mtime,$ctime,
             $blksize,$blocks)
             = stat($file);
-        my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
-            localtime($mtime);
 
         # Replace scalar filename with a arrayref of the filename with its
         # assocated timestamp for later processing for lookup().
@@ -1142,7 +1140,7 @@ sub file_parse_filelist {
         # all unneeded directory information leaving just the file's name.
         # Add all of the timestamp numbers together, so that only one numberical
         # sort is needed instead of a descending list of numerical sorts.
-        $file = [file($file)->basename(), $year+$mon+$mday+$hour+$min+$sec ];
+        $file = [file($file)->basename(), $mtime ];
     }
 
     return $file_listing;
