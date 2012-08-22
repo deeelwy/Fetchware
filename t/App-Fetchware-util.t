@@ -7,9 +7,9 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '10'; #Update if this changes.
+use Test::More 0.98;# tests => '10'; #Update if this changes.
 
-use File::Spec::Functions qw(splitpath catfile rel2abs);
+use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir);
 use URI::Split 'uri_split';
 use Cwd 'cwd';
 
@@ -22,7 +22,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 # Test if I can load the module "inside a BEGIN block so its functions are exported
 # and compile-time, and prototypes are properly honored."
 # There is no ':OVERRIDE_START' to bother importing.
-BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :TESTING :UTIL)); }
+BEGIN { use_ok('App::Fetchware', qw(:TESTING :UTIL)); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
 diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
@@ -31,7 +31,7 @@ my $class = 'App::Fetchware';
 
 
 
-subtest 'UTIL exports what it should' => sub {
+subtest 'UTIL end TESTING export what they should' => sub {
     my @expected_util_exports = qw(
         download_dirlist
         ftp_download_dirlist
@@ -43,11 +43,41 @@ subtest 'UTIL exports what it should' => sub {
         download_file_url
         just_filename
     );
+
+    my @expected_testing_exports = qw(
+        eval_ok
+        skip_all_unless_release_testing
+        __clear_CONFIG
+        debug_CONFIG
+        config_replace
+        config_delete
+        make_clean
+        make_test_dist
+        start
+        lookup
+        download
+        verify
+        unarchive
+        build
+        install
+        end
+        uninstall
+    );
     # sort them to make the testing their equality very easy.
     @expected_util_exports = sort @expected_util_exports;
+    @expected_testing_exports = sort @expected_testing_exports;
     my @sorted_util_tag = sort @{$App::Fetchware::EXPORT_TAGS{UTIL}};
+    my @sorted_testing_tag = sort @{$App::Fetchware::EXPORT_TAGS{TESTING}};
+
     ok(@expected_util_exports ~~ @sorted_util_tag, 
         'checked for correct UTIL @EXPORT_TAG');
+
+    for my $i (0..$#sorted_testing_tag) {
+        unless ($sorted_testing_tag[$i] eq $expected_testing_exports[$i]) {
+            fail('checked for correct TESTING @EXPORT_TAG failed');
+        }
+    }
+    pass('checked for correct TESTING @EXPORT_TAG');
 
 };
 
@@ -122,9 +152,6 @@ subtest 'test file_download_dirlist()' => sub {
     my $test_path = rel2abs('t');
     my $dirlist = file_download_dirlist("file://$test_path");
 diag explain $dirlist;
-    # Check if a known directory is *not* in the listing.
-    ok( ! grep /test-dist-1\.00[^\.tar\.gz]/, @$dirlist,
-        'checked file_download_dirlist() directory removal');
 
     # Check if known files are in the t directory. Regexes are used in case
     # files are changed or added, so I don't have to constantly update a silly
@@ -234,10 +261,16 @@ subtest 'test download_http_url()' => sub {
 subtest 'test download_file_url' => sub {
     skip_all_unless_release_testing();
 
+    # Create test file to download.
+    my $test_dist_path = make_test_dist('test-dist-1.00', rel2abs('t'));
+
     my $filename = download_file_url('file://t/test-dist-1.00.fpkg');
 
     is($filename, 'test-dist-1.00.fpkg',
         'checked download_file_url() success.');
+
+    # Delete useless test-dist package.
+    ok(unlink $test_dist_path, 'checked download_file_url() cleanup.');
 
     # Delete useless copied file.
     ok(unlink $filename, 'checked download_file_url() cleanup.');
@@ -271,6 +304,40 @@ EOS
 };
 
 
+subtest 'test make_test_dist' => sub {
+    ###HOWTOTEST### How do I test for mkdir() failure, open() failure, and
+    #Archive::Tar->create_archive() failure?
+
+    my $file_name = 'test-dist-1.00';
+    my $retval = make_test_dist($file_name);
+    is($retval, rel2abs("$file_name.fpkg"),
+        'check make_test_dist() success.');
+
+    ok(unlink $retval, 'checked make_test_dist() cleanup');
+
+    # Test more than one call as used in t/bin-fetchware-upgrade-all.t
+    my @filenames = qw(test-dist-1.00 test-dist-1.01);
+
+    my @retvals;
+    for my $filename (@filenames) {
+        my $retval = make_test_dist($file_name);
+        is($retval, rel2abs("$file_name.fpkg"),
+            'check make_test_dist() 2 calls  success.');
+        push @retvals, $retval;
+    }
+
+    ok(unlink @retvals, 'checked make_test_dist() 2 calls cleanup');
+
+    # Test make_test_dist()'s second destination directory argument.
+    my $name = 'test-dist-1.00';
+    my $return_val = make_test_dist($name, tmpdir());
+    is($return_val, catfile(tmpdir(), "$name.fpkg"),
+        'check make_test_dist() destination directory success.');
+
+    ok(unlink $return_val, 'checked make_test_dist() cleanup');
+};
+
+
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-#done_testing();
+done_testing();

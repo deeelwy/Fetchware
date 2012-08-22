@@ -5,7 +5,7 @@ package App::Fetchware;
 # CPAN modules making Fetchwarefile better.
 use File::Temp 'tempdir';
 use File::Spec::Functions qw(catfile catdir splitpath updir splitdir
-    file_name_is_absolute);
+    file_name_is_absolute rel2abs);
 use Path::Class;
 use Data::Dumper;
 use Net::FTP;
@@ -23,6 +23,7 @@ use Digest::MD5;
 #use Crypt::OpenPGP::KeyRing;
 #use Crypt::OpenPGP;
 use Archive::Extract;
+use Archive::Tar;
 use Sub::Override;
 use Test::More 0.98; # some utility test subroutines need it.
 
@@ -120,6 +121,7 @@ our %EXPORT_TAGS = (
         config_replace
         config_delete
         make_clean
+        make_test_dist
         start
         lookup
         download
@@ -727,7 +729,6 @@ sub start {
     # Create the temp dir in the portable locations as returned by
     # File::Spec->tempdir() using the specified template (the weird $$ is this
     # processes process id), and cleaning up at program exit.
-    ###BUGALERT### WTF is returned by tempdir???
     my $exception;
     my $temp_dir;
     eval {
@@ -2379,6 +2380,129 @@ sub make_clean {
     chdir(updir()) or fail(q{Can't chdir(updir())!});
 }
 
+
+=item make_test_dist($ver_num, rel2abs($destination_directory));
+
+Makes a C<test-dist-1.$ver_num.fpkg> fetchware package that can be used for
+testing fetchware's functionality without actually installing anything. All of
+the tests in the t/ directory use this, while all of the tests in the xt/
+directory use real programs like apache and ctags to test fetchware's
+functionality.
+
+Reuses start() to create a temp directory that is used to put the test-dist's
+files in. Then an archive is created based on $original_cwd or
+$destination_directory if provided, which is the current working directory
+before you call make_test_dist(). After the archive is created in $original_cwd,
+make_test_dist() deletes the $temp_dir using end().
+
+If $destination_directory is not provided as an argument, then make_test_dist()
+will just use cwd(), your current working directory.
+
+=over
+=item WARNING CHANGES DIRECTORY $destination_directory MUST BE ABSOLUTE!
+$destination_directory B<must> be an absolute path, because make_test_dist()
+uses start() and end() to create and delete a temp directory to create the
+directory structure in. Therefore the directory relative pathnames are relative
+to changes, which screws them up, so you can't use them properly.
+=back
+
+Returns the full path to the created test-dist fetchwware package.
+
+=cut
+
+sub make_test_dist {
+    my $file_name = shift;
+    my $destination_directory = shift || $original_cwd;
+
+    # Create a temp dir to create or test-dist-1.$ver_num directory in.
+    my $temp_dir = start();
+
+    mkdir($file_name) or die <<EOD;
+fetchware: Run-time error. Fetchware failed to create the directory
+[$file_name] in the current directory of [$temp_dir]. The OS error was
+[$!].
+EOD
+
+    my %test_dist_files = (
+        Fetchwarefile => <<EOF
+# test-dist is a fake "test distribution" mean for testing fetchware's basic installing, upgrading, and
+# so on functionality.
+use App::Fetchware;
+
+program 'test-dist';
+
+# Need to filter out the cruft.
+filter 'test-dist';
+
+lookup_url 'file://t';
+EOF
+        ,
+        catfile($file_name, 'configure') => <<EOF 
+#!/bin/sh
+
+# A Test ./configure file for testing Fetchware's install, upgrade, and so on
+# functionality.
+
+echo "fetchware: ./configure ran successfully!"
+EOF
+        ,
+        catfile($file_name, 'Makefile') => <<EOF 
+# Makefile for test-dist, which is a "test distribution" for testing Fetchware's
+# install, upgrade, and so on functionality.
+
+all:
+	sh -c 'echo "fetchware: make ran successfully!"'
+
+install:
+	sh -c 'echo "fetchware: make install ran successfully!"'
+
+uninstall:
+	sh -c 'echo "fetchware: make uninstall ran successfully!"'
+
+build-package:
+	sh -c 'echo "Build package and creating md5sum."'
+
+	sh -c '(cd .. && tar --create --gzip --verbose --file test-dist-1.00.fpkg  ./Fetchwarefile test-dist-1.00)'
+
+	sh -c '(cd .. && md5sum test-dist-1.00.fpkg > test-dist-1.00.fpkg.md5)'
+
+	sh -c 'echo "Build package and creating md5sum for upgrade version."'
+
+	sh -c 'cp -R ../test-dist-1.00 ../test-dist-1.01'
+
+	sh -c '(cd .. && tar --create --gzip --verbose --file test-dist-1.00/test-dist-1.01.fpkg  ./Fetchwarefile test-dist-1.01)'
+
+	sh -c 'rm -r ../test-dist-1.01'
+
+	sh -c 'md5sum test-dist-1.01.fpkg > test-dist-1.01.fpkg.md5'
+EOF
+        ,
+    );
+
+    for my $file_to_create (keys %test_dist_files) {
+        open(my $fh, '>', $file_to_create) or die <<EOD;
+fetchware: Run-time error. Fetchware failed to open
+[$file_to_create] for writing to create the Configure script that
+test-dist needs to work properly. The OS error was [$!].
+EOD
+        print $fh $test_dist_files{$file_to_create};
+        close $fh;
+    }
+
+    my $test_dist_filename = catdir($destination_directory, "$file_name.fpkg");
+
+    # Create a tar archive of all of the files needed for test-dist.
+    Archive::Tar->create_archive($test_dist_filename, COMPRESS_GZIP,
+        keys %test_dist_files) or die <<EOD;
+fetchware: Run-time error. Fetchware failed to create the test-dist archive for
+testing [$test_dist_filename] The error was [@{[Archive::Tar->error()]}].
+EOD
+
+    # Cd back to $original_cwd and delete $temp_dir.
+    end();
+
+    return rel2abs($test_dist_filename);
+}
 
 
 

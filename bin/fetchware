@@ -46,6 +46,7 @@ our %EXPORT_TAGS  = (
         cmd_look
         cmd_list
         cmd_upgrade
+        cmd_upgrade_all
     )]
 );
 our @EXPORT_OK = @{$EXPORT_TAGS{TESTING}};
@@ -966,15 +967,53 @@ Implements the C<fetchware upgrade-all> command, which upgrades all installed
 packages simply by looping over the fetchware database and running cmd_upgrade()
 on each one.
 
+Returns a list of the packages that were upgraded or the string
+'No upgrade needed.' if no packages were upgraded.
+
 =cut
 
 sub cmd_upgrade_all {
+    die <<EOD if @_;
+fetchware: fetchware's upgrade-all command takes no arguments. Instead, it
+simply loops through fetchware's package database, and upgrades all already
+installed fetchware packages. Please rerun fetchware upgrade-all without any
+arguments to upgrade all already installed packages, or run fetchware help for
+usage instructions.
+EOD
     my $fetchware_db_glob = catfile(fetchware_database_path(), '*');
 
+    my @upgraded_packages;
     for my $fetchware_package (glob $fetchware_db_glob) {
-        cmd_upgrade($fetchware_package);
+        ###BUGALERT### subize the 2 lines below, because I do this more than
+        #once.
+        # Strip each member of the fetchwarefile database down to just its name
+        # without any path garbage or fetchware package file extension, because
+        # cmd_upgrade() only accepts arguments of this format, and I do not want
+        # users to be able to provide a fetchware package as an argument to
+        # the fetchware upgrade command. I only want it capable of looking them
+        # up from its database.
+        $fetchware_package = file($fetchware_package)->basename();
+        $fetchware_package =~ s/\.fpkg$//;
+##TEST##
+#$fetchware_package =~ s/^([a-zA-Z0-9])-.*/$1/;
+diag("cmd_upgrade() arg[$fetchware_package]");
+        push @upgraded_packages, cmd_upgrade($fetchware_package);
+diag("cmd_upgrade() return[$upgraded_packages[-1]]");
     }
-    ###BUGALERT### Add exit 0 at end of each command sub.
+
+    ###BUGALERT### push the fetchware pacakge name and its cmd_upgrade() return
+    #value into a hash, and then return it or msg() it, to tell the user what
+    #was upgraded and what was not.
+    # Return 'No upgrade needed.' only if every package that was upgraded
+    # returned 'No upgrade needed.'.
+    if (grep { $_ eq 'No upgrade needed.'}
+            @upgraded_packages) {
+        return 'No upgrade needed.';
+    # Return a list of all packages that are not 'No upgrade needed.', which
+    # should not be returned.
+    } else {
+        return grep { $_ ne 'No upgrade needed.' } @upgraded_packages;
+    }
 }
 
 
@@ -1285,8 +1324,8 @@ EOD
     return $fetchware_package_full_path;
 
 
-    # Use old school C-style error handling to avoid copying and pasting this
-    # error message.
+    # Use old school C-style Linux Kernel error handling to avoid copying and
+    # pasting this error message.
     CPERR: die <<EOD;
 fetchware: run-time error. Fetchware failed to copy the Fetchwarefile you
 specified [$fetchwarefile_path] on the command line or was contained in the
