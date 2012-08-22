@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98;# tests => '10'; #Update if this changes.
+use Test::More 0.98 tests => '12'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir);
 use URI::Split 'uri_split';
@@ -53,6 +53,7 @@ subtest 'UTIL end TESTING export what they should' => sub {
         config_delete
         make_clean
         make_test_dist
+        md5sum_file
         start
         lookup
         download
@@ -304,7 +305,7 @@ EOS
 };
 
 
-subtest 'test make_test_dist' => sub {
+subtest 'test make_test_dist()' => sub {
     ###HOWTOTEST### How do I test for mkdir() failure, open() failure, and
     #Archive::Tar->create_archive() failure?
 
@@ -338,6 +339,30 @@ subtest 'test make_test_dist' => sub {
 };
 
 
+subtest 'test md5sum_file()' => sub {
+    ###HOWTOTEST### How do I test open(), close(), and Digest::MD5 failing?
+
+    my $filename = 'test-dist-1.00';
+    my $test_dist = make_test_dist($filename);
+    my $test_dist_md5 = md5sum_file($test_dist);
+
+    ok(-e $test_dist_md5, 'checked md5sum_file() file creation');
+
+    open(my $fh, '<', $test_dist_md5)
+        or fail("Failed to open [$test_dist_md5] for testing md5sum_file()[$!]");
+
+    my $got_md5sum = do { local $/; <$fh> };
+
+    close $fh
+        or fail("Failed to close [$test_dist_md5] for testing md5sum_file() [$!]");
+
+    # The generated fetchware package is different each time probably because of
+    # formatting in tar and gzip.
+    like($got_md5sum, qr/[0-9a-f]{32}  test-dist-1.00.fpkg/,
+        'checked md5sum_file() success');
+};
+
+
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-done_testing();
+#done_testing();

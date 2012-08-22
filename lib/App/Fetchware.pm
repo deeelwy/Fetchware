@@ -122,6 +122,7 @@ our %EXPORT_TAGS = (
         config_delete
         make_clean
         make_test_dist
+        md5sum_file
         start
         lookup
         download
@@ -2502,6 +2503,65 @@ EOD
     end();
 
     return rel2abs($test_dist_filename);
+}
+
+=item md5sum_file($archive_to_md5)
+
+Uses Digest::MD5 to generate a md5sum just like the md5sum program does, and
+instead of returning the output it returns the full path to a file containing
+the md5sum called C<"$archive_to_md5.md5">.
+
+=cut
+
+sub md5sum_file {
+    my $archive_to_md5 = shift;
+
+    open(my $package_fh, '<', $archive_to_md5)
+        or die <<EOD;
+App-Fetchware: run-time error. Fetchware failed to open the file it downloaded
+while trying to read it in order to check its MD5 sum. The file was
+[$archive_to_md5]. See perldoc App::Fetchware.
+EOD
+
+    my $digest = Digest::MD5->new();
+
+    # Digest requires the filehandle to have binmode set.
+    binmode $package_fh;
+
+    my $calculated_digest;
+    eval {
+        # Add the file for digesting.
+        $digest->addfile($package_fh);
+        # Actually digest it.
+        $calculated_digest = $digest->hexdigest();
+    };
+    if ($@) {
+        die <<EOD;
+App-Fetchware: run-time error. Digest::MD5 croak()ed an error [$@].
+See perldoc App::Fetchware.
+EOD
+    }
+
+    close $package_fh or die <<EOD;
+App-Fetchware: run-time error Fetchware failed to close the file
+[$archive_to_md5] after opening it for reading. See perldoc App::Fetchware.
+EOD
+    
+    my $md5sum_file = rel2abs($archive_to_md5);
+    $md5sum_file = "$md5sum_file.md5";
+    open(my $md5_fh, '>', $md5sum_file) or die <<EOD;
+fetchware: run-time error. Failed to open [$md5sum_file] while calculating a
+md5sum. Os error [$!].
+EOD
+
+    print $md5_fh "$calculated_digest  @{[file($archive_to_md5)->basename()]}";
+
+    close $md5_fh or die <<EOD;
+App-Fetchware: run-time error Fetchware failed to close the file
+[$md5sum_file] after opening it for reading. See perldoc App::Fetchware.
+EOD
+
+    return $md5sum_file;
 }
 
 
