@@ -2382,9 +2382,9 @@ sub make_clean {
 }
 
 
-=item make_test_dist($ver_num, rel2abs($destination_directory));
+=item make_test_dist($file_name, $ver_num, rel2abs($destination_directory));
 
-Makes a C<test-dist-1.$ver_num.fpkg> fetchware package that can be used for
+Makes a C<$filename-$ver_num.fpkg> fetchware package that can be used for
 testing fetchware's functionality without actually installing anything. All of
 the tests in the t/ directory use this, while all of the tests in the xt/
 directory use real programs like apache and ctags to test fetchware's
@@ -2399,20 +2399,13 @@ make_test_dist() deletes the $temp_dir using end().
 If $destination_directory is not provided as an argument, then make_test_dist()
 will just use cwd(), your current working directory.
 
-=over
-=item WARNING CHANGES DIRECTORY $destination_directory MUST BE ABSOLUTE!
-$destination_directory B<must> be an absolute path, because make_test_dist()
-uses start() and end() to create and delete a temp directory to create the
-directory structure in. Therefore the directory relative pathnames are relative
-to changes, which screws them up, so you can't use them properly.
-=back
-
 Returns the full path to the created test-dist fetchwware package.
 
 =cut
 
 sub make_test_dist {
     my $file_name = shift;
+    my $ver_num = shift;
     my $destination_directory;
     if ($destination_directory = shift) {
         $destination_directory = rel2abs($destination_directory);
@@ -2424,28 +2417,27 @@ sub make_test_dist {
     # Create a temp dir to create or test-dist-1.$ver_num directory in.
     my $temp_dir = start();
 
-    mkdir($file_name) or die <<EOD;
+    # Append $ver_num to $file_name to complete the dist's name.
+    my $dist_name = "$file_name-$ver_num";
+
+    mkdir($dist_name) or die <<EOD;
 fetchware: Run-time error. Fetchware failed to create the directory
-[$file_name] in the current directory of [$temp_dir]. The OS error was
+[$dist_name] in the current directory of [$temp_dir]. The OS error was
 [$!].
 EOD
-    my $configure_path = catfile($file_name, 'configure');
+    my $configure_path = catfile($dist_name, 'configure');
     my %test_dist_files = (
         './Fetchwarefile' => <<EOF
-# test-dist is a fake "test distribution" mean for testing fetchware's basic installing, upgrading, and
+# $file_name is a fake "test distribution" mean for testing fetchware's basic installing, upgrading, and
 # so on functionality.
 use App::Fetchware;
 
-program 'test-dist';
+program '$file_name';
 
 # Need to filter out the cruft.
-filter 'test-dist';
+filter '$file_name';
 
 lookup_url 'file://t';
-
-# Need to use versionstring alorithm, because the files are practically created
-# at the same time.
-lookup_method 'versionstring';
 EOF
         ,
 
@@ -2458,7 +2450,7 @@ EOF
 echo "fetchware: ./configure ran successfully!"
 EOF
         ,
-        catfile($file_name, 'Makefile') => <<EOF 
+        catfile($dist_name, 'Makefile') => <<EOF 
 # Makefile for test-dist, which is a "test distribution" for testing Fetchware's
 # install, upgrade, and so on functionality.
 
@@ -2507,7 +2499,7 @@ fetchware: run-time error. fetchware failed to chmod [$configure_path] to add
 execute permissions, which ./configure needs. Os error [$!].
 EOC
 
-    my $test_dist_filename = catdir($destination_directory, "$file_name.fpkg");
+    my $test_dist_filename = catdir($destination_directory, "$dist_name.fpkg");
 
     # Create a tar archive of all of the files needed for test-dist.
     Archive::Tar->create_archive($test_dist_filename, COMPRESS_GZIP,

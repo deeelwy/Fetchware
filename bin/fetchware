@@ -996,6 +996,9 @@ EOD
         $fetchware_package =~ s/\.fpkg$//;
 ##TEST##
 #$fetchware_package =~ s/^([a-zA-Z0-9])-.*/$1/;
+        ###BUGALERT### Spit out a warning for anything in
+        #fetchware_database_path() that does not end .fpkg, which should be
+        #here.
 diag("cmd_upgrade() arg[$fetchware_package]");
         push @upgraded_packages, cmd_upgrade($fetchware_package);
 diag("cmd_upgrade() return[$upgraded_packages[-1]]");
@@ -1006,8 +1009,8 @@ diag("cmd_upgrade() return[$upgraded_packages[-1]]");
     #was upgraded and what was not.
     # Return 'No upgrade needed.' only if every package that was upgraded
     # returned 'No upgrade needed.'.
-    if (grep { $_ eq 'No upgrade needed.'}
-            @upgraded_packages) {
+    if ( (grep { $_ eq 'No upgrade needed.'}
+            @upgraded_packages) eq @upgraded_packages) {
         return 'No upgrade needed.';
     # Return a list of all packages that are not 'No upgrade needed.', which
     # should not be returned.

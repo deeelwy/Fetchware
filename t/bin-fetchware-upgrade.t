@@ -148,7 +148,7 @@ subtest 'test cmd_upgrade() test-dist' => sub {
         }
     }
 
-    my $old_test_dist_path = make_test_dist('test-dist-1.00', 't');
+    my $old_test_dist_path = make_test_dist('test-dist', '1.00', 't');
     
     my $old_test_dist_path_md5 = md5sum_file($old_test_dist_path);
 
@@ -178,14 +178,21 @@ diag("INSTALLPATH[$old_test_dist_path]");
     __clear_CONFIG();
 
 
-    my $new_test_dist_path = make_test_dist('test-dist-1.01', 't');
+    # Sleep for 2 seconds to ensure that the new version is a least a couple of
+    # seconds newer than the original version. Perl is pretty fast, so it can
+    # actually execute this whole friggin subtest on my decent desktop system.
+    sleep 2;
+
+
+    my $new_test_dist_path = make_test_dist('test-dist', '1.01', 't');
 
     my $new_test_dist_path_md5 = md5sum_file($new_test_dist_path);
 
     # cmd_uninstall accepts a string that needs to be found in the fetchware
     # database. It does *not* take Fetchwarefiles or fetchware packages as
     # arguments.
-    my $uninstalled_package_path = cmd_upgrade('test-dist');
+    like(cmd_upgrade('test-dist'), qr/test-dist-1\.01/,
+        'checked cmd_upgrade() success');
 
     my $error;
     my $stdout;
