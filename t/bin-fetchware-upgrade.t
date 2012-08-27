@@ -137,9 +137,20 @@ __clear_CONFIG();
 
 subtest 'test cmd_upgrade() test-dist' => sub {
     # Actually test during user install!!!
+    # Delete all existing httpd fetchware packages in fetchware_database_path(),
+    # which will screw up the installation and upgrading of httpd below.
+    for my $fetchware_package (glob catfile(fetchware_database_path(), '*')) {
+        # Clean up $fetchware_package.
+        if ($fetchware_package =~ /test-dist/) {
+            ok((unlink $fetchware_package),
+                'checked cmd_upgrade() clean up fetchware database path')
+                if -e $fetchware_package
+        }
+    }
 
-    my $old_test_dist_path = 't/test-dist-1.00.fpkg';
-    my $new_test_dist_path = 't/test-dist-1.01.fpkg';
+    my $old_test_dist_path = make_test_dist('test-dist-1.00', 't');
+    
+    my $old_test_dist_path_md5 = md5sum_file($old_test_dist_path);
 
     # Delete all existing httpd fetchware packages in fetchware_database_path(),
     # which will screw up the installation and upgrading of httpd below.
@@ -153,6 +164,7 @@ subtest 'test cmd_upgrade() test-dist' => sub {
         }
     }
 
+diag("INSTALLPATH[$old_test_dist_path]");
 
     # I obviously must install test-dist before I can test upgrading it :)
     my $fetchware_package_path = cmd_install($old_test_dist_path);
@@ -160,16 +172,15 @@ subtest 'test cmd_upgrade() test-dist' => sub {
     ok(grep /test-dist/, glob(catfile(fetchware_database_path(), '*')),
         'check cmd_install(Fetchware) success.');
 
+
     # Clear internal %CONFIG variable, because I have to parse a Fetchwarefile
     # twice, and it's only supported once.
     __clear_CONFIG();
-    # Copy test-dist-1.00.fpkg to test-dist-1.01.fpkg, so that upgrade will find
-    # a newer version to install.
-    ok(cp('t/test-dist-1.00/test-dist-1.01.fpkg', $new_test_dist_path),
-        'check cmd_upgrade() cp test-dist to create a newer version.');
-    my $new_test_dist_path_md5 = "$new_test_dist_path.md5";
-    ok(cp('t/test-dist-1.00/test-dist-1.01.fpkg.md5', $new_test_dist_path_md5),
-        'check cmd_upgrade() cp test-dist md5 to create a newer version.');
+
+
+    my $new_test_dist_path = make_test_dist('test-dist-1.01', 't');
+
+    my $new_test_dist_path_md5 = md5sum_file($new_test_dist_path);
 
     # cmd_uninstall accepts a string that needs to be found in the fetchware
     # database. It does *not* take Fetchwarefiles or fetchware packages as
@@ -202,8 +213,11 @@ subtest 'test cmd_upgrade() test-dist' => sub {
         'checked cmd_upgrade() latest version already installed.');
 
     # Clean up upgrade path.
-    ok(unlink($new_test_dist_path, $new_test_dist_path_md5),
+    ok(unlink($old_test_dist_path, $old_test_dist_path_md5,
+            $new_test_dist_path, $new_test_dist_path_md5),
         'checked cmd_upgrade() delete temp upgrade files');
+
+
 };
 
 

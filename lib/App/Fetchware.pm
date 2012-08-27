@@ -2413,7 +2413,13 @@ Returns the full path to the created test-dist fetchwware package.
 
 sub make_test_dist {
     my $file_name = shift;
-    my $destination_directory = shift || $original_cwd;
+    my $destination_directory;
+    if ($destination_directory = shift) {
+        $destination_directory = rel2abs($destination_directory);
+
+    } else {
+        $destination_directory = $original_cwd;
+    }
 
     # Create a temp dir to create or test-dist-1.$ver_num directory in.
     my $temp_dir = start();
@@ -2423,9 +2429,9 @@ fetchware: Run-time error. Fetchware failed to create the directory
 [$file_name] in the current directory of [$temp_dir]. The OS error was
 [$!].
 EOD
-
+    my $configure_path = catfile($file_name, 'configure');
     my %test_dist_files = (
-        Fetchwarefile => <<EOF
+        './Fetchwarefile' => <<EOF
 # test-dist is a fake "test distribution" mean for testing fetchware's basic installing, upgrading, and
 # so on functionality.
 use App::Fetchware;
@@ -2436,9 +2442,14 @@ program 'test-dist';
 filter 'test-dist';
 
 lookup_url 'file://t';
+
+# Need to use versionstring alorithm, because the files are practically created
+# at the same time.
+lookup_method 'versionstring';
 EOF
         ,
-        catfile($file_name, 'configure') => <<EOF 
+
+        $configure_path => <<EOF 
 #!/bin/sh
 
 # A Test ./configure file for testing Fetchware's install, upgrade, and so on
@@ -2489,6 +2500,12 @@ EOD
         print $fh $test_dist_files{$file_to_create};
         close $fh;
     }
+
+    # chmod() ./configure, so it can be executed.
+    chmod(0755, $configure_path) or die <<EOC;
+fetchware: run-time error. fetchware failed to chmod [$configure_path] to add
+execute permissions, which ./configure needs. Os error [$!].
+EOC
 
     my $test_dist_filename = catdir($destination_directory, "$file_name.fpkg");
 
