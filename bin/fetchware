@@ -2,6 +2,9 @@ use strict;
 use warnings;
 
 # Enable Perl 6 knockoffs.
+###BUGALERT### Update *all* use 5.010 to use 5.010_001 or v5.10.01 or whatever
+#the hell it should be to use newer smart match semantics, or can I use 5.14 to
+#fix the nasty eval bug?
 use 5.010;
 
 # I know lowercase names are reserved for pragma's, but other programs do this
@@ -13,11 +16,12 @@ package fetchware;
 # Use Getopt::Long for options parsing beyond fetchware's simple commands such
 # as install, new, uninstall, help, and so on.
 use Getopt::Long qw(:config bundling pass_through);
-use App::Fetchware qw(:FETCHWARE);
+use App::Fetchware qw(:FETCHWARE config get_directory_listing
+    parse_directory_listing __clear_CONFIG config_replace);
 use Archive::Tar;
 use File::Copy qw(mv cp);
 use File::Spec::Functions qw(curdir catdir catfile catpath tmpdir splitpath
-splitdir rel2abs abs2rel updir file_name_is_absolute);
+    splitdir rel2abs abs2rel updir file_name_is_absolute);
 use Cwd 'cwd';
 use File::Path 'make_path';
 use Term::UI;
@@ -29,6 +33,8 @@ use File::Find 'find';
 use File::Temp qw(tempdir tempfile);
 use Fcntl qw(S_ISDIR S_ISREG);
 use Path::Class;
+use Text::Wrap 'wrap';
+use IPC::System::Simple 'systemx';
 
 # Setup exports, which are only meant to ease testing.
 use Exporter 'import';
@@ -47,6 +53,18 @@ our %EXPORT_TAGS  = (
         cmd_list
         cmd_upgrade
         cmd_upgrade_all
+        cmd_new
+        name_program
+        opening_message
+        get_lookup_url
+        download_lookup_url
+        analyze_lookup_listing
+        append_to_fetchwarefile
+        prompt_for_other_options
+        append_options_to_fetchwarefile
+        add_mirrors
+        edit_manually
+        ask_to_install_now_to_test_fetchwarefile
     )]
 );
 our @EXPORT_OK = @{$EXPORT_TAGS{TESTING}};
@@ -61,7 +79,6 @@ sub run {
     #SIGKILL???
     my $verbose;
     my $dry_run;
-
 
     GetOptions(
         # $VERSION is managed by dzil; therefore, I use eval to access it at
@@ -188,6 +205,12 @@ sub cmd_install {
 
         build($build_path);
 
+        ###BUGALERT### Add support for no_install config file option and add a
+        #command line option that does the same thing. msg() if install is
+        #skipped.
+        # For no_install to work consider using KeepTempDir => 1 option to
+        # start() to keep the temp dir, and then skip package creation, and
+        # print location of temp dir instead.
         install();
 
         my $fetchware_package_path
@@ -274,13 +297,23 @@ EOD
 
 
 
+###BUGALERT### Move cmd_new() before install()?????
+###BUGALERT### Remove print statements in new() & its helpers, and replace them
+#with msg().
+###BUGALERT### Print out fetchware's assumptions it makes about what FTP & hTTP
+#lookup_url's look like, versionstring's assumptions, timestamp's assumptions,
+#verify's assumptions, and so on. If not here in new() at least do it in the
+#POD documentation.
+###BUGALERT### Support ~/.Fetchwarefile, or whatever File::HomeDir wants it to
+#be. Test if ~/.Fetchwarefile exists, if it does do nothing, but if it does not
+#exist then prompt the user to fill one out!!!
 =head2 cmd_new()
 
 cmd_new() implements fetchware's new command. See L<whereeverthehell> for detailed
 documentation for the specifics of the new command. This chunk of POD is about
-its implementation. cmd_new() calls a bunch of helper subroutines that implement the
-algorithm fetchware uses to build new Fetchwarefiles automagically for the user.
-The algorithm is dead stupid:
+its implementation. cmd_new() calls a bunch of helper subroutines that implement
+the algorithm fetchware uses to build new Fetchwarefiles automagically for the
+user. The algorithm is dead stupid:
 
 =over
 =item 1. Ask for lookup_url & download it.
@@ -290,19 +323,24 @@ The algorithm is dead stupid:
 =back
 
 cmd_new() uses Term::UI, which in turn uses Term::ReadLine to implement the
-character basesd question and anwser wizard interface.
+character based question and anwser wizard interface.
 
 =cut
 
 sub cmd_new {
+    my $program_name = shift;
+
     my $term = Term::ReadLine->new('Fetchware new');
 
     my $now = localtime;
+    ###BUGALERT### Only App::Fetchware based Fetchwarefile's are supported now,
+    #will have to add some ifs and code to support others.
     my $fetchwarefile = <<EOF;
+use App::Fetchware;
 # Auto generated $now by fetchware's new command.
 # However, feel free to edit this file if fetchware's new command's
 # autoconfiguration is not enough.
-#
+# 
 # Please look up fetchware's documentation of its configuration file syntax at
 # perldoc App::Fetchware, and only if its configuration file syntax is not
 # malleable enough for your application should you resort to customizing
@@ -313,36 +351,49 @@ EOF
     #search on CPAN for that program under
     #App::Fetchware::Fetchwarefile::UpCasedProgName. Consider using the meta
     #CPAN API. And if it exists ask user if they wanna use that one instead of
-    #autogeging one.
+    #autogening one.
 
     opening_message();
 
+    # Ask user for name of program unless the user provided one at command line
+    # such as fetchware new <programname>.
+    $program_name //= name_program($term);
+
+    append_options_to_fetchwarefile({program => $program_name},
+        \$fetchwarefile);
 
     my $lookup_url = get_lookup_url($term);
 
     # Add $lookup_url to $fetchwarefile.
     append_options_to_fetchwarefile({lookup_url => $lookup_url},
-        $fetchwarefile);
+        \$fetchwarefile);
 
     my $filename_listing = download_lookup_url($term, $lookup_url);
 
-    my $filter = analyze_lookup_url($term, $filename_listing);
+    my $filter = analyze_lookup_listing($term, $filename_listing);
 
     # Append filter option to fetchwarefile if its needed.
     if ($filter) {
-        append_options_to_fetchwarefile({filter => $filter}, $fetchwarefile);
+        append_options_to_fetchwarefile({filter => $filter}, \$fetchwarefile);
     }
 
+    ###BUGALERT### Ask to parrallelize make with make_options???
+    ###BUGALERT### Verify prefix is writable by current user, who will
+    #presumably be the user who will install the package now and later.
     my %options = prompt_for_other_options($term);
 
     # Append all other options to fetchwarefile.
-    append_options_to_fetchwarefile(\%options, $fetchwarefile);
+    append_options_to_fetchwarefile(\%options, \$fetchwarefile);
 
-    add_mirrors($term, $fetchwarefile);
+    add_mirrors($term, \$fetchwarefile);
 
-    $fetchwarefile = edit_manually($term, $fetchwarefile);
+    edit_manually($term, \$fetchwarefile);
 
-    ask_to_install_now_to_test_fetchwarefile($term, $fetchwarefile);
+    my $fetchware_package_path =
+        ask_to_install_now_to_test_fetchwarefile($term, \$fetchwarefile,
+            $program_name);
+    ###BUGALERT### Add a msg() about the path to your fetchwarefile. perhaps
+    #just a vmsg().
 }
 
 
@@ -354,23 +405,60 @@ interface for helping to build new Fetchwarefiles and fetchware packages.
 
 =cut
 
-##BUGALERT### Add POD for cmd_new() api subs.
+
+
+=item name_program($term);
+
+Asks the user to provide a name for the program that will that corresponds to
+Fetchwarefile's C<program> configuration subroutine. This directive is currently
+not used for much, but might one day become a default C<filter> option, or might
+be used in msg() output to the user for logging.
+
+=cut
+
+sub name_program {
+    my $term = shift;
+    my $what_a_program_is = <<EOM;
+A program configuration directive simply names your program.
+
+In the future it may access existing repositories to see if a Fetchwarefile
+has already been created for that program, and use that one instead of creating
+a new one, but for now it only names your program, so you can easily tell what
+program the Fetchwarefile is supposed to download and install.
+EOM
+
+    my $program_name = $term->get_reply(
+        prompt => q{What name is your program called?},
+        print_me => $what_a_program_is,
+    );
+
+    return $program_name;
+}
+
+
+=item opening_message();
+
+Prints new()'s opening message. It takes no parameters including the message to
+be printed; instead, it simply prints the message only it can access to
+C<STDOUT>.
+
+=cut
 
 sub opening_message {
 
     my $opening_message = <<EOM;
-# Fetchware's new command is reasonable sophistocated, and is smart enough to
-# determine based on the lookup_url you provide it if it can autogenerate this
-# Fetchwarefile for you. If Fetchware cannot, then it will ask you more
-# questions regarding the information it requires to be able to build a
-# installable fetchware package for you. After that, fetchware will ask you if
-# you would like to edit the Fetchwarefile, fetchware has created for you in an
-# editor. If you say yes, fetchware will open a editor for you, but if you say
-# no, fetchware will skip the custom editing. Next, fetchware will create a test
-# Fetchwarefile for you, and ask you if you would like to test it by trying to
-# install it now. If you say yes, fetchware will install it, and if you say no,
-# then fetchware will print the location of the Fetchwarefile it created for
-# you to later use it to install your application.
+Fetchware's new command is reasonably sophisticated, and is smart enough to
+determine based on the lookup_url you provide if it can autogenerate a
+Fetchwarefile for you. If Fetchware cannot, then it will ask you more
+questions regarding the information it requires to be able to build a
+installable fetchware package for you. After that, fetchware will ask you if
+you would like to edit the Fetchwarefile, fetchware has created for you in an
+editor. If you say yes, fetchware will open a editor for you, but if you say
+no, fetchware will skip the custom editing. Next, fetchware will create a test
+Fetchwarefile for you, and ask you if you would like to test it by trying to
+install it now. If you say yes, fetchware will install it, and if you say no,
+then fetchware will print the location of the Fetchwarefile it created for
+you to later use to install your application.
 EOM
 
     # Just print the opening message.
@@ -378,10 +466,18 @@ EOM
 }
 
 
+=item my $lookup_url = get_lookup_url($term);
+
+Uses $term argument as a L<Term::ReadLine>/L<Term::UI> object to interactively
+explain what a lookup_url is, and to ask the user to provide one and press
+enter.
+
+=cut
+
 sub get_lookup_url {
     my $term = shift;
 
-    my $what_a_lookup_url_is = <<EOF;
+    my $what_a_lookup_url_is = q{
 Fetchware's heart and soul is its lookup_url. This is the configuration option
 that tells fetchware where to check if a new version of fetchware is released.
 
@@ -401,7 +497,7 @@ How to determine your application's lookup_url:
        Fetchware will download and analyze your lookup_url to see if it will work
        properly. If you do not end up with a browser directory listing, then
        please see Fetchware's documentation using perldoc App::Fetchware.
-EOF
+};
 
     # prompt for lookup_url.
     my $lookup_url = $term->get_reply(
@@ -414,19 +510,32 @@ EOF
 }
 
 
+=item my $filename_listing = download_lookup_url($term, $lookup_url);
+
+Attempts to download the lookup_url the user provides. Returns it after parsing
+it using parse_directory_listing() from L<App::Fetchware> that lookup() itself
+uses.
+
+=cut
+
 sub download_lookup_url {
     my $term = shift;
     my $lookup_url = shift;
 
     my $filename_listing;
     eval {
-        my $directory_listing = download_directory_listing($lookup_url);
+        config(lookup_url => $lookup_url);
+
+        my $directory_listing = get_directory_listing($lookup_url);
 
         $filename_listing = parse_directory_listing($directory_listing);
 
-        my $download_url = determine_download_url($filename_listing);
-    };
-    if ($@) {
+        __clear_CONFIG();
+
+        # Fix the most annoying bug that ever existed in perl.
+        # http://blog.twoshortplanks.com/2011/06/06/unexceptional-exceptions-in-perl-5-14/
+        1;
+    } or do {
         my $lookup_url_failed_try_again = <<EOF;
 fetchware: the lookup_url you provided failed because of :
 [$@]
@@ -437,13 +546,18 @@ EOF
         $lookup_url = get_lookup_url($term, $lookup_url_failed_try_again);
 
         eval {
-            my $dir_list = download_directory_listing($lookup_url);
+            # Replace the existing lookup_url with the new one the user entered
+            # in above.
+            config_replace(lookup_url => $lookup_url);
+            my $dir_list = get_directory_listing($lookup_url);
 
             $filename_listing = parse_directory_listing($dir_list);
 
-            my $download_url = determine_download_url($filename_listing);
-        };
-        if ($@) {
+            __clear_CONFIG();
+        # Fix the most annoying bug that ever existed in perl.
+        # http://blog.twoshortplanks.com/2011/06/06/unexceptional-exceptions-in-perl-5-14/
+        1;
+        } or do {
             die <<EOD;
 fetchware: run-time error. The lookup_url you provided [$lookup_url] is not a
 usable lookup_url because of the error below:
@@ -451,75 +565,77 @@ usable lookup_url because of the error below:
 Please see perldoc App::Fetchware for troubleshooting tips and rerun
 fetchware new.
 EOD
-        }
-    }
+        };
+    };
 
     return $filename_listing;
 }
 
 
+=item $filter = analyze_lookup_listing($term);
+
+###BUGALERT### Write docs for this sub after I figure out what it should do, and
+#test and debug it.
+
+=cut
+
 sub analyze_lookup_listing {
     my $term = shift;
     # $filename_listing is an array of [$filename, $timestamp] arrays.
     my $filename_listing = shift;
+###BUGALERT### Replace say's with msg() after you implement it!
     say <<EOS;
 Analyzing the lookup_url you provided to determine if fetchware can use it to
 successfully determine when new versions of your software are released.
 EOS
 
-    # What am I supposed to look for here???
-    # 1. Determine if a filter option is needed!!!
-        # split on \D just like lookup_by_version() does & then check if there
-        # are multiple nonpatchlevel versions such as 2.2 and 2.3 and 2.0 or 1.3
-        # and 2.0 and so on!!!
-    my %set;
-    for my $listing (@$filename_listing) {
-        ###BUGALERT### $filename_listing could have multiple programs in it with
-        #different versions confusing the algorithm & lookup_by_version()'s
-        #algorithm!!! Fix this bug here and there!!!
-        my @versions = split /\D/, $listing->[0];
-
-        # Populate $set with the first two "main" version numbers, and then
-        # store as a hash of hashesall of the other versions, and then increment
-        # its value by one to track duplicate versions if needed.
-        $set{"@versions[0..1]"}->{$versions[2..$#versions]}++;
-
-    }
-
-    # Now I just have to see if there are multiple %sets!
     my $filter;
-    if (keys %set == 1) {
+    if (grep {$_->[0] =~ /^(CURRENT|LATEST)[_-]IS[_-].+/} @$filename_listing) {
         # There is only one version in the lookup_url directory listing, so
         # I do not need a filter option.
         say <<EOS;
-* The lookup_url you gave fetchware does *not* have multiple versions of the same
-program in it.
+* The lookup_url you gave fetchware includes a CURRENT_IS or a LATEST_IS file
+that tells fetchware and regular users what the latest version is. Because of
+this we can be reasonable sure that a filter option is not needed, so I'll skip
+asking for one. You can provide one later if you need to provide one, when
+fetchware prompts you for any custom options you may want to use.
 EOS
-    } elsif (keys %set > 1) {
-        # There is more than one version in the lookup_url directory
-        # listing; therefore, I need a filter option.
+    } else {
+        # There is a CURRENT_IS_<ver_num> or LATEST_IS_<ver_num> file that tells
+        # you what the latest version is.
         say <<EOS;
-* The lookup_url you gave fetchware has multiple versions of the same program
-in it. Therefore, you must specify a filter option to fetchware, which will tell
-fetchware which version of the program you want fetchware to manage for your.
+* The directory listing of your lookup_url has a CURRENT_IS_<ver_num> or
+LATEST_IS_<ver_num> file that specifies the latest version, which means that
+your program's corresponding Fetchwarefile does not need a filter option. If you
+still would like to provide one, you can do so later on, when fetchware allows
+you to define any additional configuration options.
 EOS
         my $what_a_filter_is = <<EOA;
 Fetchware needs you to provide a filter option, which is a filter that fetchware
 compares each file in the directory listing of your lookup_url to to determine
 which version of your program to install.
 
-For example, Apache's lookup_url has three versions in the same lookup_url
-directory listing. These are 2.3, 2.2, and 2.0. Without the filter option
-fetchware would choose the highest, which would be 2.3, which is in beta.
-Chances are you do not want to replace your stable 2.2 apache with a beta
-release. Therefore, fetchware needs a filter option. In apache's case simply
-answering:
-2.2
-will result in fetchware filtering the results of its lookup check through your
-filter of 2.2 causing fetchware to choose the latest version from the 2.2 stable
-branch instead of the higher version numbered 2.3 beta or 2.0 legacy releases.
+Directories will have other junk files in them or even completely different
+programs that could confuse fetchware, and even potentially cause it to install
+a different program. Therefore, you should also add the program name to the
+begining of your filter. For example if you program is apache, then your filter
+should include the name of apache on mirror sites, which is actually:
+httpd
 
-Note: fetchware does accept any valid perl regular expresion as an acceptable
+Furthermore, Apache's lookup_url has three versions in the same lookup_url
+directory listing. These are 2.4, 2.2, and 2.0. Without the filter option
+fetchware would choose the highest, which would be 2.4, which is the latest
+version. However, you may want to stick with the older and perhaps more stable
+2.2 version of apache. Therefore, you'll need to tell fetchware this by using
+by adding the version number to your filter:
+httpd-2.2
+will result in fetchware filtering the results of its lookup check through your
+filter of httpd-2.2 causing fetchware to choose the latest version from the 2.2
+stable branch instead of the higher version numbered 2.4 or 2.0 legacy releases.
+Note the use of the dash, which is used in the filename to separate the 'httpd'
+name part from the '2.2' version part.
+
+Note: fetchware accepts any valid perl regular expresion as an acceptable
 filter option, but that should only be needed for advanced users. See perldoc
 fetchware.
 EOA
@@ -528,65 +644,273 @@ EOA
             prompt => q{What does fetchware need your filter option to be?},
             print_me => $what_a_filter_is,
         );
+        ###BUGALERT### Consider Adding a loop around checking the filter option
+        #that runs determine_lookup_url() using the provided filter option, and
+        #then asking the user if that is indeed the correct filter option, and
+        #if not ask again and try it again unit it succeeds or user presses
+        #ctrl-c|z.
     }
 
-    ###BUGALERT### Add support for checking if lookup_url/package.{md5,sha1?}
-    #exists and setting {md5,sha}_url accordingly, because nobody is going to
-    #set it for each release & it changes for each release so the current
-    #implemntation has to be replaced with the current automatic guessing
-    #behavior.
-    
-    # 2. Consider all possible options & if any of them may be needed.
-    # 3. Check if there is a {LATEST,CURRENT}{-,_}IS file.
     return $filter;
 }
 
 
+=item append_to_fetchwarefile(\$fetchwarefile, $config_file_option, $config_file_value, $description)
+
+Turns $description into a comment as described below, and then appends it to the
+$fetchwarefile. Then $config_file_option and $config_file_value are also
+appended inside proper Fetchwarefile syntax.
+
+$description is split into strings 78 characters long, and printed with C<# >
+prepended to make it a proper comment so fetchware skips parsing it.
+
+=over
+=item NOTE
+Notice the backslack infront of the $fetchwarefile argument above. It is there,
+because the argument $fetchwarefile must be a reference to a scalar.
+=back
+
+=cut
+
+###BUGALERT### Doesn't support ONEARRREF's!!!!!!!!!!1
 sub append_to_fetchwarefile {
-    my ($config_file_option,
+    my ($fetchwarefile,
+        $config_file_option,
         $config_file_value,
-        $description,
-        $fetchwarefile) = @_;
+        $description) = @_;
+
+    die <<EOD if ref($fetchwarefile) ne 'SCALAR';
+fetchware: run-time error. You called append_to_fetchwarefile() with a
+fetchwarefile argument that is not a scalar reference. Please add the need
+backslash reference operator to your call to append_to_fetchwarefile() and try
+again.
+EOD
 
     # Append a double newline for easier reading.
-    $fetchwarefile .= "\n\n";
+    $$fetchwarefile .= "\n\n";
 
-    # Append the description for the configfile options were adding.
-    $fetchwarefile .= "$description\n";
+    # Append a newline to $description if it doesn't have one already.
+    $description .= "\n" unless $description =~ /\n$/;
+    # Change wrap() to wrap at 80 columns instead of 76.
+    local $Text::Wrap::columns = 81;
+    # Use Text::Wrap's wrap() to split $description up
+    $$fetchwarefile .= wrap('# ', '# ', $description);
 
-    $fetchwarefile .= "$config_file_option $config_file_value;\n";
+    $$fetchwarefile .= "$config_file_option '$config_file_value';\n";
 }
 
+
+=item prompt_for_other_options($term);
+
+Asks user if they would like to add any other options to their Fetchwarefile. If
+they answer no, then everything else this subroutine does is skipped. If they
+answerer yes, then information helping them decide what to do is printed as
+needed. They are asked to input space separated list of configuration options
+they would like to customize. Then for each option they specify, a helpful
+message is printed that will help them determine what they should provide for
+that option, and then they input what they would like to answer for that option.
+
+The user's answers are tallied up in a hash that is returned as a list instead of
+as a hash reference.
+
+=cut
 
 sub prompt_for_other_options {
     my $term = shift;
 
     my %option_description = (
-    temp_dir => [
-        <<EOP,
+        temp_dir => {
+            prompt => <<EOP,
 What temp_dir configuration option would you like?
 EOP
-        <<EOP
+            print_me => <<EOP
 temp_dir is the directory where fetchware creates a temporary directory that
 stores all of the temporary files it creates while it is building your software.
 The default directory is /tmp on Unix systems and C:\\temp on Windows systems.
 EOP
-    ],
-    #Fill in the rest.
-#    user,
-#    prefix,
-#    configure_options,
-#    make_options,
-#    build_commands,
-#    install_commands,
-#    lookup_url,
-#    lookup_method,
-#    gpg_key_url,
-#    sha1_url,
-#    md5_url,
-#    verify_method,
-#    no_install,
-#    verify_failure_ok,
+        },
+###BUGALERT### Priv droping is not currently implemented!!!
+        user => {
+            prompt => <<EOP,
+What user configuration option would you like?
+EOP
+            print_me => <<EOP
+user specifies what user fetchware will drop priveleges to on Unix systems
+capable of doing so. This allows fetchware to download files from the internet
+with user priveleges, and not do anything as the administrative root user until
+after the downloaded software package has been verified as exactly the same as
+the author of the package intended it to be. If you use this option, the only
+thing that is run as root is 'make install' or whatever this package's
+install_commands configuratio option is.
+EOP
+        },
+        prefix => {
+            prompt => <<EOP,
+What prompt configuration option would you like?
+EOP
+            print_me => <<EOP
+prefix specifies the base path that will be used to install this software. The
+default is /usr/local, which is acceptable for most unix users. Please note that
+this difective only works for software packages that use GNU AutoTools, software
+that uses ./configure --prefix=<your prefix will go here> to change the prefix.
+EOP
+        },
+        configure_options => {
+            prompt => <<EOP,
+What configure_options configuration option would you like?
+EOP
+            print_me => <<EOP
+configure_options specifies what options fetchware should add when it configures
+this software package for you. A list of possible options can be obtained by
+running unarchiving the software package that corresponds to this Fetchwarefile,
+and running the command './configure --help'. These options vary from software
+package to software package. Please note that this option only works for GNU
+AutoTools based software distributions, ones that use ./configure to configure
+the software.
+EOP
+        },
+        make_options => {
+            prompt => <<EOP,
+What make_options configuration option would you like?
+EOP
+            print_me => <<EOP
+make_options specifies what options fetchware will pass to make when make is run
+to compile, perhaps test, and install your software package. They are simpley
+added after make is called. An example is '-j 4', which will cause make to
+execute 4 jobs simultaneously. A reasonable rule of thumb is to set make's -j
+argument to two times as many cpu cores your computer has as compiling programs
+is sometimes IO bound instead of CPU bound, so you can get away with running
+more jobs then you have cores.
+EOP
+        },
+###BUGALERT### Create a config sub called build_system that takes args like
+#AutoTools, cmake, MakeMaker, Module::Build, and so on that will use the default
+#build commands of whatever system this option specifies.
+        build_commands => {
+            prompt => <<EOP,
+What build_commands configuration option would you like?
+EOP
+            print_me => <<EOP
+build_commands specifies what commands fetchware will run to compile your
+software package. Fetchware's default is simply 'make', which is good for most
+programs. If you're software package uses something other than fetchware's
+default of GNU AutoTools, then you may need to change this configuration option
+to specify what you would like instead. Specify multiple build commands in
+single quotes with a comma between them:
+'./configure', 'make'
+EOP
+        },
+        install_commands => {
+            prompt => <<EOP,
+What install_commands configuration option would you like?
+EOP
+            print_me => <<EOP
+install_commands specifies what commands fetchware will run to install your
+software package. Fetchware's default is simply 'make install', which is good
+for most programs. If you're software package uses something other than
+fetchware's default of GNU AutoTools, then you may need to change this
+configuration option to specify what you would like instead. Specify multiple
+build commands in single quotes with a comma between them:
+'make test', 'make install'
+EOP
+        },
+        lookup_method => {
+            prompt => <<EOP,
+What lookup_method configuration option would you like?
+EOP
+            print_me => <<EOP
+lookup_method specifies what how fetchware determines if a new version of your
+software package is available. The available algorithms are 'timstamp' and
+'versionstring'. 'timestamp' uses the timestamp listed in the FTP or HTTP
+listing, and uses the software package that is the newest by filesystem
+timestamp. The 'versionstring' algorithm uses the filename of the files in the
+FTP or HTTP listing. It parses out the version information, sorts it highest to
+lowest, and then picks the highest version of your software package. The default
+is try 'timestamp' and if that doesn't work, then try 'versionstring'.
+EOP
+        },
+###BUGALERT### Rename gpg_key_url gpg_sig_url, because it downloads .asc sigs
+#not actual keys, which are done automatically via gpg.
+        gpg_key_url => {
+            prompt => <<EOP,
+What gpg_key_url configuration option would you like?
+EOP
+            print_me => <<EOP
+gpg_key_url specifies a url similar to lookup_url in that it should specify a
+directory instead a specific file. It is used to download gpg signatures to
+verify your software package.
+EOP
+        },
+        sha1_url => {
+            prompt => <<EOP,
+What sha1_url configuration option would you like?
+EOP
+            print_me => <<EOP
+sha1_url specifies a url similar to lookup_url in that it should specify a
+directory instead of a specific file. It is separate from lookup_url, because
+you should download software from mirrors, but checksums from the original
+vendor's server, because checksums are easily replaced on a mirror by a hacker
+if the mirror gets hacked.
+EOP
+        },
+        md5_url => {
+            prompt => <<EOP,
+What md5_url configuration option would you like?
+EOP
+            print_me => <<EOP,
+md5_url specifies a url similar to lookup_url in that it should specify a
+directory instead of a specific file. It is separate from lookup_url, because
+you should download software from mirrors, but checksums from the original
+vendor's server, because checksums are easily replaced on a mirror by a hacker
+if  the mirror gets hacked.
+EOP
+        },
+        verify_method => {
+            prompt => <<EOP,
+What verify_method configuration option would you like?
+EOP
+            print_me => <<EOP,
+verify_method specifies what method of verification fetchware should use to
+ensure the software you have downloaded has not been tampered with. The default
+is to try gpg verification, then sha1, and then finally md5, and if they all
+fail an error message is printed and fetchware exits, because if your software
+package cannot be verified, then it should not be installed. This configuration
+option allows you to remove the warnings by specifying a specific way of
+verifying your software has not been tampered with. To disable verification set
+the 'verify_failure_ok' configuration option to true.
+EOP
+        },
+###BUGALERT### replace no_install config su with a command line option that
+#would be the opposite of --force???
+# Nah! Leave it! Just create a command line option for it too!
+        no_install => {
+            prompt => <<EOP,
+Would you like to enable the no_install configuration option?
+EOP
+            ###BUGALERT### no_install is not currently implemented properly!!!
+            print_me => <<EOP
+no_install is a true or false option, whoose acceptable values include 1
+or 0, true or falue, On or Off. It's default value is false, but if you enable
+it, then fetchware will not install your software package, and instead it will
+simply download, verify, and build it. And then it will print out the full path
+of the directory it built your software package in.
+EOP
+            ###BUGALERT### Add support for a check regex, so that I can ensure
+            #that what the user enters will be either true or false!!!
+        },
+        verify_failure_ok => {
+            prompt => <<EOP,
+Would you like to enable the verify_failure_ok configuration option?
+    EOP
+            print_me => <<EOP
+verify_failure_ok is a true or false option, whoose acceptable values include 1
+or 0, true or falue, On or Off. It's default value is false, but if you enable
+it, then fetchware will not print an error message and exit if verification
+fails for your software package. Please note that you should never use this
+option, because it makes it possible for fetchware to install source code that
+may have been tampered with.
+EOP
+        },
     );
     my %answered_option;
 
@@ -598,21 +922,22 @@ EOP
     my @remove;
     for (my $i = 0; $i <= $#options; $i++) {
         # Remove unnecessary ones and ones asked about in other places.
-        for (qw(fetchware override filter mirror)) {
+        ###BUGALERT### fetchware no longer exists, and override may not. Update
+        #this after I design and implement fetchware's new override system.
+        for (qw(fetchware override lookup_url filter mirror)) {
             push @remove, $i if $options[$i] eq $_;
         }
     }
-    splice @options, $_, 1 for @remove;
+    splice @options, $_, 1 for 0..$#remove;
 
     if (
         $term->ask_yn(prompt => <<EOP,
-Would you like to add extra configuration options to your
-fetchwarefile?
+Would you like to add extra configuration options to your fetchwarefile?
 EOP
         default => 'n',
         print_me => <<EOP,
 Fetchware has many different configuration options that allow you to control its
-behavior, and even change its behavior if needed to bend fetchware for any
+behavior, and even change its behavior if needed to customize fetchware for any
 possible source code distribution.
 
 If you think you need to add configuration options please check out perldoc
@@ -637,8 +962,8 @@ EOP
 
         for my $config_file_option (@config_file_options_to_provide) {
             $answered_option{$config_file_option} = $term->get_reply(
-                prompt => $option_description{$config_file_option}->[0],
-                print_me => $option_description{$config_file_option}->[1],
+                prompt => $option_description{$config_file_option}->{prompt},
+                print_me => $option_description{$config_file_option}->{print_me},
             );
         }
     }
@@ -646,60 +971,155 @@ EOP
 }
 
 
+=item append_options_to_fetchwarefile(\%options, \$fetchwarefile);
+
+Takes a hash ref of name value fetchwarefile configuration options and a
+scalar ref representing your Fetchwarefile, and then it appends your
+fetchwarefile configuration optsions to the provided $fetchwarefile scalar ref.
+It also prepends a description of that specific fetchwarefile option.
+
+If you provide an configuration option for which
+append_options_to_fetchwarefile() does not have a preexisting descroption for in
+its internal hash, %config_file_description, append_options_to_fetchwarefile()
+will throw an exception.
+
+append_options_to_fetchwarefile() uses  append_to_fetchwarefile() to do the
+manipulation of your $fetchwarefile.
+
+=cut
 
 sub append_options_to_fetchwarefile {
     my ($options, $fetchwarefile) = @_;
 
     my %config_file_description = (
-        filter => <<EOA,
-# filter specifies a program name and/or version number that tells fetchware
-# which program and or which version of a program you want fetchware to install.
-# This is *only* needed in cases where there are multiple programs and or
-# multiple versions of the same program in the directory lookup_url specifies.
+        program => <<EOA,
+program simply names the program the Fetchwarefile is responsible for
+downloading, building, and installing.
 EOA
-        ###BUGALERT### Fill in with great descriptive comments for autogenerated
-        #config file.
+        filter => <<EOA,
+filter specifies a program name and/or version number that tells fetchware
+which program and or which version of a program you want fetchware to install.
+This is *only* needed in cases where there are multiple programs and or
+multiple versions of the same program in the directory lookup_url specifies.
+EOA
         temp_dir => <<EOA,
+temp_dir specifies what temporary directory fetchware will use to download and
+build this program.
 EOA
         user => <<EOA,
+user specifes a user that fetchware will drop priviledges to when fetchware
+downloads and builds your software. It will then switch back to root privs, if
+run as root, and install your software system wide. This does not work on
+Windows.
 EOA
         prefix => <<EOA,
+prefix specifies what base path your software will be installed under. This
+only works for software that uses GNU AutoTools to configure itself, it uses
+./configure.
 EOA
         configure_options => <<EOA,
+configure_options specifes what options fetchware should pass to ./configure
+when it configures your software. This option only works for software that
+uses GNU AutoTools.
 EOA
         make_options => <<EOA,
+make_options specifes what options fetchware should pass to make when make is
+run to build and install your software.
 EOA
+        ###BUGALERT### *_commands options, which are ONEARRREF, are not properly
+        #implemented and supported!!!
         build_commands => <<EOA,
+build_commands specifies what commands fetchware should execute to build your
+software.
 EOA
         install_commands => <<EOA,
+
+install_commands specifies what commands fetchware should execute to install
+your software.
 EOA
+        ###BUGALERT### Add one for uninstall_commands!!!!
         lookup_url => <<EOA,
+lookup_url specifes the url that fetchware uses to determine what what
+versions of your program are available. It should point to a directory listing
+instead of a specific file.
 EOA
         lookup_method => <<EOA,
+lookup_method specifies how fetchware determines what version of your program
+to install. The default is the 'timestamp' algorithm, and then to try the
+'versionstring' algorithm if 'timestamp' fails. lookup_method specifies which
+one you would like to use. Only the strings 'timestamp' and 'versionstring'
+are allowed options.
 EOA
+        ###BUGALERT### Rename to gpg_sig_url!!!!
         gpg_key_url => <<EOA,
+gpg_key_url specifies the url that fetchware uses to download digital
+signatures of this program. They're files that usually end .asc.
 EOA
         sha1_url => <<EOA,
+sha1_url specfies the url that fetchware uses to download sha1sum files of
+this program. This url should be the program's main download site instead of a
+mirror, because a hacked mirror could alter the sha1sum on that mirror.
 EOA
         md5_url => <<EOA,
+md5_url specfies the url that fetchware uses to download md5sum files of
+this program. This url should be the program's main download site instead of a
+mirror, because a hacked mirror could alter the md5sum on that mirror.
 EOA
         verify_method => <<EOA,
+verify_method specifes a specific method that fetchware should use to verify
+your program. This method can be 'gpg', 'sha1', or 'md5'.
 EOA
+        ###BUGALERT### Not actually implemented!!!
         no_install => <<EOA,
+no_install specifies that this software should not be installed. Instead, the
+install step is skipped, and fetchware prints to STDOUT where it downloaded,
+verified, and built your program. no_install must be a true or false value.
 EOA
         verify_failure_ok => <<EOA,
+verify_failure_ok specifies that fetchware should not stop installing your
+software and terminate with an error message if fetchware fails to verify your
+software. You should never set this to true. Doing so could cause fetchware to
+install software that may have been compromised, or had malware inserted into
+it. Never use this option unless the author or maintainer of this program does
+not gpg sign or checksum his software.
 EOA
         # Mirror is not supported by this subroutine, because it is a 'MANY'
         # config file option that can be used multiple times, and this
         # subroutine does not support that. add_mirrors() below handles that.
     );
 
-    for my $option (keys %$options) {
-        append_to_fetchwarefile($option, $options->{$option},
-            $config_file_description{$option}, $fetchwarefile);
+    for my $opt (keys %$options) {
+        if (exists $config_file_description{$opt}) {
+            append_to_fetchwarefile($fetchwarefile, $opt, $options->{$opt},
+                $config_file_description{$opt});
+        } else {
+            die <<EOD;
+fetchware: append_options_to_fetchwarefile() was called with \$options that it
+does not support having a description for. Please call
+append_options_to_fetchwarefile() with the correct \$options, or add the new,
+missing option to append_options_to_fetchwarefile()'s internal
+%config_file_description hash. \$options was:
+@{[%$options]}
+EOD
+        }
     }
 }
 
+
+###BUGALERT### I don't think App::Fetchware's download utilities even use mirror
+#if the default lookup_url fails!!!!
+=item add_mirrors($term, \$fetchwarefile);
+
+Prompts the user if they would like to add additional mirrors to their
+fetchwarefile. These mirrors will be tried in the order they are listed if the
+main lookup_url's server goes down. The mirrors are only used if the main host
+specified in the C<lookup_url> fails.
+
+add_mirrors() asks the questions it needs, and then it appends whatever mirrors
+you specify to your $fetchwarefile, which must be specified as a scalar
+reference, so that the original value can be modified.
+
+=cut
 
 sub add_mirrors {
     my ($term, $fetchwarefile) = @_;
@@ -714,9 +1134,9 @@ Most servers administered by large organizations that provide mirrors for open
 source software monitor their servers, and keep them running all of the time
 making outages rare.
 
-But if you would like fetchware to use other mirrors in addition to the built in
-one in any options you've provided to fetchware, answer yes, and fetchware fill
-let you provide multiple mirrors.
+But if you would like fetchware to use other mirrors in addition to the one you
+specified in your 'lookup_url', answer yes, and fetchware will ask you to
+provide as many mirrors as you like.
 EOP
         )
     ) {
@@ -727,6 +1147,15 @@ EOP
 # try to download this program from. This option is used when the server
 # specified in the url options in this file is unavailable or times out.
 EOA
+        # Prompt for first mirror outside loop, because if you just hit enter or
+        # type done, then the above text will be appended to your fetchwarefile,
+        # but you'll be able to skip actually adding a mirror.
+        my $first_mirror = $term->get_reply(
+                prompt => <<EOP,
+Type mirror or done to continue:
+EOP
+            );
+            $fetchwarefile .= "mirror '$first_mirror';\n";
 
         while (1) {
             my $mirror_or_done = $term->get_reply(
@@ -739,13 +1168,28 @@ EOP
                 when ('done') {
                     last;
                 } default {
-                    $fetchwarefile .= "mirror $mirror_or_done;";
+                    $fetchwarefile .= "mirror '$mirror_or_done';\n";
                 }
             }
         }
     }
 }
 
+
+=item edit_manually($term, \$fetchwarefile);
+
+edit_manually() asks the user if they would like to edit the specified
+$fetchwarefile manually. If the user answers no, then nothing is done. But if
+the user answers yes, then fetchware will open their favorit editor either using
+the C<$ENV{EDITOR}> environment variable, or fetchware will ask the user what
+editor they would like to use. Then this editor, and a temporary fetchwarefile
+are opened, and the user can edit their Fetchwarefile as they please. If they
+are not satisfied with their edits, and wan to undo them, they can delete the
+entire file, and write a size 0 file, which will cause fetchware to ignore the
+file they edited. If the write a file with a size greater than 0, then the file
+the user wrote, will be used as their Fetchwarefile.
+
+=cut
 
 sub edit_manually {
     my ($term, $fetchwarefile) = @_;
@@ -756,38 +1200,53 @@ Would you like to edit your automagically generated Fetchwarefile manually?
 EOP
         default => 'n',
         print_me => <<EOP,
+Fetchware has now asked you all of the needed questions to determine what it
+thinks your new program's Fetchwarefile should look like. But it's not perfect,
+and perhaps you would like to tweak it manually. If you would like to edit it
+manually in your favorite editor, answer 'yes', and if you want to skip this just
+answer 'no', or just press <Enter>.
 
+If you would like to cancel any edits you have made, and use the automagically
+generated Fetchwarefile, just delete the entire contents of the file, and save
+an empty file.
 EOP
         )
     ) {
         my ($fh, $fetchwarefile_filename) =
-            tempfile('fetchwarefile-XXXXXXXXX', TMPDIR => 1);
-        print $fh $fetchwarefile;
+            tempfile('Fetchwarefile-XXXXXXXXX', TMPDIR => 1);
+        print $fh $$fetchwarefile;
 
-        if ($ENV{EDITOR}) {
-            say <<EOS;
-If you would like to cancel any edits you have made, and use the automagically
-generated Fetchwarefile, just delete the entire contents of the file, and save
-an empty file.
-EOS
-            system($ENV{EDITOR}, $fetchwarefile_filename);
-            # NOTE: fetchware will "block" during the above call to system, and
-            # wait for the user to close the email program.
-        } else {
-            ###BUGALERT### Add support for asking what editor to use if the
-            #EDITOR environment varible isn't set.
-        }
+        close $fh;
 
-        unless (-e $fetchwarefile_filename) {
-            local $/;
-            undef $/;
+        # Ask what editor to use if EDITOR environment variable is not set.
+        my $editor = $ENV{EDITOR} || do {
+            $term->get_reply(prompt => <<EOP,
+What text editor would you like to use?
+EOP
+                print_me => <<EOP
+The Environment variable EDITOR is not set. This is used by fetchware and other
+programs to determine what program fetchware should use to edit your
+Fetchwarefile. Please enter what text editor you would like to use. Examples
+include: vim, emacs, nano, pico, or notepad.exe (on Windows).
+EOP
+            );
+        };
+
+        ###BUGALERT## Replace systemx call with msg() like systemx wrapper!
+        systemx($editor, $fetchwarefile_filename);
+        # NOTE: fetchware will "block" during the above call to system, and
+        # wait for the user to close the editor program.
+
+        # If the edited Fetchwarefile does not have a file size of zero.
+        if (not -z $fetchwarefile_filename) {
             open my $fh, '<', $fetchwarefile_filename or die <<EOD;
 fetchware: run-time error. fetchware can't open the fetchwarefile you edited
 with your editor after you edited it. This just shouldn't happen. Possible race
 condition or weird bug. See perldoc fetchware.
 EOD
-            $fetchwarefile = <$fh>;
+            $$fetchwarefile = do { local $/; <$fh> }; # slurp fetchwarefile
         } else {
+            ###BUGALERT### Replace say below with msg() after implementing it.
             say <<EOS;
 You canceled any custom editing of your fetchwarefile by writing an empty file
 to disk.
@@ -798,43 +1257,89 @@ EOS
 }
 
 
+=item ask_to_install_now_to_test_fetchwarefile($term, \$fetchwarefile, $program_name);
+
+This subroutine asks the user if they want to install the Fetchwarefile that
+this subroutine has been called with. If they say yes, then the Fetchwarefile is
+passed on to cmd_install() to do all of the installation stuff. If they say no,
+then fetchware saves the file to C<"$proram_name.Fetchwarefile"> or
+ask_to_install_now_to_test_fetchwarefile() will ask the user where to save the
+file until the user picks a filename that does not exist.
+
+=over
+NOTE: ask_to_install_now_to_test_fetchwarefile() has an infinite loop in it! It
+asks the user forever until they provide a filename that doesn't exist. Should a
+limit be placed on this? Should it only ask just once?
+=back
+
+If you answer yes to install your Fetchwarefile, then
+ask_to_install_now_to_test_fetchwarefile() will return the full path to the
+fetchware package that has been installed.
+
+=cut
+
 sub ask_to_install_now_to_test_fetchwarefile {
-    my ($term, $fetchwarefile) = @_;
+    my ($term, $fetchwarefile, $program_name) = @_;
 
-
+    # If the user wants to install their new Fetchwarefile.
     if (
         $term->ask_yn(prompt => <<EOP,
 Would you like to install the program you just created a Fetchwarefile for?
 EOP
         default => 'y',
-###BUGALERT### Does this need one of these?
-#        print_me => <<EOP,
-        #
-#EOP
+        print_me => <<EOP,
+It is recommended that fetchware go ahead and install the program based on the
+Fetchwarefile that fetchware has created for you. If you don't want to install
+it now, then enter 'no', but if you want to test your Fetchwarefile now, and
+install it, then please enter 'yes' or just press <Enter>.
+EOP
         )
     ) {
-        # Run the fetchwarefile
-        fetchware(All => 1);
-    } else {
+        # Abuse create_test_fetchwarfile(). This is not for testing, but this
+        # subroutine does exactly what I need one to do :) It even deletes this
+        # fetchwarefile when the program exists.
+        my $fetchwarefile_filename = create_test_fetchwarefile($$fetchwarefile);
 
-        if (
-            $term->ask_yn(prompt => <<EOP,
-Would you like to just build a fetchware package that you could install later?
+        my $fetchware_package_path = cmd_install($fetchwarefile_filename);
+        ###BUGALERT### Call cmd_install() inside an eval that will catch any
+        #problems that come up, and suggest how to fix them???
+        #Is that really doable???
+        return $fetchware_package_path;
+    # Else the user just wants to save the Fetchwarefile somewhere.
+    } else {
+    my $fetchwarefile_filename = $program_name . '.Fetchwarefile';
+
+    # Get a name for the Fetchwarefile that does not already exist.
+    if (-e $fetchwarefile_filename) {
+        while (1) {
+            $fetchwarefile_filename = $term->get_reply(prompt => <<EOP,
+What would you like your new Fetchwarefile's filename to be?
+EOP                 
+                    print_me => <<EOP
+Fetchware by default uses the program name you specified at the beginning of
+running fetchware new plus a '.Fetchwarefile' extension to name your
+Fetchwarefile. But his file already exists, so you'll have to pick a new
+filename that does not currently exist.
 EOP
-            default => 'y',
-###BUGALERT### Does this need one of these?
-#        print_me => <<EOP,
-        #
-#EOP
-            )
-        ) {
-            fetchware(Build => 1);
-            #Runwhatevercodeto install package!!!
-            ###BUGALERT### Fill in after install() is written.
-            fetchware(End => 1);
-            ###BUGALERT### Print out stuff about the where the fetchware package
-            #has been created (default should be cwd()).
+            );
+            last unless -e $fetchwarefile_filename;
         }
+    }
+    ###BUGALERT### replace this crap with msg() after you write it!
+    say <<EOS;
+Saving Fetchwarefile to [$fetchwarefile_filename].
+EOS
+
+    ###BUGALERT### Replace >, create or delete whole file and replace it with
+    #what I write now, with >> for append to file if it already exists????
+    open my $fh, '>', $fetchwarefile_filename or die <<EOD;
+fetchware: failed to open your new fetchwarefile because of os error
+[$!]. This really shouldn't happen in this case. Probably a bug, or a weird race
+condition.
+EOD
+    print $fh $$fetchwarefile;
+
+    close $fh;
     }
 }
 
@@ -1603,10 +2108,10 @@ sub create_test_fetchwarefile {
     my ($fh, $fetchwarefile_path) = tempfile('fetchware-XXXXXXXXXXX', TMPDIR => 1,);
 
     # Create a fake Fetchwarefile for our fake fetchware package.
-    my $write_fh;
-    ok(open($write_fh, '>', $fetchwarefile_path),
-        'checked create_fetchware_package() open file');
-    
+    open my $write_fh, '>', $fetchwarefile_path or die <<EOD;
+fetchware: run-time error. Failed to open the file [$fetchwarefile_path] for
+writing. Os error [$!]. Please see perldoc fetchware.
+EOD
     # Put test stuff in Fetchwarefile.
     print $write_fh "$fetchwarefile_content";
 

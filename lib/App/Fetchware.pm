@@ -115,6 +115,7 @@ our %EXPORT_TAGS = (
     # need to add them.
     TESTING => [qw(
         eval_ok
+        print_ok
         skip_all_unless_release_testing
         __clear_CONFIG
         debug_CONFIG
@@ -598,6 +599,14 @@ EOE
 1App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [$@]. See perldoc App::Fetchware.
 EOD
+###BUGALERT### *_commands actually need 'ONEARRREF' to support having multiple
+#build commands on one line such as:
+# build_commands './configure', 'make';
+# The eval created below doesn't actually create them properly.
+# Also, add config_* subs to access them easily such as config_push, config_pop,
+# config_iter, or whatever makes sense.
+# Then update build, install, and uninstall to use them properly when accessing
+# *_commands config options.
             } when('ONEARRREF') {
                 ###BUGALERT### the (@) sub prototype needed for ditching parens must
                 #be seen at compile time. Is "eval time" considered compile time?
@@ -664,7 +673,8 @@ Fetchwarefile. Currently only mirror supports being used more than once in a
 Fetchwarefile, but you have used $name more than once. Please remove all calls
 to $name but one. See perldoc App::Fetchware.
 EOD
-    # Make extra false values false (0).
+    # Make extra false values false (0). Not needed for true values, because
+    # everything but 0, '', and undef are true values.
     given($value) {
         when(/false/i) {
             $value = 0;
@@ -2204,6 +2214,9 @@ fetchware's output.
 
 =cut
 
+###BUGALERT### NOT TESTED!!! There is no t/App-Fetchware-uninstall.t test
+#file!!! cmd_uninstall(), which uses uninstall(), is tested, but not uninstall()
+#directly!!!
 sub uninstall {
     my $build_path = shift;
 
@@ -2220,13 +2233,10 @@ EOD
     #name of the subroutine I write to handle verbose and quiet flags for me.
 
 
-    # Set up configure_options and prefix, and then run ./configure, because
-    # Autotools uses full paths that ./configure sets up, and these paths change
-    # from install time to uninstall time.
-    run_configure();
 
     if (defined config('uninstall_commands')) {
         # Support multiple options like install_commands 'make', 'install';
+        ###BUGALERT### Doesn't actually work yet!!!!! Implement ONEARRREF!!!
         for my $uninstall_command (config('uninstall_commands')) {
             # Dequote uninstall_commands they just get in the way.
             my $dequoted_commands = $uninstall_command;
@@ -2240,6 +2250,10 @@ EOD
             }
         }
     } else {
+        # Set up configure_options and prefix, and then run ./configure, because
+        # Autotools uses full paths that ./configure sets up, and these paths
+        # change from install time to uninstall time.
+        run_configure();
         if (defined config('make_options')) {
             ###BUGALERT### make_options should go before install!!!
             systemx('make', 'uninstall', config('make_options'))
@@ -2353,6 +2367,70 @@ sub eval_ok {
 
 }
 
+
+=item print_ok(\&printer, $expected, $test_name)
+
+Tests if $expected is in the output that C<\&printer->()> produces on C<STDOUT>.
+
+It passes $test_name along to the underlying L<Test::More> function that it uses
+to do the test.
+
+$expected can be a C<SCALAR>, C<Regexp>, or C<CODEREF> as returned by Perl's
+L<ref()> function.
+
+=over
+=item * If $expected is a SCALAR according to ref()
+=over
+=item * Then Use eq to determine if the test passes.
+=back
+=item * If $expected is a Regexp according to ref()
+=over
+=item * Then use a regex comparision just like Test::More's like() function.
+=back
+=item * If $expected is a CODEREF according to ref()
+=over
+=item * Then execute the coderef and use the result of that expression to determine if the test passed or failed .
+=back
+=back
+
+=cut
+
+###BUGALERT### Some code like in t/bin-fetchware-upgrade(-all)?.t uses copy and
+#pasted code that this function is based on. Replace that crap with print_ok().
+####BUGALERT## Add tests for it!!!!!!!!!!!!!!!!
+sub print_ok {
+    my ($printer, $expected, $test_name) = @_;
+
+    my $error;
+    my $stdout;
+    # Use eval to catch errors that $printer->() could possibly throw.
+    eval {
+        local *STDOUT;
+        open STDOUT, '>', \$stdout
+            or $error = 'Can\'t open STDOUT to test cmd_upgrade using cmd_list';
+
+        # Execute $printer
+        $printer->();
+
+        close STDOUT
+            or $error = 'WTF! closing STDOUT actually failed! Huh?';
+    };
+    $error = $@ if $@;
+    fail($error) if defined $error;
+
+    if (ref($expected) eq undef) {
+        is($stdout, $expected,
+            $test_name);
+    } elsif (ref($expected) eq 'Regexp') {
+        like($stdout, $expected,
+            $test_name);
+    } elsif (ref($expected) eq 'CODEREF') {
+        ok($expected->(),
+            $test_name);
+    }
+}
+
+
 =item skip_all_unless_release_testing()
 
 Skips all tests in your test file or subtest() if fetchware's testing
@@ -2380,6 +2458,7 @@ sub make_clean {
     system('make', 'clean');
     chdir(updir()) or fail(q{Can't chdir(updir())!});
 }
+
 
 
 =item make_test_dist($file_name, $ver_num, rel2abs($destination_directory));
