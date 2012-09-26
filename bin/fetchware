@@ -47,6 +47,9 @@ our %EXPORT_TAGS  = (
         determine_fetchware_package_path
         extract_fetchwarefile
         copy_fpkg_to_fpkg_database
+        msg
+        vmsg
+        run_prog
         cmd_install
         cmd_uninstall
         cmd_look
@@ -69,6 +72,15 @@ our %EXPORT_TAGS  = (
 );
 our @EXPORT_OK = @{$EXPORT_TAGS{TESTING}};
 
+# Cool forward declarations to make the subs the handle -v, -q, and control if
+# other programs can print to STDOUT or not.
+sub msg (@);
+sub vmsg (@);
+sub run_prog ($;@);
+our $verbose = 0;
+our $quiet = 0;
+our $dry_run = 0;
+
 # Be a modulino, so I can "use fetchware" in my test suite, so I can test
 # bin/fetchware normally like any other perl module.
 run() unless caller();
@@ -77,8 +89,6 @@ sub run {
     ###BUGALERT### Inside run() is where the %SIG signal handler stuff should go
     #SIGTERM & SIGINT for ctrl-c!!! A fetchware cleanup command in cause of
     #SIGKILL???
-    my $verbose;
-    my $dry_run;
 
     GetOptions(
         # $VERSION is managed by dzil; therefore, I use eval to access it at
@@ -87,7 +97,8 @@ sub run {
         'version|V' => sub { eval 'say "Fetchware version $VERSION"; '; exit 0},
         'help|h|?' => \&help,
         'verbose|v' => \$verbose,
-        'quiet|q' => sub { $verbose = 0 },
+        'quiet|q' => \$quiet,
+        ###BUGALERT### dry-run functionality is *not* implemented!!!
         'dry-run|d' => \$dry_run,
     );
 
@@ -1640,7 +1651,7 @@ And then C<exit()> with an exit status of 1.
 
 
 sub cmd_help {
-	say <<'HELP';
+	print <<'HELP';
 
 fetchware is a package manager for source code distributions. It gives you the
 ability to install, uninstall, and even upgrade your source code distributions
@@ -1699,7 +1710,6 @@ Eval's the $fetchwarefile_path to effectively "parse" it.
 Returns true on success and dies with an error message if it fails.
 
 =cut
-
 
 sub parse_fetchwarefile {
     my $fetchwarefile_path = shift;
@@ -1769,7 +1779,7 @@ diag("FFP[$FFP]");
     # the right place.
     unless (-e catfile(cwd(), 'Fetchwarefile')) {
         # Support $fetchwarefile_path's that don't end with a filename of
-        # 'Fetchware'.
+        # 'Fetchwarefile'.
         my $fetchwarefile_filename = ( splitpath($fetchwarefile_path) )[2];
         unless ($fetchwarefile_filename eq 'Fetchwarefile') {
             my $renamed_cwd
@@ -2061,8 +2071,6 @@ EOD
 }
 
 
-
-
 =item uninstall_fetchware_package_from_database($uninstall_package_name);
 
 Deletes the specified $uninstall_package_name from the fetchware package
@@ -2089,7 +2097,135 @@ EOD
 }
 
 
-###BUGALERT### uninstall() will need a rm_fpkg_from_fpkg_database() subroutine.
+=item msg('message to print to STDOUT');
+
+msg() simply takes a list of scalars, and it prints them to STDOUT according to
+any verbose (-v), or quiet (-q) options that the user may have provided to
+fetchware.
+
+msg() will still print its arguments if the user provided a -v (verbose)
+argument, but it will B<not> print its argument if the user provided a -q (quiet)
+command line option.
+
+=over
+=item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
+=back
+
+=cut
+
+sub msg (@) {
+
+    # If fetchware was not run in quiet mode, -q.
+    unless ($quiet > 0) {
+        # print are arguments.
+        print @_;
+    # Quiet mode is turned on.
+    } else {
+        # Don't print anything.
+        return;
+    }
+}
+
+
+=item vmsg('message to print to STDOUT');
+
+vmsg() simply takes a list of scalars, and it prints them to STDOUT according to
+any verbose (-v), or quiet (-q) options that the user may have provided to
+fetchware.
+
+vmsg() will B<only> print its arguments if the user provided a -v (verbose)
+argument, but it will B<not> print its argument if the user provided a -q (quiet)
+command line option.
+
+=over
+=item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
+=back
+
+=cut
+
+sub vmsg (@) {
+
+    # If fetchware was not run in quiet mode, -q.
+    unless ($quiet > 0) {
+        # If verbose is also turned on.
+        if ($verbose > 0) {
+            # print are arguments.
+            print @_;
+        }
+    # Quiet mode is turned on.
+    } else {
+        # Don't print anything.
+        return;
+    }
+}
+
+
+=item run_prog($program, @args);
+
+run_prog() uses L<system> to execute the program for you. Only the secure way of
+avoiding the shell is used, so you can not use any shell redirection or any
+shell builtins.
+
+If the user ran fetchware with -v (verbose) then run_prog() changes none of its
+behavior it still just executes the program. However, if the user runs the
+program with -q (quiet) specified, then the the command is run using a piped
+open to capture the output of the program. This captured output is then ignored,
+because the user asked to never be bothered with the output. This piped open
+uses the safer shell avoiding syntax on systems with L<fork>, and systems
+without L<fork>, Windows,  the older less safe syntax is used. Backticks are
+avoided, because they always use the shell.
+
+=over
+=item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
+=back
+
+=cut
+
+###BUGALERT### Add support for dry-run functionality!!!!
+sub run_prog ($;@) {
+    my ($program, @args) = @_;
+
+    # If fetchware is run without -q.
+    unless ($quiet > 0) {
+        system($program, @args) == 0 or die <<EOD;
+fetchware: run-time error. Fetchware failed to execute the specified program
+[$program] with the arguments [@args]. The OS error was [$!], and the return
+value was [@{[$? >> 8]}]. Please see perldoc App::Fetchware::Diagnostics.
+EOD
+    # If fetchware is run with -q.
+    } else {
+        # Use a piped open() to capture STDOUT, so that STDOUT is not printed to
+        # the terminal like it usually is therby "quiet"ing it.
+        # If not on Windows use safer open call that doesn't work on Windows.
+        unless (is_os_type('Windows', $^O)) {
+            open(my $fh, '-|', "$program", @args) or die <<EOD;
+fetchware: run-time error. Fetchware failed to execute the specified program
+while capturing its input to prevent it from being copied to the screen, because
+you ran fetchware with it's --quite or -q option. The program was [$program],
+and its arguments were [@args]. OS error [$!], and exit value [$?]. Please see
+perldoc App::Fetchware::Diagnostics.
+EOD
+            # Close $fh, to cause perl to wait for the command to do its
+            # outputing to STDOUT.
+            close $fh;
+        # We're on Windows.
+        } else {
+            open(my $fh, '-|', "$program @args") or die <<EOD;
+fetchware: run-time error. Fetchware failed to execute the specified program
+while capturing its input to prevent it from being copied to the screen, because
+you ran fetchware with it's --quite or -q option. The program was [$program],
+and its arguments were [@args]. OS error [$!], and exit value [$?]. Please see
+perldoc App::Fetchware::Diagnostics.
+EOD
+            # Close $fh, to cause perl to wait for the command to do its
+            # outputing to STDOUT.
+            close $fh;
+        }
+    }
+}
+
+
+
 
 
 ###BUGALERT### Create a head1 for this TEST SUBROUTINE.

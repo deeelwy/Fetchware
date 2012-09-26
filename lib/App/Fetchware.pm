@@ -2393,6 +2393,18 @@ L<ref()> function.
 =back
 =back
 
+=over
+NOTICE: C<print_ok()'s> manipuation of STDOUT only works for the current Perl
+process. STDOUT may be inherited by forks, but for some reason my knowledge of
+Perl and Unix lacks a better explanation other than that print_ok() does not
+work for testing what C<fork()ed> and C<exec()ed> processes do such as those
+executed with run_prog().
+
+I also have not tested other possibilities, such as using IO::Handle to
+manipulate STDOUT, or tie()ing STDOUT like Test::Output does. These methods
+probably would not survive a fork() and an exec() though either.
+=back
+
 =cut
 
 ###BUGALERT### Some code like in t/bin-fetchware-upgrade(-all)?.t uses copy and
@@ -2406,6 +2418,11 @@ sub print_ok {
     # Use eval to catch errors that $printer->() could possibly throw.
     eval {
         local *STDOUT;
+        # Turn on Autoflush mode, so each time print is called it causes perl to
+        # flush STDOUT's buffer. Otherwise a write could happen, that may not
+        # actually get written before this eval closes, causing $stdout to stay
+        # undef instead of getting whatever was written to STDOUT.
+        $| = 1;
         open STDOUT, '>', \$stdout
             or $error = 'Can\'t open STDOUT to test cmd_upgrade using cmd_list';
 

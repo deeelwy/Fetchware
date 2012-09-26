@@ -9,7 +9,7 @@ use 5.010;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '7'; #Update if this changes.
+use Test::More 0.98 tests => '10'; #Update if this changes.
 
 use App::Fetchware qw(:TESTING config);
 use Cwd 'cwd';
@@ -170,8 +170,11 @@ subtest 'check determine_fetchware_package_path()' => sub {
     }
 
     # Now test multiple results with one query.
-    is(determine_fetchware_package_path('apache'), 2,
-        "checked determine_fetchware_package_path() multiple values");
+    eval_ok(sub {determine_fetchware_package_path('apache')},
+        <<EOE, 'checked determine_fetchware_package_path() multiple values');
+Choose which package from the list above you want to upgrade, and rerun
+fetchware upgrade using it as the argument for the package you want to upgrade.
+EOE
 
     # Remove both apache's from further tests, because it will return 2 instead
     # of a single scalar like the test assumes.
@@ -210,8 +213,8 @@ subtest 'check extract_fetchwarefile()' => sub {
     is( ( splitpath(extract_fetchwarefile($fetchware_package_path, cwd())) )[2],
         'Fetchwarefile', 'checked extract_fetchwarefile() success');
     my $fh;
-    ok(open($fh, '<', './Fetchwarefile'),
-        'checked extract_fetchwarefile() success open Fetchwarefile');
+    ok(open($fh, '<', $fetchwarefile_path),
+        "checked extract_fetchwarefile() success open [$fetchwarefile_path]");
     my $got_fetchwarefile;
     {
         local $/;
@@ -223,11 +226,11 @@ subtest 'check extract_fetchwarefile()' => sub {
         q{checked extract_fetchwarefile() success Fetchwarefile's match});
 
     # Test existence of generated files.
-    ok(-e '../App-Fetchware.tar.gz' && -e '../Fetchwarefile',
+    ok(-e '../App-Fetchware.fpkg' && -e './Fetchwarefile',
         'checked extract_fetchwarefile() existence of generated files');
     
     # Delete generated files.
-    ok(unlink('../App-Fetchware.tar.gz', '../Fetchwarefile') == 2,
+    ok(unlink('../App-Fetchware.fpkg', './Fetchwarefile') == 2,
         'checked extract_fetchwarefile() delete generated files');
 };
 
@@ -253,8 +256,132 @@ subtest 'check copy_fpkg_to_fpkg_database()' => sub {
     #can override its behavior and test this subroutine for failure.
 
     # Delete generated files.
-    ok(unlink('Fetchwarefile', 'App-Fetchware.fpkg'),
+    ok(unlink('../Fetchwarefile', '../App-Fetchware.fpkg'),
         'checked extract_fetchwarefile() delete generated files');
+};
+
+
+subtest 'test msg()' => sub {
+   print_ok(sub {msg("Testing 1...2...3!!!\n")},
+       <<EOM, 'test msg() success.');
+Testing 1...2...3!!!
+EOM
+
+   print_ok(sub {msg("Testing\n", "1...2...3!!!\n")},
+       <<EOM, 'test msg() 2 args success.');
+Testing
+1...2...3!!!
+EOM
+
+   print_ok(sub {msg(1,2,3,4,5,6,7,8,9,0,"\n")},
+       <<EOM, 'test msg() many args success.');
+1234567890
+EOM
+
+
+   print_ok(sub {msg "Testing 1...2...3!!!\n"},
+       <<EOM, 'test msg success.');
+Testing 1...2...3!!!
+EOM
+
+   print_ok(sub {msg "Testing\n", "1...2...3!!!\n"},
+       <<EOM, 'test msg 2 args success.');
+Testing
+1...2...3!!!
+EOM
+
+   print_ok(sub {msg 1,2,3,4,5,6,7,8,9,0,"\n"},
+       <<EOM, 'test msg many args success.');
+1234567890
+EOM
+
+   # Test -q (quite) mode works.
+   # Set bin/fetchware's $quiet to true.
+   $fetchware::quiet = 1;
+
+   ok(sub{msg 'Did I print anything???'}->() eq undef,
+       'test msg quiet mode success.');
+};
+
+
+subtest 'test vmsg()' => sub {
+    # Set bin/fetchware's $verbose to false.
+    $fetchware::verbose = 0;
+    # Set bin/fetchware's $quiet to false too!!!
+    $fetchware::quiet = 0;
+    # Test vmsg() when verbose is *not* turned on!
+    ok(sub{vmsg 'Did I print anything???'}->() eq undef,
+        'test vmsg not verbose mode success.');
+
+    # Test -v (verbose) mode works.
+    # Set bin/fetchware's $verbose to true.
+    $fetchware::verbose = 1;
+
+    print_ok(sub {vmsg("Testing 1...2...3!!!\n")},
+        <<EOM, 'test vmsg() success.');
+Testing 1...2...3!!!
+EOM
+
+    print_ok(sub {vmsg("Testing\n", "1...2...3!!!\n")},
+        <<EOM, 'test vmsg() 2 args success.');
+Testing
+1...2...3!!!
+EOM
+
+    print_ok(sub {vmsg(1,2,3,4,5,6,7,8,9,0,"\n")},
+        <<EOM, 'test vmsg() many args success.');
+1234567890
+EOM
+
+
+    print_ok(sub {vmsg "Testing 1...2...3!!!\n"},
+        <<EOM, 'test vmsg success.');
+Testing 1...2...3!!!
+EOM
+
+    print_ok(sub {vmsg "Testing\n", "1...2...3!!!\n"},
+        <<EOM, 'test vmsg 2 args success.');
+Testing
+1...2...3!!!
+EOM
+
+    print_ok(sub {vmsg 1,2,3,4,5,6,7,8,9,0,"\n"},
+        <<EOM, 'test vmsg many args success.');
+1234567890
+EOM
+
+    # Test -q (quite) mode works.
+    # Set bin/fetchware's $quiet to true.
+    $fetchware::quiet = 1;
+
+    ok(sub{vmsg 'Did I print anything???'}->() eq undef,
+        'test vmsg quiet mode success.');
+};
+
+
+subtest 'test run_prog()' => sub {
+    # Set bin/fetchware's $quiet to false.
+    $fetchware::quiet = 0;
+    
+    # Test using perl itself, because what other program is guaranteed to
+    # be availabe on all platforms fetchware supports?
+    # The insane >> thing is a "right shift" operator, which shifts the value of
+    # system()'s return value 8 bits right, yielding the proper perl return
+    # value as bash would return it in its $? (Not Perl's $?, which is the same
+    # as system()'s return value.). And then it is tested if it ran successfully
+    # in which case it would be 0, which means it ran successfully. See perldoc
+    # system for more.
+    ok(run_prog("$^X", '-e print "Testing 1...2...3!!!\n"') >> 8 == 0,
+        'test run_prog() success');
+
+    # Set bin/fetchware's $quiet to true.
+    $fetchware::quiet = 1;
+
+    ok(run_prog("$^X", '-e print "Testing 1...2...3!!!\n"') >> 8 == 0,
+        'test run_prog() success');
+
+    # Set bin/fetchware's $quiet to false.
+    $fetchware::quiet = 0;
 };
 
 
