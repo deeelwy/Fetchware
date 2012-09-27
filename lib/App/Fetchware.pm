@@ -16,7 +16,6 @@ use Scalar::Util 'blessed';
 ###BUGALERT### Replace IPC::System::Simple with App::Cmd, because App::Cmd is one of
 # Archive::Extract's dependencies, so I may as well use one of my dependencies'
 # dependencies so App::Fetchware users have one fewer dependency to install.
-use IPC::System::Simple 'systemx';
 use Digest;
 use Digest::SHA;
 use Digest::MD5;
@@ -26,6 +25,8 @@ use Archive::Extract;
 use Archive::Tar;
 use Sub::Override;
 use Test::More 0.98; # some utility test subroutines need it.
+use Perl::OSType 'is_os_type';
+use Cwd;
 
 # Enable Perl 6 knockoffs.
 use 5.010;
@@ -66,6 +67,12 @@ our @EXPORT = qw(
     override
     config
 );
+
+# Forward declarations to make their prototypes work correctly.
+sub msg (@);
+sub vmsg (@);
+sub run_prog ($;@);
+
 # These tags go with the override() subroutine, and together allow you to
 # replace some or all of fetchware's default behavior to install unusual
 # software.
@@ -135,6 +142,9 @@ our %EXPORT_TAGS = (
         uninstall
     )],
     UTIL => [qw(
+        msg
+        vmsg
+        run_prog
         download_dirlist
         ftp_download_dirlist
         http_download_dirlist
@@ -347,6 +357,8 @@ element of %CONFIG to be promoted to being an C<ARRAY> ref.
     sub config {
         my ($config_sub_name, $config_sub_value) = @_;
 
+        ###BUGALERT### Does *not* support ONEARRREFs!!!!!! Which are actually
+        #needed.
         # Only one argument just lookup and return it.
         if (@_ == 1) {
             ref $CONFIG{$config_sub_name} eq 'ARRAY'
@@ -734,6 +746,8 @@ the directory they should use for storing file operations.
 sub start {
     my %opts = @_;
 
+    msg 'Creating temp dir to use to install your package.';
+
     # Ask for better security.
     File::Temp->safe_level( File::Temp::HIGH );
 
@@ -745,8 +759,12 @@ sub start {
     eval {
         unless (defined $opts{KeepTempDir}) {
             $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+
+            vmsg "Created temp dir [$temp_dir] that will be deleted on exit";
         } else {
             $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1);
+
+            vmsg "Created temp dir [$temp_dir] that will be kept on exit";
 
         }
 
@@ -763,7 +781,7 @@ subroutine to create a temporary file, but tempdir() threw an exception. That
 exception was [$exception]. See perldoc App::Fetchware.
 EOD
 
-    use Cwd;
+    vmsg "Saving original working directory as [$original_cwd]";
     $original_cwd = cwd();
     diag("cwd[@{[$original_cwd]}]");
     # Change directory to $CONFIG{TempDir} to make unarchiving and building happen
@@ -775,7 +793,9 @@ temporary directory that it successfully created. This just shouldn't happen,
 and is weird, and may be a bug. See perldoc App::Fetchware.
 EOD
     diag("cwd[@{[cwd()]}]");
+    vmsg "Successfully changed working directory to [$temp_dir].";
 
+    msg "Temporary directory created [$temp_dir]";
     return $temp_dir;
 }
 
@@ -813,24 +833,33 @@ values will result in fetchware die()ing with an error message.
 =cut
 
 sub lookup {
+    msg "Looking up download url using lookup_url [@{[config('lookup_url')]}]";
+
 diag "lookup_url[@{[config('lookup_url')]}]";
     # die if lookup_url wasn't specified.
     # die if lookup_method was specified wrong.
+    vmsg 'Checking that lookup has been configured properly.';
     check_lookup_config();
     # obtain directory listing for file, ftp, or http. (a sub for each.)
+    vmsg 'Downloading a directory listing using your lookup_url';
     my $directory_listing = get_directory_listing();
+    vmsg 'Obtained the following directory listing:';
+    vmsg Dumper($directory_listing);
     # parse the directory listing's format based on ftp or http.
-    # ftp: just use Net::Ftp's dir command to get a "long" listing.
-    # http: use regex hackery or *html:linkextractor*.
+    vmsg 'Parse directory listing into internal format.';
     my $filename_listing = parse_directory_listing($directory_listing);
+    vmsg 'Directory listing parsed as:';
+    vmsg Dumper($filename_listing);
     # Run those listings through lookup_by_timestamp() and/or
         # lookup_by_versionstring() based on lookup_method, or first by timestamp,
         # and then by versionstring if timestamp can't figure out the latest
         # version (normally because everything in the directory listing has the
         # same timestamp.
     # return $download_url, which is lookup_url . <latest version archive>
+    vmsg 'Using parsed directory listing to determine download url.';
     my $download_url = determine_download_url($filename_listing);
 
+    msg "Download url determined to be [$download_url]";
     return $download_url;
 }
 
@@ -1222,7 +1251,7 @@ sub  lookup_by_versionstring {
     
 
     ###BUGALERT### This action at a distance crap should get its own high-level
-    #subroutine at least say determine_downloadurl inside lookup().
+    #subroutine at least vmsg determine_downloadurl inside lookup().
     # Manage duplicate timestamps apropriately including .md5, .asc, .txt files.
     # And support some hacks to make lookup() more robust.
     return lookup_determine_downloadurl($file_listing);
@@ -1342,11 +1371,17 @@ bugs Net::FTP or HTTP::Tiny impose.
 =cut
 
 sub download {
-    ###BUGALERT### Why does download() need $temp_dir as an argument????
     my ($temp_dir, $download_url) = @_;
 
+    msg "Downloading from url [$download_url] to temp dir [$temp_dir]";
+
     my $downloaded_file_path = download_file($download_url);
-    return determine_package_path($temp_dir, $downloaded_file_path);
+    vmsg "Downloaded file to [$downloaded_file_path]";
+
+    my $package_path = determine_package_path($temp_dir, $downloaded_file_path);
+    msg "Determined package path to be [$package_path]";
+
+    return $package_path;
 }
 
 
@@ -1419,34 +1454,59 @@ ridden, but still usable.
 sub verify {
     my ($download_url, $package_path) = @_;
 
+    msg "Verifying the downloaded package [$package_path]";
+
     my $retval;
     given (config('verify_method')) {
         when (undef) {
             # if gpg fails try
             # sha and if it fails try
             # md5 and if it fails die
+            msg 'Trying to use gpg to cyptographically verify downloaded package.';
             my ($gpg_err, $sha_err, $md5_err);
             eval {$retval = gpg_verify($download_url)};
             $gpg_err = $@;
             diag("gpgrv[$retval]");
-            warn $gpg_err if $gpg_err;
+            if ($gpg_err) {
+                msg <<EOM;
+Cyptographic using gpg failed!
+EOM
+                warn $gpg_err;
+            }
             if (! $retval or $gpg_err) {
+                msg <<EOM;
+Trying SHA1 verification of downloaded package.
+EOM
                 eval {$retval = sha1_verify($download_url, $package_path)};
                 $sha_err = $@;
                 diag("sharv[$retval]");
-                warn $sha_err if $sha_err;
+                if ($sha_err) {
+                    msg <<EOM;
+SHA1 verification failed!
+EOM
+                    warn $sha_err;
+                }
                 if (! $retval or $sha_err) {
                     diag("GOTTOMD5");
+                    msg <<EOM;
+Trying MD5 verification of downloaded package.
+EOM
                     eval {$retval = md5_verify($download_url, $package_path)};
                     $md5_err = $@;
                     diag("md5rv[$retval]");
-                    warn $md5_err if $md5_err;
+                    if ($md5_err) {
+                        msg <<EOM;
+MD5 verification failed!
+EOM
+                        warn $md5_err;
+                    }
                 }
                 if (! $retval or $md5_err) {
                     die <<EOD unless config('verify_failure_ok');
 App-Fetchware: run-time error. Fetchware failed to verify your downloaded
 software package. You can rerun fetchware with the --force option or add
-[verify_failure_ok 'True';] to your Fetchwarefile. See perldoc App::Fetchware.
+[verify_failure_ok 'True';] to your Fetchwarefile. See the section VERIFICATION
+FAILED in perldoc fetchware.
 EOD
                 }
                 if (config('verify_failure_ok')) {
@@ -1457,10 +1517,17 @@ ignore its errors when it tries to verify the integrity of your downloaded file.
 You can also ignore the errors Fetchware printed out abover where it tried to
 verify your downloaded file. See perldoc App::Fetchware.
 EOW
+                    vmsg <<EOM;
+Verification Failed! But you asked to ignore verification failures, so this
+failure is not fatal.
+EOM
                     return 'warned due to verify_failure_ok'
                 }
             }
         } when (/gpg/i) {
+            vmsg <<EOM;
+You selected gpg cryptographic verification. Verifying now.
+EOM
             gpg_verify($download_url)
                 or die <<EOD unless config('verify_failure_ok');
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
@@ -1468,6 +1535,9 @@ package with gpg or openpgp, but they both failed. See the warning above for
 their error message. See perldoc App::Fetchware.
 EOD
         } when (/sha1?/i) {
+            vmsg <<EOM;
+You selected SHA1 checksum verification. Verifying now.
+EOM
             sha1_verify($download_url, $package_path)
                 or die <<EOD unless config('verify_failure_ok');
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
@@ -1475,6 +1545,9 @@ package with sha, but it failed. See the warning above for their error message.
 See perldoc App::Fetchware.
 EOD
         } when (/md5/i) {
+            vmsg <<EOM;
+You selected MD5 checksum verification. Verifying now.
+EOM
             md5_verify($download_url, $package_path)
                 or die <<EOD unless config('verify_failure_ok');
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
@@ -1489,6 +1562,7 @@ specified [@{[config('verify_method')]}]. See perldoc App::Fetchware.
 EOD
         }
     }
+    msg 'Verification succeeded.'
 }
 
 
@@ -1598,19 +1672,19 @@ EOD
 ##DOESNTWORK??            return undef;
 ##DOESNTWORK??        }
 ###BUGALERT###    } else {
-###BUGALERT###        ###BUGALERT### eval the systemx()'s below & add better error reporting in
+###BUGALERT###        ###BUGALERT### eval the run_prog()'s below & add better error reporting in
 ###BUGALERT###        ###BUGALERT### if Crypt::OpenPGP works ok remove gpg support & this if &
         #IPC::System::Simple dependency.
         #my standard format.
         # Use automatic key retrieval & a cool pool of keyservers
         ###BUGALERT## Give Crypt::OpenPGP another try with
         #pool.sks-keyservers.net
-        systemx('gpg', '--keyserver', 'pool.sks-keyservers.net',
+        run_prog('gpg', '--keyserver', 'pool.sks-keyservers.net',
             '--keyserver-options', 'auto-key-retrieve=1',
             '--homedir', '.',  "$sig_file");
 
         # Verify sig.
-#        systemx('gpg', '--homedir', '.', '--verify', "$sig_file");
+#        run_prog('gpg', '--homedir', '.', '--verify', "$sig_file");
 ###BUGALERT###    }
 
     # Return true indicating the package was verified.
@@ -1845,9 +1919,12 @@ already extract them.
 sub unarchive {
     my $package_path = shift;
 
+    msg "Unarchiving the downloaded package [$package_path]";
+
     ###BUGALERT### fetchware needs Archive::Zip, which is *not* one of
     #Archive::Extract's dependencies.
     diag("PP[$package_path]");
+    vmsg 'Creating Archive::Extract object.';
     my $ae;
     unless ($package_path =~ m!.fpkg$!) {
         $ae = Archive::Extract->new(archive => "$package_path") or die <<EOD;
@@ -1871,6 +1948,7 @@ EOD
 #Archive::Extract *only* extracts files and then lets you see what files were
 #*already* extracted! This is a huge limitation that prevents me from checking
 #if an archive has an absolute path in it.
+    vmsg 'Using Archive::Extract to extract files.'
     $ae->extract() or die <<EOD;
 App-Fetchware: run-time error. Fetchware failed to extract the archive it
 downloaded [$package_path]. The error message is [@{[$ae->error()]}].
@@ -1878,15 +1956,21 @@ See perldoc App::Fetchware.
 EOD
 
     # list files.
+    vmsg 'Unarchived the files:';
     my $files = $ae->files();
     die <<EOD if not defined $files;
 App-Fetchware: run-time error. Fetchware failed to list the files in  the
 archive it downloaded [$package_path]. The error message is
 [@{[$ae->error()]}].  See perldoc App::Fetchware.
 EOD
+    vmsg Dumper($files);
 
     # Return the $build_path
-    return check_archive_files($files);
+    vmsg 'Checking that the files extracted from the archive are acceptable.';
+    my $build_path =  check_archive_files($files);
+
+    msg "Determined build path to [$build_path]";
+    return $build_path;
 }
 
 
@@ -2001,8 +2085,8 @@ C<prefix '/usr/local'>.
 =item LIMITATIONS
 build() likeinstall() inteligently parses C<build_commands>, C<prefix>,
 C<make_options>, and C<configure_options> by C<split()ing> on C</,\s+/>, and
-then C<split()ing> again on C<' '>, and then execute them using
-L<IPC::System::Simple>'s systemx().
+then C<split()ing> again on C<' '>, and then execute them using fetchware's
+built in run_prog() to properly support -q.
 
 Also, simply executes the commands you specify or the default ones if you
 specify none. Fetchware will check if the commands you specify exist and are
@@ -2015,8 +2099,11 @@ fetchware's output.
 sub build {
     my $build_path = shift;
 
+    msg "Building your package in [$build_path]";
+
     use Cwd;
     diag("before[@{[cwd()]}]");
+    vmsg "changing Directory to build path [$build_path]";
     chdir $build_path or die <<EOD;
 App-Fetchware: run-time error. Failed to chdir to the directory fetchware
 unarchived [$build_path]. See perldoc App::Fetchware.
@@ -2026,17 +2113,22 @@ EOD
 
     # If build_commands is set, then all other build config options are ignored.
     if (defined config('build_commands')) {
+        vmsg 'Building your package using user specified build_commands.';
         # Support multiple options like build_command './configure', 'make';
+        ###BUGALERT### May not actually work due to ONEARRREF not being
+        #implemented.
         for my $build_command (config('build_commands')) {
             # Dequote build_commands they just get in the way.
             my $dequoted_commands = $build_command;
             $dequoted_commands =~ s/'|"//g;
             # split build_commands on ,\s+ and execute them.
             my @build_commands = split /,\s+/, $dequoted_commands;
+            ###BUGALERT### Add vmsg()s after ONEARRREF is implemented.
+            #vmsg '
 
             for my $build_command (@build_commands) {
                 my ($cmd, @options) = split ' ', $build_command;
-                systemx($cmd, @options);
+                run_prog($cmd, @options);
             }
         }
     # Otherwise handle the other options properly.
@@ -2047,27 +2139,32 @@ EOD
     ) {
 
         # Set up configure_options and prefix, and then run ./configure.
+        vmsg "Running configure with options [@{[config('configure_options')]}]";
         run_configure();
 
         # Next, make.
         if (defined config('make_options')) {
             my @make_options;
             # Support multiple options like make_options '-j', '4';
+            ###BUGALERT### Not actually implemented correctly!!!
             for my $make_option (config('make_options')) {
                 push @make_options, $make_option;
             }
-
-            systemx('make', @make_options)
+            vmsg 'Executing make to build your package';
+            run_progs('make', @make_options)
         } else {
-            systemx('make');
+            vmsg 'Executing make to build your package';
+            run_progs('make');
         }
 
     # Execute the default commands.
     } else {
-        systemx($_) for qw(./configure make);
+        vmsg 'Running default build commands [./configure] and [make]';
+        run_progs($_) for qw(./configure make);
     }
     
     # Return success.
+    msg 'The build was successful.';
     return 'build succeeded';
 }
 
@@ -2119,7 +2216,7 @@ EOD
     # Now lets execute the modifed standard commands.
     # First ./configure.
     my ($cmd, @options) = split ' ', $configure;
-    systemx($cmd, @options);
+    run_prog($cmd, @options);
 
     # Return success.
     return 'Configure successful'; 
@@ -2142,7 +2239,7 @@ whatever C<install_commands 'install, commands';> if its defined.
 =item LIMITATIONS
 install() like build() inteligently parses C<install_commands> by C<split()ing>
 on C</,\s+/>, and then C<split()ing> again on C<' '>, and then execute them
-using L<IPC::System::Simple>'s systemx().
+fetchware's built-in run_prog(), which supports -q.
 
 Also, simply executes the commands you specify or the default ones if you
 specify none. Fetchware will check if the commands you specify exist and are
@@ -2154,10 +2251,19 @@ fetchware's output.
 
 sub install {
     # Skip installation if the user requests it.
-    return 'installation skipped!' if config('no_install');
+    if (config('no_install')) {
+        msg <<EOM;
+Installation skipped, because no_install is specified in your Fetchwarefile.
+EOM
+        return 'installation skipped!' ;
+    }
+
+    msg 'Installing your package.'
 
     if (defined config('install_commands')) {
+        vmsg 'Installing your package using user specified commands.'
         # Support multiple options like install_commands 'make', 'install';
+        ###BUGALERT### Support ONEARRREF's!!!
         for my $install_command (config('install_commands')) {
             # Dequote install_commands they just get in the way.
             my $dequoted_commands = $install_command;
@@ -2166,19 +2272,28 @@ sub install {
             my @install_commands = split /,\s+/, $dequoted_commands;
 
             for my $install_command (@install_commands) {
+                ###BUGALERT### Add a vmsg() after ONEARRREF works.
+                #vmsg '
                 my ($cmd, @options) = split ' ', $install_command;
-                systemx($cmd, @options);
+                run_prog($cmd, @options);
             }
         }
     } else {
         if (defined config('make_options')) {
-            ###BUGALERT### make_options should go before install!!!
-            systemx('make', 'install', config('make_options'))
+            vmsg <<EOM;
+Installing package using default command [make] with user specified make options.
+EOM
+            ###BUGALERT### Will with work with ONEARRREF????
+            run_prog('make', config('make_options'), 'install', )
         } else {
-            systemx('make', 'install');
+            vmsg <<EOM;
+Installing package using default command [make].
+EOM
+            run_prog('make', 'install');
         }
     }
 
+    msg 'Installation succeeded';
     # Return success.
     return 'install succeeded';
 }
@@ -2204,7 +2319,7 @@ if its defined.
 =item LIMITATIONS
 uninstall() like install() inteligently parses C<install_commands> by C<split()ing>
 on C</,\s+/>, and then C<split()ing> again on C<' '>, and then execute them
-using L<IPC::System::Simple>'s systemx().
+fetchware's built-in run_prog(), which supports -q.
 
 Also, simply executes the commands you specify or the default ones if you
 specify none. Fetchware will check if the commands you specify exist and are
@@ -2220,6 +2335,8 @@ fetchware's output.
 sub uninstall {
     my $build_path = shift;
 
+    msg "Uninstalling package unarchived at path [$build_path]";
+
     # chdir to $build_path so make will find the correct make file!.
     ###BUGALERT### Refactor our chdir to its own subroutine that cmd_install and
     #uninstall can share.
@@ -2228,13 +2345,12 @@ fetchware: Failed to uninstall the specified package and specifically to change
 working directory to [$build_path] before running make uninstall or the
 uninstall_commands provided in this package's Fetchwarefile. Os error [$!].
 EOD
-
-    ###BUGALERT### Add msg()s around run_configure. msg() will probably be the
-    #name of the subroutine I write to handle verbose and quiet flags for me.
+    vmsg "chdir()d to build path [$build_path].";
 
 
 
     if (defined config('uninstall_commands')) {
+        vmsg 'Uninstalling using user specified uninstall commands.';
         # Support multiple options like install_commands 'make', 'install';
         ###BUGALERT### Doesn't actually work yet!!!!! Implement ONEARRREF!!!
         for my $uninstall_command (config('uninstall_commands')) {
@@ -2243,25 +2359,40 @@ EOD
             $dequoted_commands =~ s/'|"//g;
             # split uninstall_commands on /,\s+/ and execute them.
             my @uninstall_commands = split /,\s+/, $dequoted_commands;
+            ###BUGALERT### Add proper vmsg() crap after you implement the
+            #ONEARRREF support.
 
             for my $uninstall_command (@uninstall_commands) {
                 my ($cmd, @options) = split ' ', $uninstall_command;
-                systemx($cmd, @options);
+                run_prog($cmd, @options);
             }
         }
     } else {
         # Set up configure_options and prefix, and then run ./configure, because
         # Autotools uses full paths that ./configure sets up, and these paths
         # change from install time to uninstall time.
+        vmsg q{Uninstalling using AutoTool's default of make uninstall};
+
+        vmsg q{Running AutoTool's default ./configure};
         run_configure();
         if (defined config('make_options')) {
-            ###BUGALERT### make_options should go before install!!!
-            systemx('make', 'uninstall', config('make_options'))
+            ###BUGALERT### make_options should go befoer e install!!!
+            vmsg <<EOM
+Running AutoTool's default make uninstall with user specified make options.
+EOM
+            run_prog('make', 'uninstall', config('make_options'))
         } else {
-            systemx('make', 'uninstall');
+            vmsg <<EOM
+Running AutoTool's default make uninstall.
+EOM
+            run_prog('make', 'uninstall');
         }
     }
 
+
+    msg <<EOM;
+Package uninstalled from system, but still installed in Fetchware's database.
+EOM
     # Return success.
     return 'uninstall succeeded';
 }
@@ -2302,10 +2433,12 @@ Fetchwarefile.
 =cut
 
 sub end {
+    msg 'Cleaning up temporary directory temporary directory.';
     # chdir to $original_cwd directory, so File::Temp can delete the tempdir. This
     # is necessary, because operating systems do not allow you to delete a
     # directory that a running program has as its cwd.
 
+    vmsg 'Changing directory to [$original_cwd].';
     chdir($original_cwd) or die <<EOD;
 App-Fetchware: run-time error. Fetchware failed to chdir() to [$original_cwd]. See
 perldoc App::Fetchware.
@@ -2314,6 +2447,7 @@ EOD
     # Call File::Temp's cleanup subrouttine to delete fetchware's temp
     # directory.
     ###BUGALERT### Below doesn't seem to work!!
+    vmsg 'Cleaning up temporary directory.';
     File::Temp::cleanup();
     ###BUGALERT### Should end() clear %CONFIG for next invocation of App::Fetchware
     # Clear %CONFIG for next run of App::Fetchware.
@@ -2322,7 +2456,10 @@ EOD
     ###BUGALERT###YYYYYYEEEEEEEEEESSSSSSSSSSSS!!!! It probbly should. It would
     #remove many calls to __clear_CONFIG() from the test suite.
 ###BUGALERT### Just take %CONFIG OO!!! App::Fetchware::Config!!! Problem solved.
+    vmsg 'Clearing internal %CONFIG variable that hold your parsed Fetchwarefile.'
     __clear_CONFIG();
+
+    msg 'Cleaned up temporary directory.';
 }
 
 
@@ -2516,6 +2653,7 @@ sub make_test_dist {
     # Append $ver_num to $file_name to complete the dist's name.
     my $dist_name = "$file_name-$ver_num";
 
+diag("dist_name[$dist_name]");
     mkdir($dist_name) or die <<EOD;
 fetchware: Run-time error. Fetchware failed to create the directory
 [$dist_name] in the current directory of [$temp_dir]. The OS error was
@@ -2595,7 +2733,8 @@ fetchware: run-time error. fetchware failed to chmod [$configure_path] to add
 execute permissions, which ./configure needs. Os error [$!].
 EOC
 
-    my $test_dist_filename = catdir($destination_directory, "$dist_name.fpkg");
+    my $test_dist_filename = catfile($destination_directory, "$dist_name.fpkg");
+diag("test_dist_filename[$test_dist_filename]");
 
     # Create a tar archive of all of the files needed for test-dist.
     Archive::Tar->create_archive($test_dist_filename, COMPRESS_GZIP,
@@ -2669,6 +2808,157 @@ EOD
     return $md5sum_file;
 }
 
+=item Standards for using msg() and vmsg()
+
+msg() should be used to describe the main events that happen, while vmsg()
+should be used to describe what all of the main subroutine calls do.
+
+For example, cmd_uninstall() has a msg() at the beginning and at the end, and so
+do the main App::Fetchware subroutines that it uses such as start(), download(),
+unarchive(), end() and so on. They both use vmsg() to add more detailed messages
+about the particular even "internal" things they do.
+
+msg() and vmsg() are also used without parens due to their appropriate
+prototypes. This makes them stand out from regular old subroutine calls more.
+
+=cut
+
+=item msg('message to print to STDOUT');
+
+msg() simply takes a list of scalars, and it prints them to STDOUT according to
+any verbose (-v), or quiet (-q) options that the user may have provided to
+fetchware.
+
+msg() will still print its arguments if the user provided a -v (verbose)
+argument, but it will B<not> print its argument if the user provided a -q (quiet)
+command line option.
+
+=over
+=item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
+=back
+
+=cut
+
+sub msg (@) {
+
+    # If fetchware was not run in quiet mode, -q.
+    unless ($fetchware::quiet > 0) {
+        # print are arguments. Use say if the last one doesn't end with a
+        # newline. $#_ is the last subscript of the @_ variable.
+        if ($_[$#_] =~ /\w*\n\w*\z/) {
+            print @_;
+        } else {
+            say @_;
+        }
+    # Quiet mode is turned on.
+    } else {
+        # Don't print anything.
+        return;
+    }
+}
+
+
+=item vmsg('message to print to STDOUT');
+
+vmsg() simply takes a list of scalars, and it prints them to STDOUT according to
+any verbose (-v), or quiet (-q) options that the user may have provided to
+fetchware.
+
+vmsg() will B<only> print its arguments if the user provided a -v (verbose)
+argument, but it will B<not> print its argument if the user provided a -q (quiet)
+command line option.
+
+=over
+=item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
+=back
+
+=cut
+
+sub vmsg (@) {
+
+    # If fetchware was not run in quiet mode, -q.
+    unless ($fetchware::quiet > 0) {
+        # If verbose is also turned on.
+        if ($fetchware::verbose > 0) {
+            # print are arguments. Use say if the last one doesn't end with a
+            # newline. $#_ is the last subscript of the @_ variable.
+            if ($_[$#_] =~ /\w*\n\w*\z/) {
+                print @_;
+            } else {
+                say @_;
+            }
+        }
+    # Quiet mode is turned on.
+    } else {
+        # Don't print anything.
+        return;
+    }
+}
+
+
+=item run_prog($program, @args);
+
+run_prog() uses L<system> to execute the program for you. Only the secure way of
+avoiding the shell is used, so you can not use any shell redirection or any
+shell builtins.
+
+If the user ran fetchware with -v (verbose) then run_prog() changes none of its
+behavior it still just executes the program. However, if the user runs the
+program with -q (quiet) specified, then the the command is run using a piped
+open to capture the output of the program. This captured output is then ignored,
+because the user asked to never be bothered with the output. This piped open
+uses the safer shell avoiding syntax on systems with L<fork>, and systems
+without L<fork>, Windows,  the older less safe syntax is used. Backticks are
+avoided, because they always use the shell.
+
+=over
+=item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
+=back
+
+=cut
+
+###BUGALERT### Add support for dry-run functionality!!!!
+sub run_prog ($;@) {
+    my ($program, @args) = @_;
+
+    # If fetchware is run without -q.
+    unless ($fetchware::quiet > 0) {
+        system($program, @args) == 0 or die <<EOD;
+fetchware: run-time error. Fetchware failed to execute the specified program
+[$program] with the arguments [@args]. The OS error was [$!], and the return
+value was [@{[$? >> 8]}]. Please see perldoc App::Fetchware::Diagnostics.
+EOD
+    # If fetchware is run with -q.
+    } else {
+        # Use a piped open() to capture STDOUT, so that STDOUT is not printed to
+        # the terminal like it usually is therby "quiet"ing it.
+        # If not on Windows use safer open call that doesn't work on Windows.
+        unless (is_os_type('Windows', $^O)) {
+            open(my $fh, '-|', "$program", @args) or die <<EOD;
+fetchware: run-time error. Fetchware failed to execute the specified program
+while capturing its input to prevent it from being copied to the screen, because
+you ran fetchware with it's --quite or -q option. The program was [$program],
+and its arguments were [@args]. OS error [$!], and exit value [$?]. Please see
+perldoc App::Fetchware::Diagnostics.
+EOD
+            # Close $fh, to cause perl to wait for the command to do its
+            # outputing to STDOUT.
+            close $fh;
+        # We're on Windows.
+        } else {
+            open(my $fh, '-|', "$program @args") or die <<EOD;
+fetchware: run-time error. Fetchware failed to execute the specified program
+while capturing its input to prevent it from being copied to the screen, because
+you ran fetchware with it's --quite or -q option. The program was [$program],
+and its arguments were [@args]. OS error [$!], and exit value [$?]. Please see
+perldoc App::Fetchware::Diagnostics.
+EOD
+            # Close $fh, to cause perl to wait for the command to do its
+            # outputing to STDOUT.
+            close $fh;
+        }
+    }
+}
 
 
 

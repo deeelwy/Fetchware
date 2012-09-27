@@ -17,7 +17,7 @@ package fetchware;
 # as install, new, uninstall, help, and so on.
 use Getopt::Long qw(:config bundling pass_through);
 use App::Fetchware qw(:FETCHWARE config get_directory_listing
-    parse_directory_listing __clear_CONFIG config_replace);
+    parse_directory_listing __clear_CONFIG config_replace msg vmsg run_prog);
 use Archive::Tar;
 use File::Copy qw(mv cp);
 use File::Spec::Functions qw(curdir catdir catfile catpath tmpdir splitpath
@@ -34,7 +34,6 @@ use File::Temp qw(tempdir tempfile);
 use Fcntl qw(S_ISDIR S_ISREG);
 use Path::Class;
 use Text::Wrap 'wrap';
-use IPC::System::Simple 'systemx';
 
 # Setup exports, which are only meant to ease testing.
 use Exporter 'import';
@@ -47,9 +46,6 @@ our %EXPORT_TAGS  = (
         determine_fetchware_package_path
         extract_fetchwarefile
         copy_fpkg_to_fpkg_database
-        msg
-        vmsg
-        run_prog
         cmd_install
         cmd_uninstall
         cmd_look
@@ -72,11 +68,6 @@ our %EXPORT_TAGS  = (
 );
 our @EXPORT_OK = @{$EXPORT_TAGS{TESTING}};
 
-# Cool forward declarations to make the subs the handle -v, -q, and control if
-# other programs can print to STDOUT or not.
-sub msg (@);
-sub vmsg (@);
-sub run_prog ($;@);
 our $verbose = 0;
 our $quiet = 0;
 our $dry_run = 0;
@@ -89,6 +80,8 @@ sub run {
     ###BUGALERT### Inside run() is where the %SIG signal handler stuff should go
     #SIGTERM & SIGINT for ctrl-c!!! A fetchware cleanup command in cause of
     #SIGKILL???
+
+    vmsg 'Parsing command line options using Getopt::Long';
 
     GetOptions(
         # $VERSION is managed by dzil; therefore, I use eval to access it at
@@ -111,12 +104,14 @@ sub run {
     ###BUGALERT### Add a loop around @ARGV to support multiple Fetchwarefiles
     #or fetchware packages ending in .fpkg.
     eval { # Trap any fatal errors.
+        vmsg 'Entering main eval{} block to trap errors.';
         ###BUGALERT### Should trapped exceptions with this eval cause fetchware
         #to cd to $original_cwd and then exit, so that the File::Temp's END
         #block can delete fetchware's source dir???
         # Or fetchware could print the path of this source dir and close, and
         # tell the user that they can clean it up with fetchware clean??
         # Also, add cmdline options to control what to do when this happens???
+        vmsg 'Determining which command to run based on command line options.';
         given (shift @ARGV) {
             when('install') {
                 cmd_install(@ARGV); # install() was taken by App::Fetchware!.
@@ -141,10 +136,14 @@ sub run {
         # Exit success, because if any of the main subroutines run into any
         # problems they die() exceptions, which get caught in eval above, and
         # warn()ed below, and fetchware exits 1 for failure.
+        vmsg 'Fetchware ran successfully! Exiting with status of 0 for success!';
         exit 0;
     };
     # If a fatal error was thrown print it to STDERR and exit indicating failure.
     if ($@) {
+        msg <<EOM;
+Fetchware threw an exception! Exiting with an exit status of 1 for failure.
+EOM
         warn $@;
         exit 1;
     }
@@ -178,8 +177,12 @@ sub cmd_install {
     ### Add this loop in run(), so there is just one loop to test.
     my $filename = shift;
 
+    msg "Starting fetchware install to install [$filename]";
+
     # If no Fetchwarefile or *.fpkg was specified, then pretend the user ran
     # new() instead of install().
+    ###BUGALERT### The above comment isn't actually done anymore. Add it or
+    #ditch it???
     if (defined($filename) and -e $filename) {
         # Run the :FETCHWARE subroutines to do everything to install the
         # program.
@@ -195,13 +198,22 @@ sub cmd_install {
 
         my $fetchwarefile_path;
         if ($filename =~ /\.fpkg$/) {
-            $fetchwarefile_path = extract_fetchwarefile($filename, cwd());            
+            $fetchwarefile_path = extract_fetchwarefile($filename, cwd());
+            vmsg <<EOM;
+Extracting out Fetchwarefile from [$filename] to [$fetchwarefile_path]
+EOM
             parse_fetchwarefile($fetchwarefile_path);
         } else {
             parse_fetchwarefile($filename);
             $fetchwarefile_path = $filename;
         }
+        vmsg "Parsed Fetchwarefile [$fetchwarefile_path].";
 
+        ###BUGALERT### install installs no matter if the program is already
+        #installed!!! Change this to parse out the package from the download_url
+        #if possible, compare with the one in the fetchware package database,
+        #and call exit right here if the current version is already installed
+        #unless of course --force is used!!!
         my $download_url = lookup();
         diag("DUDUDUDUDUDUDU[$download_url]");
 
@@ -224,12 +236,18 @@ sub cmd_install {
         # print location of temp dir instead.
         install();
 
+        vmsg 'Creating Fetchware package from build path [$build_path].'
         my $fetchware_package_path
             =
             create_fetchware_package($fetchwarefile_path, cwd());
+        vmsg 'Created fetchware package at [$fetchware_package_path].'
 
+        vmsg 'Installing created fetchware package to fetchware database.';
         my $installed_fetchware_package_path
             = copy_fpkg_to_fpkg_database($fetchware_package_path);
+        vmsg <<EOM;
+Installed created fetchware package to [$installed_fetchware_package_path]
+EOM
 
         end();
 
@@ -256,25 +274,27 @@ specify the version number as well.
 =over
 =item LIMITATION
 cmd_uninstall() unlike cmd_install() does not accept Fetchwarefiles as an
-argument to uninstall a fetchware package! Instead, you must proved the name and
-perhaps the name and version number of the already installed software package.
-For a list of such package names just run C<fetchware list> to list all
+argument to uninstall a fetchware package! Instead, you must provide the name
+and perhaps the name and version number of the already installed software
+package. For a list of such package names just run C<fetchware list> to list all
 installed fetchware packages.
 =back
 
 =cut
 
 sub cmd_uninstall {
-    ###BUGALERT### the or --force cmdline option will skip the checking of
-    #version numbers, and the one lookup() says to download will be installed
-    #regardless.
     my $uninstall_package_path = shift;
+
+    msg "Uninstalling specified package [$uninstall_package_path]";
 
     my $fetchware_package_path
         = determine_fetchware_package_path($uninstall_package_path);
+    vmsg <<EOM;
+Determined the path of this package in the fetchware database to be
+[$fetchware_package_path].
+EOM
 
     my $temp_dir = start();
-
 
     # Parse out the Fetchwarefile from the fetchware package stored in the
     # fetchware database directory.
@@ -282,7 +302,11 @@ sub cmd_uninstall {
     if ($fetchware_package_path =~ /\.fpkg$/) {
         $fetchwarefile_path
             = extract_fetchwarefile($fetchware_package_path, cwd());            
+        vmsg <<EOM;
+Extracted Fetchwarefile from installed package to [$fetchwarefile_path]
+EOM
         parse_fetchwarefile($fetchwarefile_path);
+        vmsg 'Parsed Fetchwarefile from installed package.';
     } else {
         die <<EOD;
 fetchware: fetchware upgrade failed to extract the Fetchwarefile from the
@@ -293,6 +317,7 @@ EOD
     # "Download" the package using a local file:// URL.
     my $fetchware_url = "file://$fetchware_package_path";
     my $package_path = download($temp_dir, $fetchware_url);
+    vmsg "Copied installed package to temporary directory at [$package_path]";
 
     my $build_path = unarchive($package_path);
 
@@ -300,8 +325,10 @@ EOD
 
     end();
 
+    vmsg 'Uninstalling fetchware package from fetchware database.';
     uninstall_fetchware_package_from_database($fetchware_package_path);
 
+    msg "Uninstalled fetchware package [$uninstall_package_path].";
     # Return the name of the uninstalled package.
     return $uninstall_package_path;
 }
@@ -369,42 +396,62 @@ EOF
     # Ask user for name of program unless the user provided one at command line
     # such as fetchware new <programname>.
     $program_name //= name_program($term);
+    vmsg "Determined name of your program to be [$program_name]";
 
     append_options_to_fetchwarefile({program => $program_name},
         \$fetchwarefile);
+    vmsg "Appended program [$program_name] configuration option to Fetchwarefile";
 
     my $lookup_url = get_lookup_url($term);
+    vmsg "Asked user for lookup_url [$lookup_url] from user."
 
     # Add $lookup_url to $fetchwarefile.
     append_options_to_fetchwarefile({lookup_url => $lookup_url},
         \$fetchwarefile);
+    vmsg "Appended lookup_url [$lookup_url] configuration option to Fetchwarefile";
 
+    vmsg "Downloaded lookup_url [$lookup_url]";
     my $filename_listing = download_lookup_url($term, $lookup_url);
+    vmsg "Downloaded lookup_url's directory listing";
+    vmsg Dumper($filename_listing);
 
     my $filter = analyze_lookup_listing($term, $filename_listing);
+    vmsg <<EOM;
+Analyzed directory listing, and with the user's help determined the filter to
+be [$filter].
+EOM
 
     # Append filter option to fetchwarefile if its needed.
     if ($filter) {
         append_options_to_fetchwarefile({filter => $filter}, \$fetchwarefile);
+        vmsg <<EOM;
+Appended filter [$filter] configuration option to Fetchwarefile";
+EOM
     }
 
     ###BUGALERT### Ask to parrallelize make with make_options???
     ###BUGALERT### Verify prefix is writable by current user, who will
     #presumably be the user who will install the package now and later.
+    vmsg 'Prompting for other options that may be needed.';
     my %options = prompt_for_other_options($term);
+    vmsg 'User entered the following options.';
+    vmsg Dumper(\%options);
 
     # Append all other options to fetchwarefile.
     append_options_to_fetchwarefile(\%options, \$fetchwarefile);
+    vmsg 'Appended all other options listed above to Fetchwarefile.';
 
     add_mirrors($term, \$fetchwarefile);
+    vmsg 'Added the mirrors the user specified to Fetchwarefile';
 
     edit_manually($term, \$fetchwarefile);
+    vmsg <<EOM;
+Asked user if they would like to edit their generated Fetchwarefile manually.
+EOM
 
     my $fetchware_package_path =
         ask_to_install_now_to_test_fetchwarefile($term, \$fetchwarefile,
             $program_name);
-    ###BUGALERT### Add a msg() about the path to your fetchwarefile. perhaps
-    #just a vmsg().
 }
 
 
@@ -1243,9 +1290,8 @@ EOP
             );
         };
 
-        ###BUGALERT## Replace systemx call with msg() like systemx wrapper!
-        systemx($editor, $fetchwarefile_filename);
-        # NOTE: fetchware will "block" during the above call to system, and
+        run_prog($editor, $fetchwarefile_filename);
+        # NOTE: fetchware will "block" during the above call to run_prog(), and
         # wait for the user to close the editor program.
 
         # If the edited Fetchwarefile does not have a file size of zero.
@@ -1292,6 +1338,10 @@ fetchware package that has been installed.
 sub ask_to_install_now_to_test_fetchwarefile {
     my ($term, $fetchwarefile, $program_name) = @_;
 
+    vmsg <<EOM;
+Determining if user wants to install now or just save their Fetchwarefile.
+EOM
+
     # If the user wants to install their new Fetchwarefile.
     if (
         $term->ask_yn(prompt => <<EOP,
@@ -1310,20 +1360,27 @@ EOP
         # subroutine does exactly what I need one to do :) It even deletes this
         # fetchwarefile when the program exists.
         my $fetchwarefile_filename = create_test_fetchwarefile($$fetchwarefile);
+        vmsg <<EOM
+Saved Fetchwarefile temporarily to [$fetchwarefile_path].
+EOM
 
         my $fetchware_package_path = cmd_install($fetchwarefile_filename);
         ###BUGALERT### Call cmd_install() inside an eval that will catch any
         #problems that come up, and suggest how to fix them???
         #Is that really doable???
+        vmsg <<EOM;
+Copied Fetchwarefile package to fetchware database [$fetchware_package_path].
+EOM
+        msg 'Installed Fetchware package to fetchware database.'
         return $fetchware_package_path;
     # Else the user just wants to save the Fetchwarefile somewhere.
     } else {
-    my $fetchwarefile_filename = $program_name . '.Fetchwarefile';
+        my $fetchwarefile_filename = $program_name . '.Fetchwarefile';
 
-    # Get a name for the Fetchwarefile that does not already exist.
-    if (-e $fetchwarefile_filename) {
-        while (1) {
-            $fetchwarefile_filename = $term->get_reply(prompt => <<EOP,
+        # Get a name for the Fetchwarefile that does not already exist.
+        if (-e $fetchwarefile_filename) {
+            while (1) {
+                $fetchwarefile_filename = $term->get_reply(prompt => <<EOP,
 What would you like your new Fetchwarefile's filename to be?
 EOP                 
                     print_me => <<EOP
@@ -1332,25 +1389,27 @@ running fetchware new plus a '.Fetchwarefile' extension to name your
 Fetchwarefile. But his file already exists, so you'll have to pick a new
 filename that does not currently exist.
 EOP
-            );
-            last unless -e $fetchwarefile_filename;
+                );
+                last unless -e $fetchwarefile_filename;
+            }
         }
-    }
-    ###BUGALERT### replace this crap with msg() after you write it!
-    say <<EOS;
-Saving Fetchwarefile to [$fetchwarefile_filename].
-EOS
+        vmsg <<EOM;
+Determine Fetchwarefile name to be [$fetchwarefile_filename].
+EOM
 
     ###BUGALERT### Replace >, create or delete whole file and replace it with
     #what I write now, with >> for append to file if it already exists????
-    open my $fh, '>', $fetchwarefile_filename or die <<EOD;
+        open my $fh, '>', $fetchwarefile_filename or die <<EOD;
 fetchware: failed to open your new fetchwarefile because of os error
 [$!]. This really shouldn't happen in this case. Probably a bug, or a weird race
 condition.
 EOD
-    print $fh $$fetchwarefile;
+        print $fh $$fetchwarefile;
 
-    close $fh;
+        close $fh;
+
+        msg "Saved Fetchwarefile to [$fetchwarefile_filename].";
+        return $fetchwarefile_filename;
     }
 }
 
@@ -1368,9 +1427,12 @@ sub cmd_upgrade {
     ###BUGALERT### the or --force cmdline option will skip the checking of
     #version numbers, and the one lookup() says to download will be installed
     #regardless.
+    msg "Upgrading installed fetchware package [$upgrade_name].";
 
     my $fetchware_package_path = determine_fetchware_package_path($upgrade_name);
-
+    vmsg <<EOM;
+Determined already installed fetchware package's path to be [$fetchware_package_path].
+EOM
 
     my $temp_dir = start();
 
@@ -1381,7 +1443,9 @@ sub cmd_upgrade {
     if ($fetchware_package_path =~ /\.fpkg$/) {
         $fetchwarefile_path
             = extract_fetchwarefile($fetchware_package_path, cwd());            
+        vmsg "Extracted Fetchwarefile temporarily to [$fetchwarefile_path]";
         parse_fetchwarefile($fetchwarefile_path);
+        vmsg 'Parsed Fetchwarefile.';
     } else {
         die <<EOD;
 fetchware: fetchware upgrade failed to extract the Fetchwarefile from the
@@ -1397,6 +1461,10 @@ EOD
     my $download_url_basename = file($download_url)->basename();
     my $upgrade_name_basename =
         file( $fetchware_package_path)->basename();
+    vmsg <<EOM;
+Shortened the new download url [$download_url_basename] and the installed
+package's [$upgrade_name_basename] into just their basenames.
+EOM
     # Strip trailing garbage to normalize their names, so that they can be
     # compared to each other.
     ###BUGALERT### This comparision is quite fragile. Figure out a better way to
@@ -1404,8 +1472,12 @@ EOD
     $upgrade_name_basename =~ s/\.fpkg$//;
     $download_url_basename
         =~ s/(\.(?:zip|tgz|tbz|txz|fpkg)|(?:\.tar\.(gz|bz2|xz|Z)?))$//;
+    vmsg <<EOM;
+Striped the new download url [$download_url_basename] and the installed
+package's [$upgrade_name_basename] of their file extensions.
+EOM
 
-    # Transform both competing filenames with presumed f
+    # Transform both competing filenames into a string of version numbers.
     my @file_listing = map { [$_, (join '', split /\D+/, $_)] }
         $download_url_basename, $upgrade_name_basename;
     die <<EOD if grep { not defined $_->[1] } @file_listing;
@@ -1414,6 +1486,8 @@ potential replacement filename [$download_url_basename] fetchware cannot tell
 which one is newer, and if a new package is available. Please report this as a
 bug, so I can make fetchware's upgrade functionality more robust.
 EOD
+    vmsg 'Transformed competing filenames into a string of version numbers.';
+    vmsg Dumper(\@file_listing);
     @file_listing = sort { $b->[1] <=> $a->[1] } @file_listing;
 diag("HERE!!!");
 diag(explain(@file_listing));
@@ -1427,6 +1501,7 @@ diag("dub[$download_url_basename] upb[$upgrade_name_basename]");
     if ($file_listing[0][0] eq $download_url_basename
         # Make cmd_upgrade() not upgrade when the ver
         and $file_listing[0][0] ne $upgrade_name_basename) {
+        msg 'New version available upgrading now.'
 
         my $package_path = download($temp_dir, $download_url);
         diag("PPPPPPPPPPP[$package_path]");
@@ -1444,6 +1519,10 @@ diag("dub[$download_url_basename] upb[$upgrade_name_basename]");
         my $updated_fetchware_package_path
             =
             create_fetchware_package($fetchwarefile_path, cwd());
+        vmsg <<EOM;
+Created a new fetchware package for the newly installed upgraded fetchware
+package [$updated_fetchware_package_path].
+EOM
 
         # Note: I must uninstall the current package before I copy over the new
         # one, because uninstall_fetchware_package_from_database() requires a
@@ -1451,10 +1530,16 @@ diag("dub[$download_url_basename] upb[$upgrade_name_basename]");
         # accept a full path to something to delete for a full fetchware package
         # name that would support multiple versions being in the fetchware
         # package database at the same time.
+        ###BUGALERT### The above Note is a ridiculous bug. Fix it!
+        vmsg 'Uninstalled the old fetchware package from the fetchware database.';
         uninstall_fetchware_package_from_database($fetchware_package_path);
 
         my $installed_fetchware_package_path
             = copy_fpkg_to_fpkg_database($updated_fetchware_package_path);
+        vmsg <<EOM;
+Installed new fetchware package to fetchware package database
+[$installed_fetchware_package_path].
+EOM
 
         end();
 
@@ -1462,11 +1547,10 @@ diag("dub[$download_url_basename] upb[$upgrade_name_basename]");
         return $installed_fetchware_package_path;
     } else {
         ###BUGALERT### Replace this print() with msg() after you implement it.
-        print <<EOD;
-fetchware: The latest version [$download_url_basename] is the same as
-the currently installed version [$upgrade_name_basename]. So no
-upgrade is needed. 
-EOD
+        msg <<EOM;
+The latest version [$download_url_basename] is the same as the currently
+installed version [$upgrade_name_basename]. So no upgrade is needed. 
+EOM
         # Clean up temp dir.
         end();
 
@@ -1496,10 +1580,14 @@ installed fetchware packages. Please rerun fetchware upgrade-all without any
 arguments to upgrade all already installed packages, or run fetchware help for
 usage instructions.
 EOD
+
+    msg 'Upgrading all installed fetchware packages.';
+
     my $fetchware_db_glob = catfile(fetchware_database_path(), '*');
 
     my @upgraded_packages;
     for my $fetchware_package (glob $fetchware_db_glob) {
+        vmsg 'Looping over list of installed fetchware packages.';
         ###BUGALERT### subize the 2 lines below, because I do this more than
         #once.
         # Strip each member of the fetchwarefile database down to just its name
@@ -1515,6 +1603,7 @@ EOD
         ###BUGALERT### Spit out a warning for anything in
         #fetchware_database_path() that does not end .fpkg, which should be
         #here.
+        vmsg "Upgrading installed fetchware package [$fetchware_package]";
 diag("cmd_upgrade() arg[$fetchware_package]");
         push @upgraded_packages, cmd_upgrade($fetchware_package);
 diag("cmd_upgrade() return[$upgraded_packages[-1]]");
@@ -1527,11 +1616,16 @@ diag("cmd_upgrade() return[$upgraded_packages[-1]]");
     # returned 'No upgrade needed.'.
     if ( (grep { $_ eq 'No upgrade needed.'}
             @upgraded_packages) eq @upgraded_packages) {
+        msg 'No packages need to be upgraded.';
         return 'No upgrade needed.';
     # Return a list of all packages that are not 'No upgrade needed.', which
     # should not be returned.
     } else {
-        return grep { $_ ne 'No upgrade needed.' } @upgraded_packages;
+        my @upgraded_packages = grep { $_ ne 'No upgrade needed.' }
+            @upgraded_packages;
+        msg 'Packages were upgraded to newer versions:'
+        msg Dumper(\@upgraded_packages);
+        return @upgraded_packages;
     }
 }
 
@@ -1556,10 +1650,16 @@ fetchware clean when you are finished working with it.
 =back
 
 =cut
+###BUGALERT### Implement & test fetchware clean commmand to delete fetchware's
+#temporary directories and files.
 
 sub cmd_look {
     my $filename = shift;
 
+    msg 'Downloading and unarchiving specified distribution.'
+
+    ###BUGALERT### Fails to support looking up installed packages in fetchware
+    #database. This test will prevent them from running.
     if (defined($filename) and -e $filename) {
         # Run the :FETCHWARE subroutines to do everything to install the
         # program.
@@ -1577,11 +1677,14 @@ sub cmd_look {
 
         my $fetchwarefile_path;
         if ($filename =~ /\.fpkg$/) {
-            $fetchwarefile_path = extract_fetchwarefile($filename, cwd());            
+            $fetchwarefile_path = extract_fetchwarefile($filename, cwd());
+            vmsg "Extracted out Fetchwarefile from [$fetchwarefile_path].";
             parse_fetchwarefile($fetchwarefile_path);
+            vmsg "Parsed Fetchwarefile from path [$fetchwarefile_path]";
         } else {
             parse_fetchwarefile($filename);
             $fetchwarefile_path = $filename;
+            vmsg "Parsed Fetchwarefile from path [$fetchwarefile_path]";
         }
 
         my $download_url = lookup();
@@ -1599,10 +1702,12 @@ sub cmd_look {
         # end() is *not* run, because the point of look is to lookup, download,
         # and unarchive, and then actually "look" at the files, and running
         # end() would delete them.
-        ###BUGALERT### Add message telling user where the $build_path is.
-        #Probably using the to be created msg() function.
 
-        return catfile($temp_dir, $build_path);
+        my $look_path =  catfile($temp_dir, $build_path);
+        msg <<EOM;
+Your package's contents are at [$look_path]. Please run [fetchware clean] to
+delete these files and any other files fetchware may have left behind.
+EOM
     } else {
         ###BUGALERT### Replace with warn for proposed for loop above to work???
         die <<EOD;
@@ -1631,12 +1736,13 @@ ramifications. So for now, I'll hold out until I study what ack does.
 =cut
 
 sub cmd_list {
+    msg 'Listing all currently installed packages:';
     for my $fetchware_package (glob catfile(fetchware_database_path(), '*')) {
         # Clean up $fetchware_package.
         $fetchware_package = file($fetchware_package)->basename();
         $fetchware_package =~ s/\.fpkg$//;
 
-        say $fetchware_package;
+        msg $fetchware_package;
     }
 }
 
@@ -2095,135 +2201,6 @@ requested [$uninstall_package_name], but it failed to also delete the
 corresponding fetchware package from its database Os error [$!].
 EOD
 }
-
-
-=item msg('message to print to STDOUT');
-
-msg() simply takes a list of scalars, and it prints them to STDOUT according to
-any verbose (-v), or quiet (-q) options that the user may have provided to
-fetchware.
-
-msg() will still print its arguments if the user provided a -v (verbose)
-argument, but it will B<not> print its argument if the user provided a -q (quiet)
-command line option.
-
-=over
-=item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
-=back
-
-=cut
-
-sub msg (@) {
-
-    # If fetchware was not run in quiet mode, -q.
-    unless ($quiet > 0) {
-        # print are arguments.
-        print @_;
-    # Quiet mode is turned on.
-    } else {
-        # Don't print anything.
-        return;
-    }
-}
-
-
-=item vmsg('message to print to STDOUT');
-
-vmsg() simply takes a list of scalars, and it prints them to STDOUT according to
-any verbose (-v), or quiet (-q) options that the user may have provided to
-fetchware.
-
-vmsg() will B<only> print its arguments if the user provided a -v (verbose)
-argument, but it will B<not> print its argument if the user provided a -q (quiet)
-command line option.
-
-=over
-=item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
-=back
-
-=cut
-
-sub vmsg (@) {
-
-    # If fetchware was not run in quiet mode, -q.
-    unless ($quiet > 0) {
-        # If verbose is also turned on.
-        if ($verbose > 0) {
-            # print are arguments.
-            print @_;
-        }
-    # Quiet mode is turned on.
-    } else {
-        # Don't print anything.
-        return;
-    }
-}
-
-
-=item run_prog($program, @args);
-
-run_prog() uses L<system> to execute the program for you. Only the secure way of
-avoiding the shell is used, so you can not use any shell redirection or any
-shell builtins.
-
-If the user ran fetchware with -v (verbose) then run_prog() changes none of its
-behavior it still just executes the program. However, if the user runs the
-program with -q (quiet) specified, then the the command is run using a piped
-open to capture the output of the program. This captured output is then ignored,
-because the user asked to never be bothered with the output. This piped open
-uses the safer shell avoiding syntax on systems with L<fork>, and systems
-without L<fork>, Windows,  the older less safe syntax is used. Backticks are
-avoided, because they always use the shell.
-
-=over
-=item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
-=back
-
-=cut
-
-###BUGALERT### Add support for dry-run functionality!!!!
-sub run_prog ($;@) {
-    my ($program, @args) = @_;
-
-    # If fetchware is run without -q.
-    unless ($quiet > 0) {
-        system($program, @args) == 0 or die <<EOD;
-fetchware: run-time error. Fetchware failed to execute the specified program
-[$program] with the arguments [@args]. The OS error was [$!], and the return
-value was [@{[$? >> 8]}]. Please see perldoc App::Fetchware::Diagnostics.
-EOD
-    # If fetchware is run with -q.
-    } else {
-        # Use a piped open() to capture STDOUT, so that STDOUT is not printed to
-        # the terminal like it usually is therby "quiet"ing it.
-        # If not on Windows use safer open call that doesn't work on Windows.
-        unless (is_os_type('Windows', $^O)) {
-            open(my $fh, '-|', "$program", @args) or die <<EOD;
-fetchware: run-time error. Fetchware failed to execute the specified program
-while capturing its input to prevent it from being copied to the screen, because
-you ran fetchware with it's --quite or -q option. The program was [$program],
-and its arguments were [@args]. OS error [$!], and exit value [$?]. Please see
-perldoc App::Fetchware::Diagnostics.
-EOD
-            # Close $fh, to cause perl to wait for the command to do its
-            # outputing to STDOUT.
-            close $fh;
-        # We're on Windows.
-        } else {
-            open(my $fh, '-|', "$program @args") or die <<EOD;
-fetchware: run-time error. Fetchware failed to execute the specified program
-while capturing its input to prevent it from being copied to the screen, because
-you ran fetchware with it's --quite or -q option. The program was [$program],
-and its arguments were [@args]. OS error [$!], and exit value [$?]. Please see
-perldoc App::Fetchware::Diagnostics.
-EOD
-            # Close $fh, to cause perl to wait for the command to do its
-            # outputing to STDOUT.
-            close $fh;
-        }
-    }
-}
-
 
 
 

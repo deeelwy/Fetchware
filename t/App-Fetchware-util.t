@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '12'; #Update if this changes.
+use Test::More 0.98 tests => '16'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir);
 use URI::Split 'uri_split';
@@ -22,7 +22,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 # Test if I can load the module "inside a BEGIN block so its functions are exported
 # and compile-time, and prototypes are properly honored."
 # There is no ':OVERRIDE_START' to bother importing.
-BEGIN { use_ok('App::Fetchware', qw(:TESTING :UTIL)); }
+BEGIN { use_ok('App::Fetchware', qw(:TESTING :UTIL )); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
 diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
@@ -31,8 +31,11 @@ my $class = 'App::Fetchware';
 
 
 
-subtest 'UTIL end TESTING export what they should' => sub {
+#subtest 'UTIL end TESTING export what they should' => sub {
     my @expected_util_exports = qw(
+        msg
+        vmsg
+        run_prog
         download_dirlist
         ftp_download_dirlist
         http_download_dirlist
@@ -46,6 +49,7 @@ subtest 'UTIL end TESTING export what they should' => sub {
 
     my @expected_testing_exports = qw(
         eval_ok
+        print_ok
         skip_all_unless_release_testing
         __clear_CONFIG
         debug_CONFIG
@@ -80,7 +84,7 @@ subtest 'UTIL end TESTING export what they should' => sub {
     }
     pass('checked for correct TESTING @EXPORT_TAG');
 
-};
+#};
 
 
 ###BUGALERT###Need to add tests for :TESTING exports & specifc subtests for eval_ok(),
@@ -263,7 +267,7 @@ subtest 'test download_file_url' => sub {
     skip_all_unless_release_testing();
 
     # Create test file to download.
-    my $test_dist_path = make_test_dist('test-dist-1.00', rel2abs('t'));
+    my $test_dist_path = make_test_dist('test-dist', '1.00', rel2abs('t'));
 
     my $filename = download_file_url('file://t/test-dist-1.00.fpkg');
 
@@ -309,20 +313,21 @@ subtest 'test make_test_dist()' => sub {
     ###HOWTOTEST### How do I test for mkdir() failure, open() failure, and
     #Archive::Tar->create_archive() failure?
 
-    my $file_name = 'test-dist-1.00';
-    my $retval = make_test_dist($file_name);
-    is($retval, rel2abs("$file_name.fpkg"),
+    my $file_name = 'test-dist';
+    my $ver_num = '1.00';
+    my $retval = make_test_dist($file_name, $ver_num);
+    is($retval, rel2abs("$file_name-$ver_num.fpkg"),
         'check make_test_dist() success.');
 
     ok(unlink $retval, 'checked make_test_dist() cleanup');
 
     # Test more than one call as used in t/bin-fetchware-upgrade-all.t
-    my @filenames = qw(test-dist-1.00 test-dist-1.01);
+    my @filenames = qw(test-dist test-dist);
 
     my @retvals;
     for my $filename (@filenames) {
-        my $retval = make_test_dist($file_name);
-        is($retval, rel2abs("$file_name.fpkg"),
+        my $retval = make_test_dist($file_name, $ver_num);
+        is($retval, rel2abs("$file_name-$ver_num.fpkg"),
             'check make_test_dist() 2 calls  success.');
         push @retvals, $retval;
     }
@@ -331,8 +336,8 @@ subtest 'test make_test_dist()' => sub {
 
     # Test make_test_dist()'s second destination directory argument.
     my $name = 'test-dist-1.00';
-    my $return_val = make_test_dist($name, tmpdir());
-    is($return_val, catfile(tmpdir(), "$name.fpkg"),
+    my $return_val = make_test_dist($name, $ver_num, tmpdir());
+    is($return_val, catfile(tmpdir(), "$name-$ver_num.fpkg"),
         'check make_test_dist() destination directory success.');
 
     ok(unlink $return_val, 'checked make_test_dist() cleanup');
@@ -342,8 +347,9 @@ subtest 'test make_test_dist()' => sub {
 subtest 'test md5sum_file()' => sub {
     ###HOWTOTEST### How do I test open(), close(), and Digest::MD5 failing?
 
-    my $filename = 'test-dist-1.00';
-    my $test_dist = make_test_dist($filename);
+    my $filename = 'test-dist';
+    my $ver_num = '1.00';
+    my $test_dist = make_test_dist($filename, $ver_num);
     my $test_dist_md5 = md5sum_file($test_dist);
 
     ok(-e $test_dist_md5, 'checked md5sum_file() file creation');
@@ -361,6 +367,136 @@ subtest 'test md5sum_file()' => sub {
     like($got_md5sum, qr/[0-9a-f]{32}  test-dist-1.00.fpkg/,
         'checked md5sum_file() success');
 };
+
+
+subtest 'test msg()' => sub {
+   print_ok(sub {msg("Testing 1...2...3!!!\n")},
+       <<EOM, 'test msg() success.');
+Testing 1...2...3!!!
+EOM
+
+   print_ok(sub {msg("Testing\n", "1...2...3!!!\n")},
+       <<EOM, 'test msg() 2 args success.');
+Testing
+1...2...3!!!
+EOM
+
+   print_ok(sub {msg(1,2,3,4,5,6,7,8,9,0,"\n")},
+       <<EOM, 'test msg() many args success.');
+1234567890
+EOM
+
+
+   print_ok(sub {msg "Testing 1...2...3!!!\n"},
+       <<EOM, 'test msg success.');
+Testing 1...2...3!!!
+EOM
+
+   print_ok(sub {msg "Testing\n", "1...2...3!!!\n"},
+       <<EOM, 'test msg 2 args success.');
+Testing
+1...2...3!!!
+EOM
+
+   print_ok(sub {msg 1,2,3,4,5,6,7,8,9,0,"\n"},
+       <<EOM, 'test msg many args success.');
+1234567890
+EOM
+
+   # Test -q (quite) mode works.
+   # Set bin/fetchware's $quiet to true.
+   $fetchware::quiet = 1;
+
+   ok(sub{msg 'Did I print anything???'}->() eq undef,
+       'test msg quiet mode success.');
+};
+
+
+subtest 'test vmsg()' => sub {
+    # Set bin/fetchware's $verbose to false.
+    $fetchware::verbose = 0;
+    # Set bin/fetchware's $quiet to false too!!!
+    $fetchware::quiet = 0;
+    # Test vmsg() when verbose is *not* turned on!
+    ok(sub{vmsg 'Did I print anything???'}->() eq undef,
+        'test vmsg not verbose mode success.');
+
+    # Test -v (verbose) mode works.
+    # Set bin/fetchware's $verbose to true.
+    $fetchware::verbose = 1;
+
+    print_ok(sub {vmsg("Testing 1...2...3!!!\n")},
+        <<EOM, 'test vmsg() success.');
+Testing 1...2...3!!!
+EOM
+
+    print_ok(sub {vmsg("Testing\n", "1...2...3!!!\n")},
+        <<EOM, 'test vmsg() 2 args success.');
+Testing
+1...2...3!!!
+EOM
+
+    print_ok(sub {vmsg(1,2,3,4,5,6,7,8,9,0,"\n")},
+        <<EOM, 'test vmsg() many args success.');
+1234567890
+EOM
+
+
+    print_ok(sub {vmsg "Testing 1...2...3!!!\n"},
+        <<EOM, 'test vmsg success.');
+Testing 1...2...3!!!
+EOM
+
+    print_ok(sub {vmsg "Testing\n", "1...2...3!!!\n"},
+        <<EOM, 'test vmsg 2 args success.');
+Testing
+1...2...3!!!
+EOM
+
+    print_ok(sub {vmsg 1,2,3,4,5,6,7,8,9,0,"\n"},
+        <<EOM, 'test vmsg many args success.');
+1234567890
+EOM
+
+    # Test -q (quite) mode works.
+    # Set bin/fetchware's $quiet to true.
+    $fetchware::quiet = 1;
+
+    ok(sub{vmsg 'Did I print anything???'}->() eq undef,
+        'test vmsg quiet mode success.');
+};
+
+
+subtest 'test run_prog()' => sub {
+    # Set bin/fetchware's $quiet to false.
+    $fetchware::quiet = 0;
+    
+    # Test using perl itself, because what other program is guaranteed to
+    # be availabe on all platforms fetchware supports?
+    # The insane >> thing is a "right shift" operator, which shifts the value of
+    # system()'s return value 8 bits right, yielding the proper perl return
+    # value as bash would return it in its $? (Not Perl's $?, which is the same
+    # as system()'s return value.). And then it is tested if it ran successfully
+    # in which case it would be 0, which means it ran successfully. See perldoc
+    # system for more.
+    ok(run_prog("$^X", '-e print "Testing 1...2...3!!!\n"') >> 8 == 0,
+        'test run_prog() success');
+
+    # Set bin/fetchware's $quiet to true.
+    $fetchware::quiet = 1;
+
+    ok(run_prog("$^X", '-e print "Testing 1...2...3!!!\n"') >> 8 == 0,
+        'test run_prog() success');
+
+    # Set bin/fetchware's $quiet to false.
+    $fetchware::quiet = 0;
+};
+
+
+
+
+
+
 
 
 # Remove this or comment it out, and specify the number of tests, because doing
