@@ -9,6 +9,7 @@ use 5.010;
 # Test::More version 0.98 is needed for proper subtest support.
 use Test::More 0.98 tests => '13'; #Update if this changes.
 use File::Spec::Functions qw(rel2abs);
+use Test::Deep;
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -25,6 +26,8 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
+###BUGALERT### Redo tests to use Test::Deep so I don't need to update the test
+#when new versions of Apache come out!!!
 
 subtest 'OVERRIDE_LOOKUP exports what it should' => sub {
     my @expected_overide_lookup_exports = qw(
@@ -106,13 +109,50 @@ subtest 'test get_directory_listing()' => sub {
 };
 
 
+my $expected_filename_listing = <<'EOC';
+    array_each(
+        array_each(any(
+            re(qr/Announcement2.\d.(html|txt)/),
+            re(qr/CHANGES_2\.\d(\.\d+)?/),
+            re(qr/CURRENT(-|_)IS(-|_)\d\.\d+?\.\d+/),
+            re(qr/
+                HEADER.html
+                |
+                KEYS
+                |
+                README.html
+                |
+                binaries
+                |
+                docs
+                |
+                flood
+            /x),
+            re(qr/httpd-2\.\d\.\d+?-win32-src\.zip(\.asc)?/),
+            re(qr/httpd-2\.\d\.\d+?\.tar\.(bz2|gz)(\.asc)?/),
+            re(qr/httpd-2\.\d\.\d+?-deps\.tar\.(bz2|gz)(\.asc)?/),
+            re(qr/
+                libapreq
+                |
+                mod_fcgid
+                |
+                mod_ftp
+                |
+                patches
+            /x),
+            re(qr/\d{12}/)
+            ) # end any
+        )
+    );
+EOC
+
+
 subtest 'test ftp_parse_filelist()' => sub {
     skip_all_unless_release_testing();
 
     # Clear %CONFIG, so I can call lookup_url again.
     __clear_CONFIG();
     # Set download type.
-    # Make this a FETCHWARE_FTP_REMOTE env var in frt().
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
 
     my $directory_listing = get_directory_listing();
@@ -120,7 +160,7 @@ subtest 'test ftp_parse_filelist()' => sub {
     my $filename_listing = ftp_parse_filelist($directory_listing);
 
 diag explain $filename_listing;
-    is_deeply($filename_listing, test_filename_listing(),
+    cmp_deeply($filename_listing, eval "$expected_filename_listing",
         'checked ftp_parse_listing() success');
     pass('fixin it');
 
@@ -128,29 +168,35 @@ diag explain $filename_listing;
 
 
 subtest 'test http_parse_filelist()' => sub {
-    skip_all_unless_release_testing();
 
-    my $expected_filename_listing = [
-        [ 'httpd-2.0.64.tar.bz2', '201010180432' ],
-        [ 'httpd-2.0.64.tar.gz', '201010180432' ],
-        [ 'httpd-2.2.21.tar.bz2', '201109121302' ],
-        [ 'httpd-2.2.21.tar.gz', '201109121302' ],
-        [ 'httpd-2.3.15-beta-deps.tar.bz2', '201111131437' ],
-        [ 'httpd-2.3.15-beta-deps.tar.gz', '201111131437' ],
-        [ 'httpd-2.3.15-beta.tar.bz2', '201111131437' ],
-        [ 'httpd-2.3.15-beta.tar.gz', '201111131437' ]
-    ];
+##TEST##    my $expected_filename_listing = [
+##TEST##        [ 'httpd-2.0.64.tar.bz2', '201010180432' ],
+##TEST##        [ 'httpd-2.0.64.tar.gz', '201010180432' ],
+##TEST##        [ 'httpd-2.2.21.tar.bz2', '201109121302' ],
+##TEST##        [ 'httpd-2.2.21.tar.gz', '201109121302' ],
+##TEST##        [ 'httpd-2.3.15-beta-deps.tar.bz2', '201111131437' ],
+##TEST##        [ 'httpd-2.3.15-beta-deps.tar.gz', '201111131437' ],
+##TEST##        [ 'httpd-2.3.15-beta.tar.bz2', '201111131437' ],
+##TEST##        [ 'httpd-2.3.15-beta.tar.gz', '201111131437' ]
+##TEST##    ];
+    __clear_CONFIG();
+    lookup_url $ENV{FETCHWARE_HTTP_LOOKUP_URL};
+
+    my $directory_listing = get_directory_listing();
+
+diag("COPYHERE");
+diag explain $directory_listing;
+diag("ENDCOPYHERE");
 
     my $filename_listing = http_parse_filelist(return_html_listing());
 
-    is_deeply($filename_listing, $expected_filename_listing,
+    cmp_deeply($filename_listing, eval "$expected_filename_listing",
         'checked http_parse_listing() success');
 
 };
 
 
 subtest 'test file_parse_filelist()' => sub {
-    skip_all_unless_release_testing();
 
     # Use list_file_dirlist() to create the needed list of files and parse them.
     my $test_path = rel2abs('t');
@@ -159,7 +205,7 @@ subtest 'test file_parse_filelist()' => sub {
     # Do a few greps to test list_file_dirlist() generated the proper output.
     ok( grep({ $_->[0] =~ /(App-Fetchware|bin-fetchware)/ } @{$dirlist}),
         'checked file_parse_filelist() file success.');
-    ok( grep({ $_->[1] =~ /^\d+-\d+-\d+-\d+-\d+-\d+$/ } @{$dirlist}),
+    ok( grep({ $_->[1] =~ /^\d+$/ } @{$dirlist}),
         'checked file_parse_filelist() timestamp success.');
 
 };
@@ -177,9 +223,8 @@ subtest 'test parse_directory_listing()' => sub {
     check_lookup_config();
     my $directory_listing = get_directory_listing();
 
-    ###BUGALERT### NOTE THIS TEST IS BRITLE, BUT IT WILL ONLY BE RUN WHEN I
-    #RELEASE A NEW VERSION OF FETCHWARE. FIX WITH SUB::OVERRIDE??
-    is_deeply(parse_directory_listing($directory_listing), test_filename_listing(),
+    cmp_deeply(parse_directory_listing($directory_listing),
+        eval "$expected_filename_listing",
         'checked parse_directory_listing() ftp success.');
 
 };
@@ -188,14 +233,10 @@ subtest 'test parse_directory_listing()' => sub {
 
 
 subtest 'test lookup_determine_downloadurl()' => sub {
-    skip_all_unless_release_testing();
 
     # Clear App::Fetchware's %CONFIG variable.
     __clear_CONFIG();
     
-    ###BUGALERT### NOTE THIS TEST IS BRITLE, AND DEPENDS ON YOU SELECTING AN
-    #APACHE LOOKUP_URL. THIS ISN'T THAT BIG A DEAL, BECAUSE THIS TEST WILL ONLY
-    #BE RUN FOR FETCHWARE RELEASE TESTING.
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
 
     # Select one of the different apache versions 'httpd-2.{0,2,3}'.
@@ -218,8 +259,6 @@ subtest 'test lookup_determine_downloadurl()' => sub {
         'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
         'checked lookup_determine_downloadurl() success.');
 
-###BUGALERT### Make test_filename_listing() usable again supporting both ftp and
-    #http, or make separate sub for each or something.
         my $no_current_file_list;
         @$no_current_file_list =
             grep { $_->[0] !~ /^(:?latest|current)[_-]is(.*)$/i } @$current_file_list;
@@ -240,27 +279,24 @@ EOS
 
 
 subtest 'test lookup_by_timestamp()' => sub {
-    skip_all_unless_release_testing();
 
-    is(lookup_by_timestamp(test_filename_listing('no current')),
-        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.22.tar.bz2',
+    like(lookup_by_timestamp(test_filename_listing('no current')),
+        qr{ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
         'check lookup_by_timestamp() success.');
 
 };
 
 
 subtest 'test lookup_by_versionstring()' => sub {
-    skip_all_unless_release_testing();
 
-    is(lookup_by_versionstring(test_filename_listing('no current')),
-        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.22.tar.bz2',
+    like(lookup_by_versionstring(test_filename_listing('no current')),
+        qr{ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
         'check lookup_by_versionstring() success.');
 
 }; 
 
 
 subtest 'test determine_download_url()' => sub {
-    ###BUGALERT### Double-check which subtests actually need to be skipped.
     skip_all_unless_release_testing();
 
     # Clear App::Fetchware's %CONFIG variable.
@@ -276,8 +312,8 @@ subtest 'test determine_download_url()' => sub {
     my $directory_listing = get_directory_listing();
     my $filename_listing = parse_directory_listing($directory_listing);
     
-    is(determine_download_url($filename_listing),
-        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.22.tar.bz2',
+    like(determine_download_url($filename_listing),
+        qr{ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
         'checked lookup_determine_downloadurl() success.');
     
     # Clear App::Fetchware's %CONFIG variable so I can test it with custom
@@ -296,8 +332,8 @@ subtest 'test determine_download_url()' => sub {
     $directory_listing = get_directory_listing();
     $filename_listing = parse_directory_listing($directory_listing);
     
-    is(determine_download_url($filename_listing),
-        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.22.tar.bz2',
+    like(determine_download_url($filename_listing),
+        qr{ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
         'checked lookup_determine_downloadurl() success.');
 
 };
@@ -316,8 +352,8 @@ subtest 'test lookup()' => sub {
     # Set needed config variables.
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
 
-    is(lookup(),
-        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.22.tar.bz2',
+    like(lookup(),
+        qr{ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
         'checked lookup_determine_downloadurl() success.');
 
 };
@@ -404,9 +440,9 @@ sub return_html_listing {
 
 <h2>Apache HTTP Server <u>Source Code</u> Distributions</h2>
 
-<p>This download page includes <strong>only the sources</strong> to compile 
-   and build Apache yourself with the proper tools.  Download 
-   the precompiled distribution for your platform from 
+<p>This download page includes <strong>only the sources</strong> to compile
+   and build Apache yourself with the proper tools.  Download
+   the precompiled distribution for your platform from
    <a href="binaries/">binaries/</a>.</p>
 
 <h2>Important Notices</h2>
@@ -414,63 +450,59 @@ sub return_html_listing {
 <ul>
 <li><a href="#mirrors">Download from your nearest mirror site!</a></li>
 <li><a href="#binaries">Binary Releases</a></li>
-
 <li><a href="#releases">Current Releases</a></li>
 <li><a href="#archive">Older Releases</a></li>
 <li><a href="#sig">PGP Signatures</a></li>
 <li><a href="#patches">Official Patches</a></li>
 </ul>
 
-<pre><img src="/icons/blank.gif" alt="Icon "> <a href="?C=N;O=D">Name</a>                               <a href="?C=M;O=A">Last modified</a>      <a href="?C=S;O=A">Size</a>  <a href="?C=D;O=A">Description</a><hr><img src="/icons/back.gif" alt="[DIR]"> <a href="/pub/software/apache//">Parent Directory</a>                                        -   HTTP Server project
-
-<img src="/icons/folder.gif" alt="[DIR]"> <a href="binaries/">binaries/</a>                          11-May-2011 02:54    -   Binary distributions
-<img src="/icons/folder.gif" alt="[DIR]"> <a href="docs/">docs/</a>                              11-Dec-2010 17:57    -   Extra documentation packages
-<img src="/icons/folder.gif" alt="[DIR]"> <a href="flood/">flood/</a>                             07-Dec-2009 21:29    -   HTTP Server project
-<img src="/icons/folder.gif" alt="[DIR]"> <a href="libapreq/">libapreq/</a>                          27-Apr-2011 08:35    -   HTTP Server project
-<img src="/icons/folder.gif" alt="[DIR]"> <a href="mod_fcgid/">mod_fcgid/</a>                         22-Nov-2010 21:09    -   HTTP Server project
-
-<img src="/icons/folder.gif" alt="[DIR]"> <a href="mod_ftp/">mod_ftp/</a>                           07-Dec-2009 21:29    -   HTTP Server project
-<img src="/icons/folder.gif" alt="[DIR]"> <a href="patches/">patches/</a>                           05-Oct-2011 10:27    -   Official patches
-<img src="/icons/text.gif" alt="[TXT]"> <a href="Announcement2.0.html">Announcement2.0.html</a>               19-Oct-2010 00:50  5.5K  Apache 2.0 Release Note
-<img src="/icons/text.gif" alt="[TXT]"> <a href="Announcement2.0.txt">Announcement2.0.txt</a>                19-Oct-2010 00:50  4.2K  Apache 2.0 Release Note
-<img src="/icons/text.gif" alt="[TXT]"> <a href="Announcement2.2.html">Announcement2.2.html</a>               14-Sep-2011 02:21  3.8K  Apache 2.2 Release Note
-
-<img src="/icons/text.gif" alt="[TXT]"> <a href="Announcement2.2.txt">Announcement2.2.txt</a>                14-Sep-2011 02:21  2.7K  Apache 2.2 Release Note
-<img src="/icons/text.gif" alt="[TXT]"> <a href="Announcement2.3.txt">Announcement2.3.txt</a>                13-Nov-2011 14:39  1.4K  HTTP Server project
-<img src="/icons/text.gif" alt="[TXT]"> <a href="CHANGES_2.0">CHANGES_2.0</a>                        18-Oct-2010 04:32  316K  List of changes in 2.0
-<img src="/icons/text.gif" alt="[TXT]"> <a href="CHANGES_2.0.64">CHANGES_2.0.64</a>                     18-Oct-2010 04:32  3.2K  List of changes in 2.0
-<img src="/icons/unknown.gif" alt="[   ]"> <a href="CHANGES_2.2">CHANGES_2.2</a>                        12-Sep-2011 13:02  116K  List of changes in 2.2
-
-<img src="/icons/unknown.gif" alt="[   ]"> <a href="CHANGES_2.2.21">CHANGES_2.2.21</a>                     12-Sep-2011 13:02  1.4K  List of changes in 2.2
-<img src="/icons/unknown.gif" alt="[   ]"> <a href="CHANGES_2.3">CHANGES_2.3</a>                        13-Nov-2011 14:37   98K  HTTP Server project
-<img src="/icons/unknown.gif" alt="[   ]"> <a href="CHANGES_2.3.15">CHANGES_2.3.15</a>                     13-Nov-2011 14:37   11K  HTTP Server project
-<img src="/icons/unknown.gif" alt="[   ]"> <a href="CURRENT-IS-2.2.21">CURRENT-IS-2.2.21</a>                  05-Oct-2011 14:31    0   HTTP Server project
-<img src="/icons/quill.gif" alt="[SIG]"> <a href="KEYS">KEYS</a>                               31-Aug-2011 01:11  364K  Developer PGP/GPG keys
-
-<img src="/icons/compressed.gif" alt="[ZIP]"> <a href="httpd-2.0.64-win32-src.zip">httpd-2.0.64-win32-src.zip</a>         18-Oct-2010 04:32   11M  HTTP Server project
-<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.0.64-win32-src.zip.asc">httpd-2.0.64-win32-src.zip.asc</a>     18-Oct-2010 04:32  850   PGP signature
-<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.0.64.tar.bz2">httpd-2.0.64.tar.bz2</a>               18-Oct-2010 04:32  4.7M  HTTP Server project
-<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.0.64.tar.bz2.asc">httpd-2.0.64.tar.bz2.asc</a>           18-Oct-2010 04:32  833   PGP signature
-<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.0.64.tar.gz">httpd-2.0.64.tar.gz</a>                18-Oct-2010 04:32  6.1M  HTTP Server project
-
-<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.0.64.tar.gz.asc">httpd-2.0.64.tar.gz.asc</a>            18-Oct-2010 04:32  833   PGP signature
-<img src="/icons/compressed.gif" alt="[ZIP]"> <a href="httpd-2.2.21-win32-src.zip">httpd-2.2.21-win32-src.zip</a>         12-Sep-2011 13:02  9.8M  HTTP Server project
-<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.2.21-win32-src.zip.asc">httpd-2.2.21-win32-src.zip.asc</a>     12-Sep-2011 13:02  835   PGP signature
-<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.2.21.tar.bz2">httpd-2.2.21.tar.bz2</a>               12-Sep-2011 13:02  5.1M  HTTP Server project
-<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.2.21.tar.bz2.asc">httpd-2.2.21.tar.bz2.asc</a>           12-Sep-2011 13:02  835   PGP signature
-
-<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.2.21.tar.gz">httpd-2.2.21.tar.gz</a>                12-Sep-2011 13:02  6.8M  HTTP Server project
-<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.2.21.tar.gz.asc">httpd-2.2.21.tar.gz.asc</a>            12-Sep-2011 13:02  835   PGP signature
-<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.3.15-beta-deps.tar.bz2">httpd-2.3.15-beta-deps.tar.bz2</a>     13-Nov-2011 14:37  1.3M  HTTP Server project
-<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.3.15-beta-deps.tar.bz2.asc">httpd-2.3.15-beta-deps.tar.bz2.asc</a> 13-Nov-2011 14:37  825   PGP signature
-<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.3.15-beta-deps.tar.gz">httpd-2.3.15-beta-deps.tar.gz</a>      13-Nov-2011 14:37  1.6M  HTTP Server project
-
-<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.3.15-beta-deps.tar.gz.asc">httpd-2.3.15-beta-deps.tar.gz.asc</a>  13-Nov-2011 14:37  825   PGP signature
-<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.3.15-beta.tar.bz2">httpd-2.3.15-beta.tar.bz2</a>          13-Nov-2011 14:37  3.9M  HTTP Server project
-<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.3.15-beta.tar.bz2.asc">httpd-2.3.15-beta.tar.bz2.asc</a>      13-Nov-2011 14:37  825   PGP signature
-<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.3.15-beta.tar.gz">httpd-2.3.15-beta.tar.gz</a>           13-Nov-2011 14:37  5.3M  HTTP Server project
-<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.3.15-beta.tar.gz.asc">httpd-2.3.15-beta.tar.gz.asc</a>       13-Nov-2011 14:37  825   PGP signature
-
+<pre><img src="/icons/blank.gif" alt="Icon "> <a href="?C=N;O=D">Name</a>                           <a href="?C=M;O=A">Last modified</a>      <a href="?C=S;O=A">Size</a>  <a href="?C=D;O=A">Description</a><hr><img src="/icons/back.gif" alt="[DIR]"> <a href="/pub/software/apache//">Parent Directory</a>                                    -   HTTP Server project
+<img src="/icons/folder.gif" alt="[DIR]"> <a href="binaries/">binaries/</a>                      23-Aug-2012 23:27    -   Binary distributions
+<img src="/icons/folder.gif" alt="[DIR]"> <a href="docs/">docs/</a>                          23-Aug-2012 23:28    -   Extra documentation packages
+<img src="/icons/folder.gif" alt="[DIR]"> <a href="flood/">flood/</a>                         23-Aug-2012 23:27    -   HTTP Server project
+<img src="/icons/folder.gif" alt="[DIR]"> <a href="libapreq/">libapreq/</a>                      23-Aug-2012 23:29    -   HTTP Server project
+<img src="/icons/folder.gif" alt="[DIR]"> <a href="mod_fcgid/">mod_fcgid/</a>                     23-Aug-2012 23:25    -   HTTP Server project
+<img src="/icons/folder.gif" alt="[DIR]"> <a href="mod_ftp/">mod_ftp/</a>                       23-Aug-2012 23:25    -   HTTP Server project
+<img src="/icons/folder.gif" alt="[DIR]"> <a href="patches/">patches/</a>                       23-Aug-2012 23:27    -   Official patches
+<img src="/icons/text.gif" alt="[TXT]"> <a href="Announcement2.0.html">Announcement2.0.html</a>           19-Oct-2010 00:50  5.5K  Apache 2.0 Release Note
+<img src="/icons/text.gif" alt="[TXT]"> <a href="Announcement2.0.txt">Announcement2.0.txt</a>            19-Oct-2010 00:50  4.2K  Apache 2.0 Release Note
+<img src="/icons/text.gif" alt="[TXT]"> <a href="Announcement2.2.html">Announcement2.2.html</a>           11-Sep-2012 10:08  3.5K  Apache 2.2 Release Note
+<img src="/icons/text.gif" alt="[TXT]"> <a href="Announcement2.2.txt">Announcement2.2.txt</a>            11-Sep-2012 10:08  2.6K  Apache 2.2 Release Note
+<img src="/icons/text.gif" alt="[TXT]"> <a href="Announcement2.4.html">Announcement2.4.html</a>           21-Aug-2012 08:51  3.8K  HTTP Server project
+<img src="/icons/text.gif" alt="[TXT]"> <a href="Announcement2.4.txt">Announcement2.4.txt</a>            21-Aug-2012 08:51  2.6K  HTTP Server project
+<img src="/icons/text.gif" alt="[TXT]"> <a href="CHANGES_2.0">CHANGES_2.0</a>                    18-Oct-2010 04:32  316K  List of changes in 2.0
+<img src="/icons/text.gif" alt="[TXT]"> <a href="CHANGES_2.0.64">CHANGES_2.0.64</a>                 18-Oct-2010 04:32  3.2K  List of changes in 2.0
+<img src="/icons/unknown.gif" alt="[   ]"> <a href="CHANGES_2.2">CHANGES_2.2</a>                    11-Sep-2012 10:08  122K  List of changes in 2.2
+<img src="/icons/unknown.gif" alt="[   ]"> <a href="CHANGES_2.2.22">CHANGES_2.2.22</a>                 30-Jan-2012 17:06  2.8K  List of changes in 2.2
+<img src="/icons/unknown.gif" alt="[   ]"> <a href="CHANGES_2.2.23">CHANGES_2.2.23</a>                 11-Sep-2012 10:08  3.6K  List of changes in 2.2
+<img src="/icons/unknown.gif" alt="[   ]"> <a href="CHANGES_2.4">CHANGES_2.4</a>                    21-Aug-2012 08:51  116K  HTTP Server project
+<img src="/icons/unknown.gif" alt="[   ]"> <a href="CHANGES_2.4.3">CHANGES_2.4.3</a>                  21-Aug-2012 08:51  8.4K  HTTP Server project
+<img src="/icons/unknown.gif" alt="[   ]"> <a href="CURRENT-IS-2.4.3">CURRENT-IS-2.4.3</a>               20-Aug-2012 13:44    0   HTTP Server project
+<img src="/icons/quill.gif" alt="[SIG]"> <a href="KEYS">KEYS</a>                           28-Aug-2012 16:47  378K  Developer PGP/GPG keys
+<img src="/icons/compressed.gif" alt="[ZIP]"> <a href="httpd-2.0.64-win32-src.zip">httpd-2.0.64-win32-src.zip</a>     18-Oct-2010 04:32   11M  HTTP Server project
+<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.0.64-win32-src.zip.asc">httpd-2.0.64-win32-src.zip.asc</a> 18-Oct-2010 04:32  850   PGP signature
+<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.0.64.tar.bz2">httpd-2.0.64.tar.bz2</a>           18-Oct-2010 04:32  4.7M  HTTP Server project
+<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.0.64.tar.bz2.asc">httpd-2.0.64.tar.bz2.asc</a>       18-Oct-2010 04:32  833   PGP signature
+<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.0.64.tar.gz">httpd-2.0.64.tar.gz</a>            18-Oct-2010 04:32  6.1M  HTTP Server project
+<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.0.64.tar.gz.asc">httpd-2.0.64.tar.gz.asc</a>        18-Oct-2010 04:32  833   PGP signature
+<img src="/icons/compressed.gif" alt="[ZIP]"> <a href="httpd-2.2.22-win32-src.zip">httpd-2.2.22-win32-src.zip</a>     30-Jan-2012 17:06   12M  HTTP Server project
+<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.2.22-win32-src.zip.asc">httpd-2.2.22-win32-src.zip.asc</a> 30-Jan-2012 17:06  833   PGP signature
+<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.2.22.tar.bz2">httpd-2.2.22.tar.bz2</a>           30-Jan-2012 17:06  5.1M  HTTP Server project
+<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.2.22.tar.bz2.asc">httpd-2.2.22.tar.bz2.asc</a>       30-Jan-2012 17:06  835   PGP signature
+<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.2.22.tar.gz">httpd-2.2.22.tar.gz</a>            30-Jan-2012 17:06  6.9M  HTTP Server project
+<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.2.22.tar.gz.asc">httpd-2.2.22.tar.gz.asc</a>        30-Jan-2012 17:06  835   PGP signature
+<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.2.23.tar.bz2">httpd-2.2.23.tar.bz2</a>           11-Sep-2012 10:08  5.2M  HTTP Server project
+<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.2.23.tar.bz2.asc">httpd-2.2.23.tar.bz2.asc</a>       11-Sep-2012 10:08  836   PGP signature
+<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.2.23.tar.gz">httpd-2.2.23.tar.gz</a>            11-Sep-2012 10:08  7.0M  HTTP Server project
+<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.2.23.tar.gz.asc">httpd-2.2.23.tar.gz.asc</a>        11-Sep-2012 10:08  836   PGP signature
+<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.4.3-deps.tar.bz2">httpd-2.4.3-deps.tar.bz2</a>       20-Aug-2012 09:22  1.4M  HTTP Server project
+<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.4.3-deps.tar.bz2.asc">httpd-2.4.3-deps.tar.bz2.asc</a>   20-Aug-2012 09:22  825   PGP signature
+<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.4.3-deps.tar.gz">httpd-2.4.3-deps.tar.gz</a>        20-Aug-2012 09:22  1.7M  HTTP Server project
+<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.4.3-deps.tar.gz.asc">httpd-2.4.3-deps.tar.gz.asc</a>    20-Aug-2012 09:22  825   PGP signature
+<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.4.3.tar.bz2">httpd-2.4.3.tar.bz2</a>            20-Aug-2012 09:22  4.3M  HTTP Server project
+<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.4.3.tar.bz2.asc">httpd-2.4.3.tar.bz2.asc</a>        20-Aug-2012 09:22  825   PGP signature
+<img src="/icons/compressed.gif" alt="[TGZ]"> <a href="httpd-2.4.3.tar.gz">httpd-2.4.3.tar.gz</a>             20-Aug-2012 09:22  5.9M  HTTP Server project
+<img src="/icons/quill.gif" alt="[SIG]"> <a href="httpd-2.4.3.tar.gz.asc">httpd-2.4.3.tar.gz.asc</a>         20-Aug-2012 09:22  825   PGP signature
 <hr></pre>
 <h2><a name="mirrors">Download from your
     <a href="http://www.apache.org/dyn/closer.cgi/httpd/"
@@ -478,26 +510,26 @@ sub return_html_listing {
 
 <p>Do not download from www.apache.org.  Please use a mirror site
    to help us save apache.org bandwidth.
-   <a href="http://www.apache.org/dyn/closer.cgi/httpd/">Go 
+   <a href="http://www.apache.org/dyn/closer.cgi/httpd/">Go
    here to find your nearest mirror.</a></p>
 
 <h2><a name="binaries">Binary Releases</a></h2>
 
 <p>Are available in the <a href="binaries/">binaries/</a> directory.
-   Every binary distribution contains an install script. See README 
+   Every binary distribution contains an install script. See README
    for details.</p>
 
 <h2><a name="releases">Current Releases</a></h2>
 
-<p>For details on current releases, please see the 
+<p>For details on current releases, please see the
    <a href="http://httpd.apache.org/download.cgi">Apache HTTP
    Server Download Page</a>.</p>
 
 <p>Note; the -win32-src.zip versions of Apache are nearly identical to the
-   .tar.gz versions.  However, they offer the source files in DOS/Windows 
-   CR/LF text format, and include the Win32 build files.  
+   .tar.gz versions.  However, they offer the source files in DOS/Windows
+   CR/LF text format, and include the Win32 build files.
    These -win32-src.zip files <strong>do NOT contain binaries!</strong>
-   See the <a href="binaries/win32/">binaries/win32/</a> 
+   See the <a href="binaries/win32/">binaries/win32/</a>
    directory for the Windows binary distributions.</p>
 
 <h2><a name="archive">Older Releases</a></h2>

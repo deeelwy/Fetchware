@@ -651,14 +651,6 @@ EOD
 sub $name (@) {
     my $value = shift;
 
-    if (defined config('$name') and ref config('$name') ne 'ARRAY') {
-        die <<EOD;
-App-Fetchware: internal operation error!!! @{[config('$name')]} is *not* undef or an array
-ref!!! This simply should never happen, but it did somehow. This is most likely
-a bug, so please report it. Thanks. See perldoc App::Fetchware.
-EOD
-    }
-
     # Support multiple arguments specified on the same line. like:
     # mirror 'http://djfjf.com/a', 'ftp://kdjfjkl.net/b';
     unless (@_) {
@@ -1562,7 +1554,7 @@ specified [@{[config('verify_method')]}]. See perldoc App::Fetchware.
 EOD
         }
     }
-    msg 'Verification succeeded.'
+    msg 'Verification succeeded.';
 }
 
 
@@ -1797,7 +1789,13 @@ sub digest_verify {
     my $digest_file;
     # Obtain a sha sum file.
     if (defined config("${digest_ext}_url")) {
-        $digest_file = download_file(config("${digest_ext}_url"));
+        # Save old lookup_url and restore later like Perl's crazy local does.
+        my $old_lookup_url = config('lookup_url');
+        config_replace(lookup_url => config("${digest_ext}_url"));
+        my $lookuped_download_url = lookup();
+        # Should I implement config_local() :)
+        config_replace(lookup_url => $old_lookup_url);
+        $digest_file = download_file("$lookuped_download_url.$digest_ext");
     } else {
         eval {
             $digest_file = download_file("$download_url.$digest_ext");
@@ -1805,9 +1803,9 @@ sub digest_verify {
         };
         if ($@) {
             die <<EOD;
-App-Fetchware: Fetchware was unable to download the $digest_type sum it needs to download
-to properly verify you software package. This is a fatal error, because failing
-to verify packages is a perferable default over potentially installing
+App-Fetchware: Fetchware was unable to download the $digest_type sum it needs to
+download to properly verify you software package. This is a fatal error, because
+failing to verify packages is a perferable default over potentially installin
 compromised ones. If failing to verify your software package is ok to you, then
 you may disable verification by adding verify_failure_ok 'On'; to your
 Fetchwarefile. See perldoc App::Fetchware.
@@ -1825,6 +1823,9 @@ while trying to read it in order to check its MD5 sum. The file was
 [$package_path]. See perldoc App::Fetchware.
 EOD
 
+    # Do Digest type checking myself, because until Digest.pm 1.17,
+    # Digest->new() could run any Perl code you specify or a user does causing
+    # the security hole. Instead of use Digest 1.17, just avoid it altogether.
     my $digest;
     if ($digest_type eq 'MD5') {
         $digest = Digest::MD5->new();
@@ -1948,7 +1949,7 @@ EOD
 #Archive::Extract *only* extracts files and then lets you see what files were
 #*already* extracted! This is a huge limitation that prevents me from checking
 #if an archive has an absolute path in it.
-    vmsg 'Using Archive::Extract to extract files.'
+    vmsg 'Using Archive::Extract to extract files.';
     $ae->extract() or die <<EOD;
 App-Fetchware: run-time error. Fetchware failed to extract the archive it
 downloaded [$package_path]. The error message is [@{[$ae->error()]}].
@@ -2151,16 +2152,16 @@ EOD
                 push @make_options, $make_option;
             }
             vmsg 'Executing make to build your package';
-            run_progs('make', @make_options)
+            run_prog('make', @make_options)
         } else {
             vmsg 'Executing make to build your package';
-            run_progs('make');
+            run_prog('make');
         }
 
     # Execute the default commands.
     } else {
         vmsg 'Running default build commands [./configure] and [make]';
-        run_progs($_) for qw(./configure make);
+        run_prog($_) for qw(./configure make);
     }
     
     # Return success.
@@ -2258,10 +2259,10 @@ EOM
         return 'installation skipped!' ;
     }
 
-    msg 'Installing your package.'
+    msg 'Installing your package.';
 
     if (defined config('install_commands')) {
-        vmsg 'Installing your package using user specified commands.'
+        vmsg 'Installing your package using user specified commands.';
         # Support multiple options like install_commands 'make', 'install';
         ###BUGALERT### Support ONEARRREF's!!!
         for my $install_command (config('install_commands')) {
@@ -2284,7 +2285,7 @@ EOM
 Installing package using default command [make] with user specified make options.
 EOM
             ###BUGALERT### Will with work with ONEARRREF????
-            run_prog('make', config('make_options'), 'install', )
+            run_prog('make', config('make_options'), 'install', );
         } else {
             vmsg <<EOM;
 Installing package using default command [make].
@@ -2377,12 +2378,12 @@ EOD
         run_configure();
         if (defined config('make_options')) {
             ###BUGALERT### make_options should go befoer e install!!!
-            vmsg <<EOM
+            vmsg <<EOM;
 Running AutoTool's default make uninstall with user specified make options.
 EOM
-            run_prog('make', 'uninstall', config('make_options'))
+            run_prog('make', 'uninstall', config('make_options'));
         } else {
-            vmsg <<EOM
+            vmsg <<EOM;
 Running AutoTool's default make uninstall.
 EOM
             run_prog('make', 'uninstall');
@@ -2456,7 +2457,7 @@ EOD
     ###BUGALERT###YYYYYYEEEEEEEEEESSSSSSSSSSSS!!!! It probbly should. It would
     #remove many calls to __clear_CONFIG() from the test suite.
 ###BUGALERT### Just take %CONFIG OO!!! App::Fetchware::Config!!! Problem solved.
-    vmsg 'Clearing internal %CONFIG variable that hold your parsed Fetchwarefile.'
+    vmsg 'Clearing internal %CONFIG variable that hold your parsed Fetchwarefile.';
     __clear_CONFIG();
 
     msg 'Cleaned up temporary directory.';
@@ -2877,10 +2878,13 @@ command line option.
 sub vmsg (@) {
 
     # If fetchware was not run in quiet mode, -q.
+    ###BUGALERT### Can I do something like:
+    #eval "use constant quiet => 0;" so that the iffs below can be resolved at
+    #run-time to make vmsg() and msg() faster???
     unless ($fetchware::quiet > 0) {
         # If verbose is also turned on.
         if ($fetchware::verbose > 0) {
-            # print are arguments. Use say if the last one doesn't end with a
+            # print our arguments. Use say if the last one doesn't end with a
             # newline. $#_ is the last subscript of the @_ variable.
             if ($_[$#_] =~ /\w*\n\w*\z/) {
                 print @_;

@@ -86,16 +86,23 @@ subtest 'test download() local file success' => sub {
     my $cwd = cwd();
     config_replace('temp_dir', "$cwd");
 
-    my $url = "file://t/test-dist-1.00.fpkg";
+    my $test_dist_path = make_test_dist('test-dist', '1.00', 't');
+    my $test_dist_md5 = md5sum_file($test_dist_path);
+    my $url = "file://$test_dist_path";
 
     # Determine $filename for is() test below.
     my ($scheme, $auth, $path, $query, $frag) = uri_split($url);
     my ($volume, $directories, $filename) = splitpath($path);
+    ###BUGALERT## Remove cwd(), and replace with temp dir, so tests can be run
+    #in parallel to speed up development.
     is(download($cwd, $url), catfile($cwd, $filename),
         'checked download() local file success.');
 
     ok(-e $filename, 'checked download() file exists success');
     ok(unlink $filename, 'checked deleting downloaded file');
+
+    ok(unlink($test_dist_path, $test_dist_md5),
+        'checked cmd_list() delete temp files.');
 };
 
 

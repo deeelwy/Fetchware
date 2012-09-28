@@ -212,7 +212,8 @@ subtest 'test cmd_upgrade_all() test-dist' => sub {
 
     # Sleep for 2 seconds to ensure that the new version is a least a couple of
     # seconds newer than the original version. Perl is pretty fast, so it can
-    # actually execute this whole friggin subtest on my decent desktop system.
+    # actually execute this whole friggin subtest on my decent desktop system
+    # in less thatn one second.
     sleep 2;
 
 

@@ -8,7 +8,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '3'; #Update if this changes.
+use Test::More 0.98;# tests => '3'; #Update if this changes.
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -25,9 +25,6 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
-# Use extra private sub __CONFIG() to access App::Fetchware's internal state
-# variable, so that I can test that the configuration subroutines work properly.
-my $CONFIG = App::Fetchware::__CONFIG();
 
 subtest 'test config file subs' => sub {
     # Test 'ONE' and 'BOOLEAN' config subs.
@@ -45,7 +42,7 @@ subtest 'test config file subs' => sub {
     no_install 'test';
     verify_failure_ok 'test';
 
-    diag explain $CONFIG;
+    debug_CONFIG();
 
     for my $config_sub (qw(
         temp_dir
@@ -62,7 +59,7 @@ subtest 'test config file subs' => sub {
         no_install
         verify_failure_ok
     )) {
-        is($CONFIG->{$config_sub}, 'test', "checked config sub $config_sub");
+        is(config($config_sub), 'test', "checked config sub $config_sub");
     }
 
     # Test 'MANY' config subs.
@@ -72,17 +69,17 @@ subtest 'test config file subs' => sub {
     mirror 'test';
     mirror 'test';
 
-    diag explain $CONFIG;
+    debug_CONFIG();
 
-    for (my $i = 0; $i <= 4; $i++) { # Its 0 based. 4 is the 5th entry.
-        is($CONFIG->{mirror}->[$i], 'test', 'checked config sub mirror');
+    for my $mirror (config('mirror')) {
+        is($mirror, 'test', 'checked config sub mirror');
     }
-    ok('Succeed', 'checked only 5 entries in mirror') if not defined $CONFIG->{mirror}->[5];
+    ok(config('mirror') == 5, 'checked only 5 entries in mirror');
 
 };
 
 # Clear %CONFIG
-%$CONFIG = ();
+__clear_CONFIG();
 
 subtest 'test ONEARRREF config_file_subs()' => sub {
     my @onearrref_or_not = (
@@ -134,4 +131,4 @@ EOE
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-#done_testing();
+done_testing();

@@ -47,8 +47,11 @@ subtest 'OVERRIDE_VERIFY exports what it should' => sub {
 # Needed by all other subtests.
 my $package_path = $ENV{FETCHWARE_LOCAL_URL};
 $package_path =~ s!^file://!!;
-# Note: Cannot use a mirror site, because they don't mirror MD5 and SHA1 sums.
-my $download_url = 'http://www.apache.org/dist/httpd/httpd-2.2.21.tar.bz2';
+# Use config subs to determine a $download_url based on the current version of
+# apache instead of updating this manually.
+lookup_url 'http://www.apache.org/dist/httpd';
+filter 'httpd-2.2';
+my $download_url = lookup();
 
 
 # Call start() to create & cd to a tempdir, so end() called later can delete all
@@ -94,9 +97,9 @@ EOE
             digest_verify($digest_type,
                 'ftp://fake.url/will.fail', $package_path);
         }, <<EOE, "checked digest_verify($digest_type) download digest failure");
-App-Fetchware: Fetchware was unable to download the $digest_type sum it needs to download
-to properly verify you software package. This is a fatal error, because failing
-to verify packages is a perferable default over potentially installing
+App-Fetchware: Fetchware was unable to download the $digest_type sum it needs to
+download to properly verify you software package. This is a fatal error, because
+failing to verify packages is a perferable default over potentially installin
 compromised ones. If failing to verify your software package is ok to you, then
 you may disable verification by adding verify_failure_ok 'On'; to your
 Fetchwarefile. See perldoc App::Fetchware.
@@ -112,7 +115,7 @@ subtest 'test md5_verify()' => sub {
     ok(md5_verify($download_url, $package_path),
         "checked md5_verify() success.");
 
-    md5_url 'http://www.apache.org/dist/httpd/httpd-2.2.21.tar.bz2.md5';
+    md5_url 'http://www.apache.org/dist/httpd/';
 
     ok(md5_verify($download_url, $package_path),
         'checked md5_verify() md5_url success.');
@@ -124,7 +127,7 @@ subtest 'test sha1_verify()' => sub {
     ok(sha1_verify($download_url, $package_path),
         "checked sha1_verify() success.");
 
-    sha1_url 'http://www.apache.org/dist/httpd/httpd-2.2.21.tar.bz2.md5';
+    sha1_url 'http://www.apache.org/dist/httpd/';
 
     ok(sha1_verify($download_url, $package_path),
         'checked sha1_verify() sha_url success.');
@@ -134,6 +137,9 @@ subtest 'test sha1_verify()' => sub {
 
 subtest 'test gpg_verify()' => sub {
     skip_all_unless_release_testing();
+
+    # Clean the gunk of of %CONFIG.
+    __clear_CONFIG();
 
     lookup_url 'http://www.alliedquotes.com/mirrors/apache//httpd/';
 
@@ -156,7 +162,7 @@ EOE
 };
 
 
-#subtest 'test verify()' => sub {
+subtest 'test verify()' => sub {
     skip_all_unless_release_testing();
 
     # test verify_method
@@ -218,7 +224,8 @@ EOE
             $package_path)}, <<EOE, 'checked verify() failure');
 App-Fetchware: run-time error. Fetchware failed to verify your downloaded
 software package. You can rerun fetchware with the --force option or add
-[verify_failure_ok 'True';] to your Fetchwarefile. See perldoc App::Fetchware.
+[verify_failure_ok 'True';] to your Fetchwarefile. See the section VERIFICATION
+FAILED in perldoc fetchware.
 EOE
 
     # test verify_failure_ok
@@ -239,7 +246,7 @@ specified [invalid]. See perldoc App::Fetchware.
 EOE
     config_delete('verify_method');
 
-#};
+};
 
 
 # Call end() to delete temp dir created by start().

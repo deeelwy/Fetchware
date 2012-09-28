@@ -21,7 +21,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_BUILD :TESTING)); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
-diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
+diag(qq{App::Fetchwares default imports [@App::Fetchware::EXPORT]});
 
 my $class = 'App::Fetchware';
 
@@ -64,6 +64,8 @@ make_clean();
 subtest 'test build() build_commands' => sub {
     skip_all_unless_release_testing();
 
+    ###BUGALERT### Implement ONEARRREF support so that build_commands can be:
+    #build_commands './configure', 'make';
     build_commands './configure, make';
     ok(build($build_path), 'checked build() build_command success.');
 

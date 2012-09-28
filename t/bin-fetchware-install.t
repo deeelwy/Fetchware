@@ -101,7 +101,8 @@ subtest 'test test-dist.fpkg cmd_install' => sub {
     # if I parse more than one Fetchwarefile in a running of fetchware.
     __clear_CONFIG();
 
-    my $test_dist_path = 't/test-dist-1.00.fpkg';
+    my $test_dist_path = make_test_dist('test-dist', '1.00', 't');
+    my $test_dist_md5 = md5sum_file($test_dist_path);
 
     my $install_success = cmd_install($test_dist_path);
     diag("IS[$install_success");
@@ -109,6 +110,12 @@ subtest 'test test-dist.fpkg cmd_install' => sub {
     ok($install_success,
         'check test-dist.fpkg cmd_install');
 
+    # Now uninstall the useless test dist.
+    ok(cmd_uninstall('test-dist-1.00'),
+        'checked cmd_list() clean up installed test-dist.');
+
+    ok(unlink($test_dist_path, $test_dist_md5),
+        'checked cmd_list() delete temp files.');
 };
 
 

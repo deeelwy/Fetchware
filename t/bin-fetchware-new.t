@@ -39,18 +39,18 @@ BEGIN {
 subtest 'test opening_message() success' => sub {
    print_ok(sub {opening_message()},
        <<EOM, 'test opening_message() success.');
-# Fetchware's new command is reasonably sophisticated, and is smart enough to
-# determine based on the lookup_url you provide if it can autogenerate a
-# Fetchwarefile for you. If Fetchware cannot, then it will ask you more
-# questions regarding the information it requires to be able to build a
-# installable fetchware package for you. After that, fetchware will ask you if
-# you would like to edit the Fetchwarefile, fetchware has created for you in an
-# editor. If you say yes, fetchware will open a editor for you, but if you say
-# no, fetchware will skip the custom editing. Next, fetchware will create a test
-# Fetchwarefile for you, and ask you if you would like to test it by trying to
-# install it now. If you say yes, fetchware will install it, and if you say no,
-# then fetchware will print the location of the Fetchwarefile it created for
-# you to later use to install your application.
+Fetchware's new command is reasonably sophisticated, and is smart enough to
+determine based on the lookup_url you provide if it can autogenerate a
+Fetchwarefile for you. If Fetchware cannot, then it will ask you more
+questions regarding the information it requires to be able to build a
+installable fetchware package for you. After that, fetchware will ask you if
+you would like to edit the Fetchwarefile, fetchware has created for you in an
+editor. If you say yes, fetchware will open a editor for you, but if you say
+no, fetchware will skip the custom editing. Next, fetchware will create a test
+Fetchwarefile for you, and ask you if you would like to test it by trying to
+install it now. If you say yes, fetchware will install it, and if you say no,
+then fetchware will print the location of the Fetchwarefile it created for
+you to later use to install your application.
 EOM
 
 };
@@ -166,7 +166,7 @@ subtest 'test append_to_fetchwarefile() success' => sub {
 
 
 # A meaningless test example.
-program test-dist;
+program 'test-dist';
 EOE
 
     undef $fetchwarefile;
@@ -181,7 +181,7 @@ EOE
 
 # test with more than 80 chars to test the logic that chops it up into lines
 # that are only 80 chars long. Do you think it will work?? Well, let's hope so!
-program test-dist;
+program 'test-dist';
 EOE
 
     eval_ok(sub {append_to_fetchwarefile($fetchwarefile,
@@ -226,7 +226,7 @@ EOE
 
     append_options_to_fetchwarefile(
         {temp_dir => '/var/tmp',
-        prefix => '/top',
+        prefix => '/tmp',
         make_options => '-j 4'}, \$fetchwarefile);
 
     is($fetchwarefile, <<EOS, 'checked append_options_to_fetchwarefile() success');
@@ -234,18 +234,18 @@ EOE
 
 # temp_dir specifies what temporary directory fetchware will use to download and
 # build this program.
-temp_dir /var/tmp;
+temp_dir '/var/tmp';
 
 
 # make_options specifes what options fetchware should pass to make when make is
 # run to build and install your software.
-make_options -j 4;
+make_options '-j 4';
 
 
 # prefix specifies what base path your software will be installed under. This
 # only works for software that uses GNU AutoTools to configure itself, it uses
 # ./configure.
-prefix /top;
+prefix '/tmp';
 EOS
 };
 
@@ -304,13 +304,11 @@ EOF
 diag('FETCHWAREFILE');
 diag("$fetchwarefile");
 
-    my $fetchwarefile_path = create_test_fetchwarefile($fetchwarefile);
 
-    ok(-e $fetchwarefile_path,
-        'check saving fetchwarefile to disk success');
 
     my $new_fetchware_package_path =
-        ask_to_install_now_to_test_fetchwarefile($term, $fetchwarefile_path);
+        ask_to_install_now_to_test_fetchwarefile($term, \$fetchwarefile,
+            'Apache 2.2');
 
     ok(grep /httpd-2\.2/, glob(catfile(fetchware_database_path(), '*')),
         'check cmd_install(Fetchware) success.');

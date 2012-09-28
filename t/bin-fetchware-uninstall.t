@@ -181,25 +181,29 @@ EOE
 __clear_CONFIG();
 
 subtest 'test cmd_uninstall() with test-dist.fpkg' => sub {
-    # Actually test during user install!!!
+    my $test_dist_path = make_test_dist('test-dist', '1.00', 't');
+    my $test_dist_md5 = md5sum_file($test_dist_path);
 
     # I obviously must install apache before I can test uninstalling it :)
-    $fetchware_package_path = cmd_install('t/test-dist-1.00.fpkg');
+    $fetchware_package_path = cmd_install($test_dist_path);
     # And then test if the install was successful.
-    ok(grep /httpd-2\.2/, glob(catfile(fetchware_database_path(), '*')),
+    ok(grep /test-dist-1.00/, glob(catfile(fetchware_database_path(), '*')),
         'check cmd_install(Fetchware) test setup success.');
 
-    # Clear internal %CONFIG variable, because I have to pare a Fetchwarefile
+    # Clear internal %CONFIG variable, because I have to parse a Fetchwarefile
     # twice, and it's only supported once.
     __clear_CONFIG();
 
     # cmd_uninstall accepts a string that needs to be found in the fetchware
     # database. It does *not* take Fetchwarefiles or fetchware packages as
     # arguments.
-    my $uninstalled_package_path = cmd_uninstall('test-dist');
+    my $uninstalled_package_path = cmd_uninstall('test-dist-1.00');
 
     like($fetchware_package_path, qr/$uninstalled_package_path/,
         'check cmd_uninstall() success.');
+
+    ok(unlink($test_dist_path, $test_dist_md5),
+        'checked cmd_uninstall() clean up.');
 };
 
 

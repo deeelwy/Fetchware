@@ -34,6 +34,7 @@ use File::Temp qw(tempdir tempfile);
 use Fcntl qw(S_ISDIR S_ISREG);
 use Path::Class;
 use Text::Wrap 'wrap';
+use Data::Dumper;
 
 # Setup exports, which are only meant to ease testing.
 use Exporter 'import';
@@ -236,11 +237,11 @@ EOM
         # print location of temp dir instead.
         install();
 
-        vmsg 'Creating Fetchware package from build path [$build_path].'
+        vmsg 'Creating Fetchware package from build path [$build_path].';
         my $fetchware_package_path
             =
             create_fetchware_package($fetchwarefile_path, cwd());
-        vmsg 'Created fetchware package at [$fetchware_package_path].'
+        vmsg 'Created fetchware package at [$fetchware_package_path].';
 
         vmsg 'Installing created fetchware package to fetchware database.';
         my $installed_fetchware_package_path
@@ -309,8 +310,10 @@ EOM
         vmsg 'Parsed Fetchwarefile from installed package.';
     } else {
         die <<EOD;
-fetchware: fetchware upgrade failed to extract the Fetchwarefile from the
-fetchware package that should be stored in fetchware's database.
+fetchware: The option you provided to uninstall is not a currently installed
+fetchware package. Please rerun uninstall after determining the proper name for
+the already installed fetchware package. To see a list of already installed
+fetchware packages please try fetchware's list command: fetchware list
 EOD
     }
 
@@ -403,7 +406,7 @@ EOF
     vmsg "Appended program [$program_name] configuration option to Fetchwarefile";
 
     my $lookup_url = get_lookup_url($term);
-    vmsg "Asked user for lookup_url [$lookup_url] from user."
+    vmsg "Asked user for lookup_url [$lookup_url] from user.";
 
     # Add $lookup_url to $fetchwarefile.
     append_options_to_fetchwarefile({lookup_url => $lookup_url},
@@ -1304,10 +1307,10 @@ EOD
             $$fetchwarefile = do { local $/; <$fh> }; # slurp fetchwarefile
         } else {
             ###BUGALERT### Replace say below with msg() after implementing it.
-            say <<EOS;
+            msg <<EOM;
 You canceled any custom editing of your fetchwarefile by writing an empty file
 to disk.
-EOS
+EOM
         }
     }
     return $fetchwarefile;
@@ -1360,8 +1363,8 @@ EOP
         # subroutine does exactly what I need one to do :) It even deletes this
         # fetchwarefile when the program exists.
         my $fetchwarefile_filename = create_test_fetchwarefile($$fetchwarefile);
-        vmsg <<EOM
-Saved Fetchwarefile temporarily to [$fetchwarefile_path].
+        vmsg <<EOM;
+Saved Fetchwarefile temporarily to [$fetchwarefile_filename].
 EOM
 
         my $fetchware_package_path = cmd_install($fetchwarefile_filename);
@@ -1371,7 +1374,7 @@ EOM
         vmsg <<EOM;
 Copied Fetchwarefile package to fetchware database [$fetchware_package_path].
 EOM
-        msg 'Installed Fetchware package to fetchware database.'
+        msg 'Installed Fetchware package to fetchware database.';
         return $fetchware_package_path;
     # Else the user just wants to save the Fetchwarefile somewhere.
     } else {
@@ -1501,7 +1504,7 @@ diag("dub[$download_url_basename] upb[$upgrade_name_basename]");
     if ($file_listing[0][0] eq $download_url_basename
         # Make cmd_upgrade() not upgrade when the ver
         and $file_listing[0][0] ne $upgrade_name_basename) {
-        msg 'New version available upgrading now.'
+        msg 'New version available upgrading now.';
 
         my $package_path = download($temp_dir, $download_url);
         diag("PPPPPPPPPPP[$package_path]");
@@ -1623,7 +1626,7 @@ diag("cmd_upgrade() return[$upgraded_packages[-1]]");
     } else {
         my @upgraded_packages = grep { $_ ne 'No upgrade needed.' }
             @upgraded_packages;
-        msg 'Packages were upgraded to newer versions:'
+        msg 'Packages were upgraded to newer versions:';
         msg Dumper(\@upgraded_packages);
         return @upgraded_packages;
     }
@@ -1656,7 +1659,7 @@ fetchware clean when you are finished working with it.
 sub cmd_look {
     my $filename = shift;
 
-    msg 'Downloading and unarchiving specified distribution.'
+    msg 'Downloading and unarchiving specified distribution.';
 
     ###BUGALERT### Fails to support looking up installed packages in fetchware
     #database. This test will prevent them from running.
@@ -1708,6 +1711,7 @@ sub cmd_look {
 Your package's contents are at [$look_path]. Please run [fetchware clean] to
 delete these files and any other files fetchware may have left behind.
 EOM
+        return $look_path;
     } else {
         ###BUGALERT### Replace with warn for proposed for loop above to work???
         die <<EOD;

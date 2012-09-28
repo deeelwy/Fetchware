@@ -40,7 +40,11 @@ my $fetchware_package_path;
 subtest 'test cmd_list() success' => sub {
     # First install a test package to make sure there is something for cmd_list()
     # to find.
-    cmd_install('t/test-dist-1.00.fpkg');
+    my $test_dist_path = make_test_dist('test-dist', '1.00', 't');
+    my $test_dist_md5 = md5sum_file($test_dist_path);
+
+    ok(cmd_install($test_dist_path),
+        'checked cmd_list() by installing a test-dist to list');
 diag("CWD[@{[cwd()]}]");
 
     my $stdout;
@@ -69,7 +73,11 @@ __clear_CONFIG();
 
 diag("CWD2[@{[cwd()]}]");
     # Now uninstall the useless test dist.
-    cmd_uninstall('test-dist');
+    ok(cmd_uninstall('test-dist-1.00'),
+        'checked cmd_list() clean up installed test-dist.');
+
+    ok(unlink($test_dist_path, $test_dist_md5),
+        'checked cmd_list() delete temp files.');
 };
 
 

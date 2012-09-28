@@ -59,10 +59,10 @@ EOF
     ok(-e $fetchwarefile_path,
         'check create_test_fetchwarefile() test Fetchwarefile');
 
-    my $build_path = cmd_look($fetchwarefile_path);
+    my $look_path = cmd_look($fetchwarefile_path);
 
     # And then test if cmd_look() was successful.
-    like($build_path, qr/@{[config('filter')]}/,
+    like($look_path, qr/@{[config('filter')]}/,
         'check cmd_look(Fetchware) success.');
 };
 
@@ -76,12 +76,17 @@ __clear_CONFIG();
 
 
 subtest 'test cmd_look() test-dist success' => sub {
-    my $build_path = cmd_look('t/test-dist-1.00.fpkg');
+    my $test_dist_path = make_test_dist('test-dist', '1.00', 't');
+    my $test_dist_md5 = md5sum_file($test_dist_path);
 
-    like($build_path, qr//,
+    my $look_path = cmd_look($test_dist_path);
+
+    like($look_path, qr//,
         'check cmd_look(test-dist) success.');
 
-
+    # Cleanup the test-dist crap.
+    ok(unlink($test_dist_path, $test_dist_md5),
+        'checked cmd_list() delete temp files.');
 };
 
 
