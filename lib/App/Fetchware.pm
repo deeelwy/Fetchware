@@ -22,7 +22,6 @@ use Digest::MD5;
 #use Crypt::OpenPGP;
 use Archive::Extract;
 use Archive::Tar;
-use Sub::Override;
 use Test::More 0.98; # some utility test subroutines need it.
 use Perl::OSType 'is_os_type';
 use Cwd;
