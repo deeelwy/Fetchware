@@ -16,7 +16,6 @@ use Scalar::Util 'blessed';
 ###BUGALERT### Replace IPC::System::Simple with App::Cmd, because App::Cmd is one of
 # Archive::Extract's dependencies, so I may as well use one of my dependencies'
 # dependencies so App::Fetchware users have one fewer dependency to install.
-use Digest;
 use Digest::SHA;
 use Digest::MD5;
 #use Crypt::OpenPGP::KeyRing;
@@ -1835,8 +1834,7 @@ EOD
         die <<EOD;
 EOD
     }
-    ###BUGALERT### Why don't I use Digest to support more than just MD5 and SHA!
-    #my $digest = Digest->new($digest_type);
+
     # Digest requires the filehandle to have binmode set.
     binmode $package_fh;
 
