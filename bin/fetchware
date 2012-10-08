@@ -16,7 +16,7 @@ package fetchware;
 # Use Getopt::Long for options parsing beyond fetchware's simple commands such
 # as install, new, uninstall, help, and so on.
 use Getopt::Long qw(:config bundling pass_through);
-use App::Fetchware qw(:FETCHWARE config get_directory_listing
+use App::Fetchware qw(config get_directory_listing
     parse_directory_listing __clear_CONFIG config_replace msg vmsg run_prog);
 use Archive::Tar;
 use File::Copy qw(mv cp);

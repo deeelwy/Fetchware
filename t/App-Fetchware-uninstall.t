@@ -1,7 +1,7 @@
 #!perl
-# App-Fetchware-start.t tests App::Fetchware's start() subroutine, which
-# determines if a new version of your program is available.
-# Pretend to be bin/fetchware, so that I can test App::Fetchware as though
+# App-Fetchware-uninstall.t tests App::Fetchware's uninstall() subroutine,
+# uninstalls your program.
+# # Pretend to be bin/fetchware, so that I can test App::Fetchware as though
 # bin/fetchware was calling it.
 package fetchware;
 use strict;
@@ -10,7 +10,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '3'; #Update if this changes.
+use Test::More 0.98 tests => '2'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile);
 use URI::Split 'uri_split';
@@ -34,34 +34,25 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 
 
-subtest 'test start()' => sub {
-    skip_all_unless_release_testing();
-
-    my $temp_dir = start();
-
-    ok(-e $temp_dir, 'check start() success');
-    
-    # chdir() so File::Temp can delete the tempdir.
-    chdir();
-
-};
+###BUGALERT### Add actual tests to actually test uninstall(). See the existing
+#uninstall tests that are in t/bin-fetchware-uninstall.t.
 
 
 
-subtest 'test overriding start()' => sub {
-    # switch to *not* being package fetchware, so that I can test start()'s
+subtest 'test overriding uninstall()' => sub {
+    # switch to *not* being package fetchware, so that I can test uninstall()'s
     # behavior as if its being called from a Fetchwarefile to create a callback
-    # that start will later call back in package fetchware.
+    # that uninstall will later call back in package fetchware.
     package main;
     use App::Fetchware;
 
-    start sub { return 'Overrode start()!' };
+    uninstall sub { return 'Overrode uninstall()!' };
 
-    # Switch back to being in package fetchware, so that start() will try out
-    # the callback I gave it in the start() call above.
+    # Switch back to being in package fetchware, so that uninstall() will try out
+    # the callback I gave it in the uninstall() call above.
     package fetchware;
-    is(start(), 'Overrode start()!',
-        'checked overiding start() success');
+    is(uninstall('fake arg'), 'Overrode uninstall()!',
+        'checked overiding uninstall() success');
 };
 
 

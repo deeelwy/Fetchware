@@ -1,13 +1,16 @@
 #!perl
 # App-Fetchware-lookup.t tests App::Fetchware's lookup() subroutine, which
 # determines if a new version of your program is available.
+# Pretend to be bin/fetchware, so that I can test App::Fetchware as though
+# bin/fetchware was calling it.
+package fetchware;
 use strict;
 use warnings;
 use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '5'; #Update if this changes.
+use Test::More 0.98 tests => '6'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile);
 use URI::Split 'uri_split';
@@ -103,6 +106,24 @@ subtest 'test download() local file success' => sub {
 
     ok(unlink($test_dist_path, $test_dist_md5),
         'checked cmd_list() delete temp files.');
+};
+
+
+
+subtest 'test overriding download()' => sub {
+    # switch to *not* being package fetchware, so that I can test download()'s
+    # behavior as if its being called from a Fetchwarefile to create a callback
+    # that download will later call back in package fetchware.
+    package main;
+    use App::Fetchware;
+
+    download sub { return 'Overrode download()!' };
+
+    # Switch back to being in package fetchware, so that download() will try out
+    # the callback I gave it in the download() call above.
+    package fetchware;
+    is(download('fake', 'args'), 'Overrode download()!',
+        'checked overiding download() success');
 };
 
 

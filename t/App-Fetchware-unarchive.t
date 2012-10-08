@@ -1,13 +1,16 @@
 #!perl
 # App-Fetchware-unarchive.t tests App::Fetchware's unarchive() subroutine, which
 # unzips or untars your downloaded archived software.
+# Pretend to be bin/fetchware, so that I can test App::Fetchware as though
+# bin/fetchware was calling it.
+package fetchware;
 use strict;
 use warnings;
 use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '4'; #Update if this changes.
+use Test::More 0.98 tests => '5'; #Update if this changes.
 use File::Spec::Functions 'devnull';
 
 # Set PATH to a known good value.
@@ -24,7 +27,6 @@ BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_UNARCHIVE :TESTING)); }
 # Print the subroutines that App::Fetchware imported by default when I used it.
 diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
-my $class = 'App::Fetchware';
 
 # Call start() to create & cd to a tempdir, so end() called later can delete all
 # of the files that will be downloaded.
@@ -119,6 +121,25 @@ subtest 'test unarchive()' => sub {
 #failing to unarchive files. Maybe I could create archives that can get past the
 #error above.
 };
+
+
+
+subtest 'test overriding unarchive()' => sub {
+    # switch to *not* being package fetchware, so that I can test unarchive()'s
+    # behavior as if its being called from a Fetchwarefile to create a callback
+    # that unarchive will later call back in package fetchware.
+    package main;
+    use App::Fetchware;
+
+    unarchive sub { return 'Overrode unarchive()!' };
+
+    # Switch back to being in package fetchware, so that unarchive() will try out
+    # the callback I gave it in the unarchive() call above.
+    package fetchware;
+    is(unarchive('fake arg'), 'Overrode unarchive()!',
+        'checked overiding unarchive() success');
+};
+
 
 # Call end() to delete temp dir created by start().
 end();

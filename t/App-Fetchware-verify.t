@@ -1,6 +1,9 @@
 #!perl
 # App-Fetchware-verify.t tests App::Fetchware's verify() subroutine, which gpg
 # verifies your downloaded archive if possible. If not it will also try md5/sha.
+# Pretend to be bin/fetchware, so that I can test App::Fetchware as though
+# bin/fetchware was calling it.
+package fetchware;
 use strict;
 use warnings;
 use diagnostics;
@@ -11,7 +14,7 @@ use File::Spec::Functions 'devnull';
 use File::Copy 'cp';
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98;# tests => '7'; #Update if this changes.
+use Test::More 0.98 tests => '8'; #Update if this changes.
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -26,7 +29,6 @@ BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_VERIFY :TESTING :UTIL)); 
 # Print the subroutines that App::Fetchware imported by default when I used it.
 diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
-my $class = 'App::Fetchware';
 
 
 
@@ -249,9 +251,27 @@ EOE
 };
 
 
+subtest 'test overriding verify()' => sub {
+    # switch to *not* being package fetchware, so that I can test verify()'s
+    # behavior as if its being called from a Fetchwarefile to create a callback
+    # that verify will later call back in package fetchware.
+    package main;
+    use App::Fetchware;
+
+    verify sub { return 'Overrode verify()!' };
+
+    # Switch back to being in package fetchware, so that verify() will try out
+    # the callback I gave it in the verify() call above.
+    package fetchware;
+    is(verify('fake', 'args'), 'Overrode verify()!',
+        'checked overiding verify() success');
+};
+
+
+
 # Call end() to delete temp dir created by start().
-end();
+#end();
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-done_testing();
+#done_testing();

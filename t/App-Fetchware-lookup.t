@@ -1,13 +1,16 @@
 #!perl
 # App-Fetchware-lookup.t tests App::Fetchware's lookup() subroutine, which
 # determines if a new version of your program is available.
+# Pretend to be bin/fetchware, so that I can test App::Fetchware as though
+# bin/fetchware was calling it.
+package fetchware;
 use strict;
 use warnings;
 use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '13'; #Update if this changes.
+use Test::More 0.98 tests => '14'; #Update if this changes.
 use File::Spec::Functions qw(rel2abs);
 use Test::Deep;
 
@@ -356,6 +359,24 @@ subtest 'test lookup()' => sub {
         qr{ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
         'checked lookup_determine_downloadurl() success.');
 
+};
+
+
+
+subtest 'test overriding lookup()' => sub {
+    # switch to *not* being package fetchware, so that I can test lookup()'s
+    # behavior as if its being called from a Fetchwarefile to create a callback
+    # that lookup will later call back in package fetchware.
+    package main;
+    use App::Fetchware;
+
+    lookup { return 'Overrode lookup()!' };
+
+    # Switch back to being in package fetchware, so that lookup() will try out
+    # the callback I gave it in the lookup() call above.
+    package fetchware;
+    is(lookup(), 'Overrode lookup()!',
+        'checked overiding lookup() success');
 };
 
 

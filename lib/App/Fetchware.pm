@@ -1,3 +1,6 @@
+###BUGALERT### Uses die instead of croak. croak is the preferred way of throwing
+#exceptions in modules. croak says that the caller was the one who caused the
+#error not the specific code that actually threw the error.
 use strict;
 use warnings;
 package App::Fetchware;
@@ -28,6 +31,24 @@ use Cwd;
 
 # Enable Perl 6 knockoffs.
 use 5.010;
+
+# Add prototypes for the subroutines that can be used in Fetchwarefiles that can
+# take a coderef in packages other than fetchware, but if in fetchware will just
+# take a normal arguments. 
+#
+# The semicolon means the options that follow it are optional. Perl's sucky
+# prototypes can't specify two different versions of the same subroutine with
+# different arguments, so instead all options are optional, and they can be a
+# coderef and/or whatever scalars the subroutine would normally take.
+sub start (;$$);
+sub lookup (;$);
+sub download ($;$);
+sub verify ($;$);
+sub unarchive ($);
+sub build ($);
+sub install (;$);
+sub uninstall ($);
+sub end (;$);
 
 # Set up Exporter to bring App::Fetchware's API to everyone who use's it
 # including fetchware's ability to let you rip into its guts, and customize it
@@ -64,6 +85,16 @@ our @EXPORT = qw(
     fetchware
     override
     config
+
+    start
+    lookup
+    download
+    verify
+    unarchive
+    build
+    install
+    end
+    uninstall
 );
 
 # Forward declarations to make their prototypes work correctly.
@@ -75,17 +106,6 @@ sub run_prog ($;@);
 # replace some or all of fetchware's default behavior to install unusual
 # software.
 our %EXPORT_TAGS = (
-    FETCHWARE => [qw(
-        start
-        lookup
-        download
-        verify
-        unarchive
-        build
-        install
-        end
-        uninstall
-    )],
     OVERRIDE_LOOKUP => [qw(
         check_lookup_config
         get_directory_listing
@@ -733,59 +753,35 @@ the directory they should use for storing file operations.
 
 =cut
 
-sub start {
+sub start (;$$) {
+    # Based on what package we're called in, either accept a callback as an
+    # argument and save it for later, or execute the already saved callback.
+    state $callback; # A state variable to keep its value between calls.
+    if (caller ne 'fetchware') {
+        $callback = shift;
+        die <<EOD if ref $callback ne 'CODE';
+fetchware: start() was called from a package other than 'fetchware', and with an
+argument that was not a code reference. Outside of package 'fetchware' this
+subroutine can only be called with a code reference as its one and only
+argument.
+EOD
+        return 'Callback added.';
+    # We *were* called in package fetchware.
+    } else {
+        # Only execute and return the specified $callback, if it has previously
+        # been defined. If it has not, then execute the rest of this subroutine
+        # normally.
+        if (defined $callback and ref $callback eq 'CODE') {
+            return $callback->(@_);
+        }
+    }
+
+
     my %opts = @_;
 
-    msg 'Creating temp dir to use to install your package.';
+    # Forward opts to create_tempdir(), which does the heavy lifting.
+    my $temp_dir = create_tempdir(%opts);
 
-    # Ask for better security.
-    File::Temp->safe_level( File::Temp::HIGH );
-
-    # Create the temp dir in the portable locations as returned by
-    # File::Spec->tempdir() using the specified template (the weird $$ is this
-    # processes process id), and cleaning up at program exit.
-    my $exception;
-    my $temp_dir;
-    eval {
-        unless (defined $opts{KeepTempDir}) {
-            $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
-
-            vmsg "Created temp dir [$temp_dir] that will be deleted on exit";
-        } else {
-            $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1);
-
-            vmsg "Created temp dir [$temp_dir] that will be kept on exit";
-
-        }
-
-        # Must chown 700 so gpg's localized keyfiles are good.
-        chown 0700, $temp_dir;
-
-        use Test::More;
-        diag("tempdir[$temp_dir]");
-        $exception = $@;
-        1; # return true unless an exception is thrown.
-    } or die <<EOD;
-App-Fetchware: run-time error. Fetchware tried to use File::Temp's tempdir()
-subroutine to create a temporary file, but tempdir() threw an exception. That
-exception was [$exception]. See perldoc App::Fetchware.
-EOD
-
-    vmsg "Saving original working directory as [$original_cwd]";
-    $original_cwd = cwd();
-    diag("cwd[@{[$original_cwd]}]");
-    # Change directory to $CONFIG{TempDir} to make unarchiving and building happen
-    # in a temporary directory, and to allow for multiple concurrent fetchware
-    # runs at the same time.
-    chdir $temp_dir or die <<EOD;
-App-Fetchware: run-time error. Fetchware failed to change its directory to the
-temporary directory that it successfully created. This just shouldn't happen,
-and is weird, and may be a bug. See perldoc App::Fetchware.
-EOD
-    diag("cwd[@{[cwd()]}]");
-    vmsg "Successfully changed working directory to [$temp_dir].";
-
-    msg "Temporary directory created [$temp_dir]";
     return $temp_dir;
 }
 
@@ -822,7 +818,30 @@ values will result in fetchware die()ing with an error message.
 
 =cut
 
-sub lookup {
+sub lookup (;$) {
+    # Based on what package we're called in, either accept a callback as an
+    # argument and save it for later, or execute the already saved callback.
+    state $callback; # A state variable to keep its value between calls.
+    if (caller ne 'fetchware') {
+        $callback = shift;
+        die <<EOD if ref $callback ne 'CODE';
+fetchware: start() was called from a package other than 'fetchware', and with an
+argument that was not a code reference. Outside of package 'fetchware' this
+subroutine can only be called with a code reference as its one and only
+argument.
+EOD
+        return 'Callback added.';
+    # We *were* called in package fetchware.
+    } else {
+        # Only execute and return the specified $callback, if it has previously
+        # been defined. If it has not, then execute the rest of this subroutine
+        # normally.
+        if (defined $callback and ref $callback eq 'CODE') {
+            return $callback->(@_);
+        }
+    }
+
+
     msg "Looking up download url using lookup_url [@{[config('lookup_url')]}]";
 
 diag "lookup_url[@{[config('lookup_url')]}]";
@@ -1360,7 +1379,30 @@ bugs Net::FTP or HTTP::Tiny impose.
 
 =cut
 
-sub download {
+sub download ($;$) {
+    # Based on what package we're called in, either accept a callback as an
+    # argument and save it for later, or execute the already saved callback.
+    state $callback; # A state variable to keep its value between calls.
+    if (caller ne 'fetchware') {
+        $callback = shift;
+        die <<EOD if ref $callback ne 'CODE';
+fetchware: download() was called from a package other than 'fetchware', and with an
+argument that was not a code reference. Outside of package 'fetchware' this
+subroutine can only be called with a code reference as its one and only
+argument.
+EOD
+        return 'Callback added.';
+    # We *were* called in package fetchware.
+    } else {
+        # Only execute and return the specified $callback, if it has previously
+        # been defined. If it has not, then execute the rest of this subroutine
+        # normally.
+        if (defined $callback and ref $callback eq 'CODE') {
+            return $callback->(@_);
+        }
+    }
+
+
     my ($temp_dir, $download_url) = @_;
 
     msg "Downloading from url [$download_url] to temp dir [$temp_dir]";
@@ -1441,7 +1483,30 @@ ridden, but still usable.
 
 =cut
 
-sub verify {
+sub verify ($;$) {
+    # Based on what package we're called in, either accept a callback as an
+    # argument and save it for later, or execute the already saved callback.
+    state $callback; # A state variable to keep its value between calls.
+    if (caller ne 'fetchware') {
+        $callback = shift;
+        die <<EOD if ref $callback ne 'CODE';
+fetchware: start() was called from a package other than 'fetchware', and with an
+argument that was not a code reference. Outside of package 'fetchware' this
+subroutine can only be called with a code reference as its one and only
+argument.
+EOD
+        return 'Callback added.';
+    # We *were* called in package fetchware.
+    } else {
+        # Only execute and return the specified $callback, if it has previously
+        # been defined. If it has not, then execute the rest of this subroutine
+        # normally.
+        if (defined $callback and ref $callback eq 'CODE') {
+            return $callback->(@_);
+        }
+    }
+
+
     my ($download_url, $package_path) = @_;
 
     msg "Verifying the downloaded package [$package_path]";
@@ -1790,7 +1855,11 @@ sub digest_verify {
         # Save old lookup_url and restore later like Perl's crazy local does.
         my $old_lookup_url = config('lookup_url');
         config_replace(lookup_url => config("${digest_ext}_url"));
+        ###BUGALERT### This is crap! Rip lookup()'s fetchware out, and have this
+        #subroutine call a new library function instead!
+        package fetchware; # Pretend to be bin/fetchware.
         my $lookuped_download_url = lookup();
+        package App::Fetchware; # Switch back.
         # Should I implement config_local() :)
         config_replace(lookup_url => $old_lookup_url);
         $digest_file = download_file("$lookuped_download_url.$digest_ext");
@@ -1914,7 +1983,30 @@ already extract them.
 
 =cut
 
-sub unarchive {
+sub unarchive ($) {
+    # Based on what package we're called in, either accept a callback as an
+    # argument and save it for later, or execute the already saved callback.
+    state $callback; # A state variable to keep its value between calls.
+    if (caller ne 'fetchware') {
+        $callback = shift;
+        die <<EOD if ref $callback ne 'CODE';
+fetchware: start() was called from a package other than 'fetchware', and with an
+argument that was not a code reference. Outside of package 'fetchware' this
+subroutine can only be called with a code reference as its one and only
+argument.
+EOD
+        return 'Callback added.';
+    # We *were* called in package fetchware.
+    } else {
+        # Only execute and return the specified $callback, if it has previously
+        # been defined. If it has not, then execute the rest of this subroutine
+        # normally.
+        if (defined $callback and ref $callback eq 'CODE') {
+            return $callback->(@_);
+        }
+    }
+
+
     my $package_path = shift;
 
     msg "Unarchiving the downloaded package [$package_path]";
@@ -2094,7 +2186,30 @@ fetchware's output.
 
 =cut
 
-sub build {
+sub build ($) {
+    # Based on what package we're called in, either accept a callback as an
+    # argument and save it for later, or execute the already saved callback.
+    state $callback; # A state variable to keep its value between calls.
+    if (caller ne 'fetchware') {
+        $callback = shift;
+        die <<EOD if ref $callback ne 'CODE';
+fetchware: start() was called from a package other than 'fetchware', and with an
+argument that was not a code reference. Outside of package 'fetchware' this
+subroutine can only be called with a code reference as its one and only
+argument.
+EOD
+        return 'Callback added.';
+    # We *were* called in package fetchware.
+    } else {
+        # Only execute and return the specified $callback, if it has previously
+        # been defined. If it has not, then execute the rest of this subroutine
+        # normally.
+        if (defined $callback and ref $callback eq 'CODE') {
+            return $callback->(@_);
+        }
+    }
+
+
     my $build_path = shift;
 
     msg "Building your package in [$build_path]";
@@ -2247,7 +2362,30 @@ fetchware's output.
 
 =cut
 
-sub install {
+sub install (;$) {
+    # Based on what package we're called in, either accept a callback as an
+    # argument and save it for later, or execute the already saved callback.
+    state $callback; # A state variable to keep its value between calls.
+    if (caller ne 'fetchware') {
+        $callback = shift;
+        die <<EOD if ref $callback ne 'CODE';
+fetchware: start() was called from a package other than 'fetchware', and with an
+argument that was not a code reference. Outside of package 'fetchware' this
+subroutine can only be called with a code reference as its one and only
+argument.
+EOD
+        return 'Callback added';
+    # We *were* called in package fetchware.
+    } else {
+        # Only execute and return the specified $callback, if it has previously
+        # been defined. If it has not, then execute the rest of this subroutine
+        # normally.
+        if (defined $callback and ref $callback eq 'CODE') {
+            return $callback->(@_);
+        }
+    }
+
+
     # Skip installation if the user requests it.
     if (config('no_install')) {
         msg <<EOM;
@@ -2330,7 +2468,31 @@ fetchware's output.
 ###BUGALERT### NOT TESTED!!! There is no t/App-Fetchware-uninstall.t test
 #file!!! cmd_uninstall(), which uses uninstall(), is tested, but not uninstall()
 #directly!!!
-sub uninstall {
+sub uninstall ($) {
+    # Based on what package we're called in, either accept a callback as an
+    # argument and save it for later, or execute the already saved callback.
+    state $callback; # A state variable to keep its value between calls.
+    if (caller ne 'fetchware') {
+        $callback = shift;
+        diag("callback[$callback]");
+        die <<EOD if ref $callback ne 'CODE';
+fetchware: start() was called from a package other than 'fetchware', and with an
+argument that was not a code reference. Outside of package 'fetchware' this
+subroutine can only be called with a code reference as its one and only
+argument.
+EOD
+        return 'Callback added.';
+    # We *were* called in package fetchware.
+    } else {
+        # Only execute and return the specified $callback, if it has previously
+        # been defined. If it has not, then execute the rest of this subroutine
+        # normally.
+        if (defined $callback and ref $callback eq 'CODE') {
+            return $callback->(@_);
+        }
+    }
+
+
     my $build_path = shift;
 
     msg "Uninstalling package unarchived at path [$build_path]";
@@ -2430,34 +2592,32 @@ Fetchwarefile.
 
 =cut
 
-sub end {
-    msg 'Cleaning up temporary directory temporary directory.';
-    # chdir to $original_cwd directory, so File::Temp can delete the tempdir. This
-    # is necessary, because operating systems do not allow you to delete a
-    # directory that a running program has as its cwd.
-
-    vmsg 'Changing directory to [$original_cwd].';
-    chdir($original_cwd) or die <<EOD;
-App-Fetchware: run-time error. Fetchware failed to chdir() to [$original_cwd]. See
-perldoc App::Fetchware.
+sub end (;$) {
+    # Based on what package we're called in, either accept a callback as an
+    # argument and save it for later, or execute the already saved callback.
+    state $callback; # A state variable to keep its value between calls.
+    if (caller ne 'fetchware') {
+        $callback = shift;
+        diag("callback[$callback]");
+        die <<EOD if ref $callback ne 'CODE';
+fetchware: end() was called from a package other than 'fetchware', and with an
+argument that was not a code reference. Outside of package 'fetchware' this
+subroutine can only be called with a code reference as its one and only
+argument.
 EOD
+        return 'Callback added.';
+    # We *were* called in package fetchware.
+    } else {
+        # Only execute and return the specified $callback, if it has previously
+        # been defined. If it has not, then execute the rest of this subroutine
+        # normally.
+        if (defined $callback and ref $callback eq 'CODE') {
+            return $callback->(@_);
+        }
+    }
 
-    # Call File::Temp's cleanup subrouttine to delete fetchware's temp
-    # directory.
-    ###BUGALERT### Below doesn't seem to work!!
-    vmsg 'Cleaning up temporary directory.';
-    File::Temp::cleanup();
-    ###BUGALERT### Should end() clear %CONFIG for next invocation of App::Fetchware
-    # Clear %CONFIG for next run of App::Fetchware.
-    # Is this a design defect? It's a pretty lame hack! Does my() do this for
-    # me?
-    ###BUGALERT###YYYYYYEEEEEEEEEESSSSSSSSSSSS!!!! It probbly should. It would
-    #remove many calls to __clear_CONFIG() from the test suite.
-###BUGALERT### Just take %CONFIG OO!!! App::Fetchware::Config!!! Problem solved.
-    vmsg 'Clearing internal %CONFIG variable that hold your parsed Fetchwarefile.';
-    __clear_CONFIG();
-
-    msg 'Cleaned up temporary directory.';
+    # Use cleanup_tempdir() to cleanup your tempdir for us.
+    cleanup_tempdir();
 }
 
 
@@ -2646,7 +2806,7 @@ sub make_test_dist {
     }
 
     # Create a temp dir to create or test-dist-1.$ver_num directory in.
-    my $temp_dir = start();
+    my $temp_dir = create_tempdir();
 
     # Append $ver_num to $file_name to complete the dist's name.
     my $dist_name = "$file_name-$ver_num";
@@ -2742,7 +2902,7 @@ testing [$test_dist_filename] The error was [@{[Archive::Tar->error()]}].
 EOD
 
     # Cd back to $original_cwd and delete $temp_dir.
-    end();
+    cleanup_tempdir();
 
     return rel2abs($test_dist_filename);
 }
@@ -2805,6 +2965,114 @@ EOD
 
     return $md5sum_file;
 }
+
+
+=item my $temp_dir = create_tempdir();
+
+Creates a temporary directory, chmod 700's it, and chdir()'s into it.
+
+Accepts the fake hash argument C<KeepTempDir => 1>, which tells create_tempdir()
+to B<not> delete the temporary directory when the program exits.
+
+=cut
+
+sub create_tempdir {
+    my %opts = @_;
+
+    msg 'Creating temp dir to use to install your package.';
+
+    # Ask for better security.
+    File::Temp->safe_level( File::Temp::HIGH );
+
+    # Create the temp dir in the portable locations as returned by
+    # File::Spec->tempdir() using the specified template (the weird $$ is this
+    # processes process id), and cleaning up at program exit.
+    my $exception;
+    my $temp_dir;
+    eval {
+        unless (defined $opts{KeepTempDir}) {
+            $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+
+            vmsg "Created temp dir [$temp_dir] that will be deleted on exit";
+        } else {
+            $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1);
+
+            vmsg "Created temp dir [$temp_dir] that will be kept on exit";
+
+        }
+
+        # Must chown 700 so gpg's localized keyfiles are good.
+        chown 0700, $temp_dir;
+
+        use Test::More;
+        diag("tempdir[$temp_dir]");
+        $exception = $@;
+        1; # return true unless an exception is thrown.
+    } or die <<EOD;
+App-Fetchware: run-time error. Fetchware tried to use File::Temp's tempdir()
+subroutine to create a temporary file, but tempdir() threw an exception. That
+exception was [$exception]. See perldoc App::Fetchware.
+EOD
+
+    vmsg "Saving original working directory as [$original_cwd]";
+    $original_cwd = cwd();
+    diag("cwd[@{[$original_cwd]}]");
+    # Change directory to $CONFIG{TempDir} to make unarchiving and building happen
+    # in a temporary directory, and to allow for multiple concurrent fetchware
+    # runs at the same time.
+    chdir $temp_dir or die <<EOD;
+App-Fetchware: run-time error. Fetchware failed to change its directory to the
+temporary directory that it successfully created. This just shouldn't happen,
+and is weird, and may be a bug. See perldoc App::Fetchware.
+EOD
+    diag("cwd[@{[cwd()]}]");
+    vmsg "Successfully changed working directory to [$temp_dir].";
+
+    msg "Temporary directory created [$temp_dir]";
+
+    return $temp_dir;
+}
+
+
+=item cleanup_tempdir();
+
+Cleans up B<any> temporary files or directories that anything in this process used
+File::Temp to create. You cannot only clean up one directory or another;
+instead, you must just use this sparingly or in an END block although file::Temp
+takes care of that for you unless you asked it not to.
+
+=cut
+
+sub cleanup_tempdir {
+    msg 'Cleaning up temporary directory temporary directory.';
+    # chdir to $original_cwd directory, so File::Temp can delete the tempdir. This
+    # is necessary, because operating systems do not allow you to delete a
+    # directory that a running program has as its cwd.
+
+    vmsg 'Changing directory to [$original_cwd].';
+    chdir($original_cwd) or die <<EOD;
+App-Fetchware: run-time error. Fetchware failed to chdir() to [$original_cwd]. See
+perldoc App::Fetchware.
+EOD
+
+    # Call File::Temp's cleanup subrouttine to delete fetchware's temp
+    # directory.
+    ###BUGALERT### Below doesn't seem to work!!
+    vmsg 'Cleaning up temporary directory.';
+    File::Temp::cleanup();
+    ###BUGALERT### Should end() clear %CONFIG for next invocation of App::Fetchware
+    # Clear %CONFIG for next run of App::Fetchware.
+    # Is this a design defect? It's a pretty lame hack! Does my() do this for
+    # me?
+    ###BUGALERT###YYYYYYEEEEEEEEEESSSSSSSSSSSS!!!! It probbly should. It would
+    #remove many calls to __clear_CONFIG() from the test suite.
+###BUGALERT### Just take %CONFIG OO!!! App::Fetchware::Config!!! Problem solved.
+    vmsg 'Clearing internal %CONFIG variable that hold your parsed Fetchwarefile.';
+    __clear_CONFIG();
+
+    msg 'Cleaned up temporary directory.';
+}
+
 
 =item Standards for using msg() and vmsg()
 
@@ -2960,6 +3228,7 @@ EOD
         }
     }
 }
+
 
 
 

@@ -1,13 +1,16 @@
 #!perl
 # App-Fetchware-end.t tests App::Fetchware's end() subroutine, which
 # determines if a new version of your program is available.
+# Pretend to be bin/fetchware, so that I can test App::Fetchware as though
+# bin/fetchware was calling it.
+package fetchware;
 use strict;
 use warnings;
 use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '2'; #Update if this changes.
+use Test::More 0.98 tests => '3'; #Update if this changes.
 
 use File::Temp 'tempdir';
 
@@ -43,6 +46,23 @@ subtest 'test end()' => sub {
     done_testing();
 };
 
+
+
+subtest 'test overriding end()' => sub {
+    # switch to *not* being package fetchware, so that I can test end()'s
+    # behavior as if its being called from a Fetchwarefile to create a callback
+    # that end will later call back in package fetchware.
+    package main;
+    use App::Fetchware;
+
+    end sub { return 'Overrode end()!' };
+
+    # Switch back to being in package fetchware, so that end() will try out
+    # the callback I gave it in the end() call above.
+    package fetchware;
+    is(end(), 'Overrode end()!',
+        'checked overiding end() success');
+};
 
 
 

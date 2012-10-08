@@ -1,13 +1,16 @@
 #!perl
 # App-Fetchware-install.t tests App::Fetchware's install() subroutine, which
 # installs your software.
+# Pretend to be bin/fetchware, so that I can test App::Fetchware as though
+# bin/fetchware was calling it.
+package fetchware;
 use strict;
 use warnings;
 use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '7'; #Update if this changes.
+use Test::More 0.98 tests => '8'; #Update if this changes.
 use File::Copy 'cp';
 
 # Set PATH to a known good value.
@@ -91,6 +94,24 @@ subtest 'test install() no_install success' => sub {
 
     is(install(), 'installation skipped!',
         'checked install() no_install success');
+};
+
+
+
+subtest 'test overriding install()' => sub {
+    # switch to *not* being package fetchware, so that I can test install()'s
+    # behavior as if its being called from a Fetchwarefile to create a callback
+    # that install will later call back in package fetchware.
+    package main;
+    use App::Fetchware;
+
+    install sub { return 'Overrode install()!' };
+
+    # Switch back to being in package fetchware, so that install() will try out
+    # the callback I gave it in the install() call above.
+    package fetchware;
+    is(install(), 'Overrode install()!',
+        'checked overiding install() success');
 };
 
 

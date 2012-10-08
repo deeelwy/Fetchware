@@ -1,13 +1,16 @@
 #!perl
 # App-Fetchware-build.t tests App::Fetchware's build() subroutine, which builds
 # your software.
+# Pretend to be bin/fetchware, so that I can test App::Fetchware as though
+# bin/fetchware was calling it.
+package fetchware;
 use strict;
 use warnings;
 use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '7'; #Update if this changes.
+use Test::More 0.98 tests => '8'; #Update if this changes.
 use File::Copy 'cp';
 
 # Set PATH to a known good value.
@@ -23,7 +26,6 @@ BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_BUILD :TESTING)); }
 # Print the subroutines that App::Fetchware imported by default when I used it.
 diag(qq{App::Fetchwares default imports [@App::Fetchware::EXPORT]});
 
-my $class = 'App::Fetchware';
 
 
 subtest 'OVERRIDE_BUILD exports what it should' => sub {
@@ -156,6 +158,24 @@ subtest 'test build() make_options success' => sub {
     # Clear $CONFIG of configure_options for next subtest.
     config_delete('make_options');
 };
+
+
+subtest 'test overriding build()' => sub {
+    # switch to *not* being package fetchware, so that I can test build()'s
+    # behavior as if its being called from a Fetchwarefile to create a callback
+    # that build will later call back in package fetchware.
+    package main;
+    use App::Fetchware;
+
+    build sub { return 'Overrode build()!' };
+
+    # Switch back to being in package fetchware, so that build() will try out
+    # the callback I gave it in the build() call above.
+    package fetchware;
+    is(build('fake arg'), 'Overrode build()!',
+        'checked overiding build() success');
+};
+
 
 # Call end() to delete temp dir created by start().
 end();
