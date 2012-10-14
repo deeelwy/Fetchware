@@ -82,8 +82,6 @@ our @EXPORT = qw(
     no_install
     verify_failure_ok
     mirror
-    fetchware
-    override
     config
 
     start
