@@ -237,11 +237,11 @@ EOM
         # print location of temp dir instead.
         install();
 
-        vmsg 'Creating Fetchware package from build path [$build_path].';
+        vmsg "Creating Fetchware package from [@{[cwd()]}].";
         my $fetchware_package_path
             =
             create_fetchware_package($fetchwarefile_path, cwd());
-        vmsg 'Created fetchware package at [$fetchware_package_path].';
+        vmsg "Created fetchware package at [$fetchware_package_path].";
 
         vmsg 'Installing created fetchware package to fetchware database.';
         my $installed_fetchware_package_path
