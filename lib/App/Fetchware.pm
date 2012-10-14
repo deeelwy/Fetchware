@@ -149,6 +149,7 @@ our %EXPORT_TAGS = (
         make_clean
         make_test_dist
         md5sum_file
+        expected_filename_listing
         start
         lookup
         download
@@ -2993,6 +2994,57 @@ EOD
 }
 
 
+
+=item expected_filename_listing()
+
+Returns a crazy string meant for use with Test::Deep for testing that Apache
+directory listings have been parsed correctly by lookup().
+
+=cut
+
+sub expected_filename_listing {
+    my $expected_filename_listing = <<'EOC';
+        array_each(
+            array_each(any(
+                re(qr/Announcement2.\d.(html|txt)/),
+                re(qr/CHANGES_2\.\d(\.\d+)?/),
+                re(qr/CURRENT(-|_)IS(-|_)\d\.\d+?\.\d+/),
+                re(qr/
+                    HEADER.html
+                    |
+                    KEYS
+                    |
+                    README.html
+                    |
+                    binaries
+                    |
+                    docs
+                    |
+                    flood
+                /x),
+                re(qr/httpd-2\.\d\.\d+?-win32-src\.zip(\.asc)?/),
+                re(qr/httpd-2\.\d\.\d+?\.tar\.(bz2|gz)(\.asc)?/),
+                re(qr/httpd-2\.\d\.\d+?-deps\.tar\.(bz2|gz)(\.asc)?/),
+                re(qr/
+                    libapreq
+                    |
+                    mod_fcgid
+                    |
+                    mod_ftp
+                    |
+                    patches
+                /x),
+                re(qr/\d{12}/)
+                ) # end any
+            )
+        );
+EOC
+
+    return $expected_filename_listing;
+}
+
+
+
 =item my $temp_dir = create_tempdir();
 
 Creates a temporary directory, chmod 700's it, and chdir()'s into it.
@@ -3683,13 +3735,5 @@ sub do_nothing {
 
 =cut
 
-
-
-
-    no strict 'refs';
-use Test::More;
-    diag "Installed subs!!!";
-my $module = 'App::Fetchware';
-    diag explain \(grep { defined &{"$module\::$_"} } keys %{"$module\::"});
 
 1;

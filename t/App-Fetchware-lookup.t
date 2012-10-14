@@ -58,6 +58,7 @@ subtest 'OVERRIDE_LOOKUP exports what it should' => sub {
 # Test lookup()'s internal dependencies first in the order they appear.
 
 
+###BUGALERT### Make check_lookup_config() support App::Fetchware "subclasses."
 subtest 'test check_lookup_config()' => sub {
     # check for when lookup_url is *not* providied.
     eval_ok(sub {check_lookup_config()}, <<EOS, 'checked check_lookup_config no lookup_url');
@@ -112,44 +113,6 @@ subtest 'test get_directory_listing()' => sub {
 };
 
 
-my $expected_filename_listing = <<'EOC';
-    array_each(
-        array_each(any(
-            re(qr/Announcement2.\d.(html|txt)/),
-            re(qr/CHANGES_2\.\d(\.\d+)?/),
-            re(qr/CURRENT(-|_)IS(-|_)\d\.\d+?\.\d+/),
-            re(qr/
-                HEADER.html
-                |
-                KEYS
-                |
-                README.html
-                |
-                binaries
-                |
-                docs
-                |
-                flood
-            /x),
-            re(qr/httpd-2\.\d\.\d+?-win32-src\.zip(\.asc)?/),
-            re(qr/httpd-2\.\d\.\d+?\.tar\.(bz2|gz)(\.asc)?/),
-            re(qr/httpd-2\.\d\.\d+?-deps\.tar\.(bz2|gz)(\.asc)?/),
-            re(qr/
-                libapreq
-                |
-                mod_fcgid
-                |
-                mod_ftp
-                |
-                patches
-            /x),
-            re(qr/\d{12}/)
-            ) # end any
-        )
-    );
-EOC
-
-
 subtest 'test ftp_parse_filelist()' => sub {
     skip_all_unless_release_testing();
 
@@ -163,7 +126,7 @@ subtest 'test ftp_parse_filelist()' => sub {
     my $filename_listing = ftp_parse_filelist($directory_listing);
 
 diag explain $filename_listing;
-    cmp_deeply($filename_listing, eval "$expected_filename_listing",
+    cmp_deeply($filename_listing, eval(expected_filename_listing()),
         'checked ftp_parse_listing() success');
     pass('fixin it');
 
@@ -193,7 +156,7 @@ diag("ENDCOPYHERE");
 
     my $filename_listing = http_parse_filelist(return_html_listing());
 
-    cmp_deeply($filename_listing, eval "$expected_filename_listing",
+    cmp_deeply($filename_listing, eval(expected_filename_listing()),
         'checked http_parse_listing() success');
 
 };
@@ -227,7 +190,7 @@ subtest 'test parse_directory_listing()' => sub {
     my $directory_listing = get_directory_listing();
 
     cmp_deeply(parse_directory_listing($directory_listing),
-        eval "$expected_filename_listing",
+        eval(expected_filename_listing()),
         'checked parse_directory_listing() ftp success.');
 
 };
