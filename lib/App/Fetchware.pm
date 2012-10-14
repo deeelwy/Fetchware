@@ -1,9 +1,9 @@
+package App::Fetchware;
 ###BUGALERT### Uses die instead of croak. croak is the preferred way of throwing
 #exceptions in modules. croak says that the caller was the one who caused the
 #error not the specific code that actually threw the error.
 use strict;
 use warnings;
-package App::Fetchware;
 
 # CPAN modules making Fetchwarefile better.
 use File::Temp 'tempdir';
@@ -93,6 +93,8 @@ our @EXPORT = qw(
     install
     end
     uninstall
+
+    make_config_sub
 );
 
 # Forward declarations to make their prototypes work correctly.
@@ -170,6 +172,7 @@ our %EXPORT_TAGS = (
         download_http_url
         download_file_url
         just_filename
+        do_nothing
     )],
 );
 # OVERRIDE_ALL is simply all other tags combined.
@@ -500,6 +503,15 @@ therefore, that is why make_config_sub() must be called inside a C<BEGIN> block.
 =back
 
 =over
+=item NOTE
+make_config_sub() uses caller to determine the package that make_config_sub()
+was called from. This package is then prepended to the string that is eval'd to
+create the designated subroutine in the caller's package. This is needed so that
+App::Fetchware "subclasses" can import this function, and enjoy its simple
+interface to create custom configuration subroutines.
+=back
+
+=over
 
 =item $one_or_many_values Supported Values
 
@@ -576,6 +588,10 @@ make_config_sub() except for fetchware() and override().
     sub make_config_sub {
         my ($name, $one_or_many_values) = @_;
 
+        # Obtain caller's package name, so that the new configuration subroutine
+        # can be created in the caller's package instead of our own.
+        my $package = caller;
+
         die <<EOD unless defined $name;
 App-Fetchware: internal syntax error: make_config_sub() was called without a
 name. It must receive a name parameter as its first paramter. See perldoc
@@ -599,6 +615,8 @@ EOD
                 ###BUGALERT### the ($) sub prototype needed for ditching parens must
                 #be seen at compile time. Is "eval time" considered compile time?
                 my $eval = <<'EOE'; 
+package $package;
+
 sub $name (@) {
     my $value = shift;
     
@@ -623,6 +641,7 @@ EOD
 1; # return true from eval
 EOE
                 $eval =~ s/\$name/$name/g;
+                $eval =~ s/\$package/$package/g;
                 eval $eval or die <<EOD;
 1App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [$@]. See perldoc App::Fetchware.
@@ -639,6 +658,8 @@ EOD
                 ###BUGALERT### the (@) sub prototype needed for ditching parens must
                 #be seen at compile time. Is "eval time" considered compile time?
                 my $eval = <<'EOE'; 
+package $package;
+
 sub $name (@) {
     my $value = shift;
     
@@ -657,6 +678,7 @@ EOD
 1; # return true from eval
 EOE
                 $eval =~ s/\$name/$name/g;
+                $eval =~ s/\$package/$package/g;
                 eval $eval or die <<EOD;
 2App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [$@]. See perldoc App::Fetchware.
@@ -664,6 +686,8 @@ EOD
             }
             when('MANY') {
                 my $eval = <<'EOE';
+package $package;
+
 sub $name (@) {
     my $value = shift;
 
@@ -678,12 +702,15 @@ sub $name (@) {
 1; # return true from eval
 EOE
                 $eval =~ s/\$name/$name/g;
+                $eval =~ s/\$package/$package/g;
                 eval $eval or die <<EOD;
 3App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [\$@]. See perldoc App::Fetchware.
 EOD
             } when('BOOLEAN') {
                 my $eval = <<'EOE';
+package $package;
+
 sub $name (@) {
     my $value = shift;
 
@@ -718,6 +745,7 @@ EOD
 1; # return true from eval
 EOE
                 $eval =~ s/\$name/$name/g;
+                $eval =~ s/\$package/$package/g;
                 eval $eval or die <<EOD;
 4App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [\$@]. See perldoc App::Fetchware.
@@ -2770,7 +2798,6 @@ sub make_clean {
 }
 
 
-
 =item make_test_dist($file_name, $ver_num, rel2abs($destination_directory));
 
 Makes a C<$filename-$ver_num.fpkg> fetchware package that can be used for
@@ -2904,6 +2931,7 @@ EOD
 
     return rel2abs($test_dist_filename);
 }
+
 
 =item md5sum_file($archive_to_md5)
 
@@ -3503,12 +3531,33 @@ EOD
 
 Uses HTTP::Tiny to download the specified HTTP URL.
 
+Supports adding extra arguments to HTTP::Tiny's new() constructor. These
+arguments are B<not> checked for correctness; instead, they are simply forwarded
+to HTTP::Tiny, which does not check them for correctness either. HTTP::Tiny
+simply loops over its internal listing of what is arguments should be, and then
+accesses the arguments if they exist.
+
+This was really only implemented to allow App::Fetchware::HTMLPageSync to change
+its user agent string to avoid being blocked or freaking out Web developers that
+they're being screen scraped by some obnoxious bot as HTMLPageSync is wimply and
+harmless, and only downloads one page. 
+
+You would add an argument like this:
+download_http_url($http_url, agent => 'Firefox');
+
+See HTTP::Tiny's documentation for what these options are.
+
 =cut
 
 sub download_http_url {
     my $http_url = shift;
 
-    my $response = HTTP::Tiny->new->get($http_url);
+    # Forward any other options over to HTTP::Tiny. This is used mostly to
+    # support changing user agent strings, but why not support them all.
+    my %opts = @_ if @_ % 2 == 0;
+
+    my $http = HTTP::Tiny->new(%opts);
+    my $response = $http->get($http_url);
 
     die <<EOD unless $response->{success};
 App-Fetchware: run-time error. HTTP::Tiny failed to download a directory listing
@@ -3547,6 +3596,8 @@ EOD
     # Determine filename from the $path.
     my ($volume, $directories, $filename) = splitpath($path);
     diag("filename[$filename]");
+    # If $filename is empty string, then its probably a index directory listing.
+    $filename ||= 'index.html';
     ###BUGALERT### Need binmode() on Windows???
     open(my $fh, '>', $filename) or die <<EOD;
 App-Fetchware: run-time error. Fetchware failed to open a file necessary for
@@ -3614,10 +3665,31 @@ sub just_filename {
 }
 
 
+=item do_nothing();
+
+do_nothing() does nothing but return. It simply returns doing nothing. It is
+meant to be used by App::Fetchware "subclasses" that "override" App::Fetchware's
+API subroutines to make those API subroutines do nothing.
+
+=cut
+
+sub do_nothing {
+    return;
+}
+
+
 # End UTILITY SUBROUTINES =over.
 =back
 
 =cut
 
+
+
+
+    no strict 'refs';
+use Test::More;
+    diag "Installed subs!!!";
+my $module = 'App::Fetchware';
+    diag explain \(grep { defined &{"$module\::$_"} } keys %{"$module\::"});
 
 1;
