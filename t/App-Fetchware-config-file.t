@@ -1,6 +1,6 @@
 #!perl
 # App-Fetchware-config-file.t tests App::Fetchware's configuration file
-# subroutines except for fetchware which deserves its own test file.
+# subroutines.
 
 use strict;
 use warnings;
@@ -23,7 +23,7 @@ BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :TESTING)); }
 # Print the subroutines that App::Fetchware imported by default when I used it.
 diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
-my $class = 'App::Fetchware';
+###BUGALERT### make_config_sub() has no tests!!!
 
 
 subtest 'test config file subs' => sub {
