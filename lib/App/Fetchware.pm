@@ -1,4 +1,5 @@
 package App::Fetchware;
+# ABSTRACT: App::Fetchware is Fetchware's API used to make extensions.
 ###BUGALERT### Uses die instead of croak. croak is the preferred way of throwing
 #exceptions in modules. croak says that the caller was the one who caused the
 #error not the specific code that actually threw the error.

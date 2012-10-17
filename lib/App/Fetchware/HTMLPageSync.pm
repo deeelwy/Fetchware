@@ -1,5 +1,5 @@
-###BUGALERT### Need msg() and vmsg()s!!!
 package App::Fetchware::HTMLPageSync;
+# ABSTRACT: An App::Fetchware extension that downloads files based on an HTML page.
 use strict;
 use warnings;
 
