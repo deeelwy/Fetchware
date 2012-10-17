@@ -3,3 +3,4 @@
 *.fpkg*
 test-dist*.tar.gz
 .prove
+*.html
