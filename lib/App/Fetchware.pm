@@ -212,6 +212,7 @@ subroutines as Fetchwarefile configuration syntax.
 =item lookup_method $value;
 =item gpg_key_url $value;
 =item verify_method $value;
+
 =back
 
 These Fetchwarefile API subroutines can B<only> be called just one time in each
@@ -222,6 +223,7 @@ These subroutines are generated at compile time by make_config_sub().
 =item 'MANY' Fetchwarefile API Subroutines.
 =over
 =item mirror $value;
+
 =back
 
 C<mirror> can be called many times with each one adding a mirror that fetchware
@@ -234,6 +236,7 @@ time.
 =over
 =item no_install;
 =item verify_failure_ok;
+
 =back
 
 C<no_install> is a true/false, on/off, 1/0 directive. It supports only true or
@@ -257,12 +260,15 @@ die()ing printing an error message.
 =cut
 
 
-
+###BUGALERT### Recommend installing http://gpg4win.org if you use fetchware on
+# Windows so you have gpg support. 
 
 
 
 =head1 CUSTOMIZING YOUR FETCHWAREFILE
 
+###BUGALERT### This is totally *wrong* rewrite to the way fetchware can be
+#overridden and extended now!!!!!!!
 When fetchware's default behavior and configuration are B<not> enough you can
 replace your call to C<fetchware;> with C<override;> that allows you to replace
 each of the steps fetchware follows to install your software.
@@ -282,9 +288,10 @@ install and use L<Sub::Import> if you demand more control over imports.
 
 =cut
 
-=over
 
-=item override LIST;
+=head2 override
+
+    override LIST;
 
 Used instead of C<fetchware;> to override fetchware's default behavior. This
 should only be used if fetchware's configuration options do B<not> provide the
@@ -294,8 +301,9 @@ The LIST your provide is a fake hash of steps you want to override as keys and
 the coderefs to a replacement  those subroutines like:
 
 =over
-override lookup => \&overridden_lookup,
-    download => sub { code refs work too; };
+=item * override lookup => \&overridden_lookup,
+=item * download => sub { code refs work too; };
+
 =back
 
 
@@ -344,11 +352,6 @@ EOD
     return 'overrode specified subs and executed them';
 }
 
-# End over CUSTOMIZING YOUR FETCHWAREFILE.
-
-=back
-
-=cut
 
 
 
@@ -359,7 +362,9 @@ BEGIN { # BEGIN BLOCK due to api subs needing prototypes.
 { # Containing bare block for %CONFIG
     my %CONFIG;
     
-=item config($config_sub_name, $config_sub_value);
+=head2 config()
+
+    $config_sub_value = config($config_sub_name, $config_sub_value);
 
 config() stores all of the configuration options that are parsed (actually
 executed) in your Fetchwarefile. They are stored in the %CONFIG variable that is
@@ -413,7 +418,9 @@ element of %CONFIG to be promoted to being an C<ARRAY> ref.
 
 
 
-=item config_replace($name, $value);
+=head2 config_replace()
+
+    config_replace($name, $value);
 
 Replaces $name with $value. If C<scalar @_> > 2, then config_replace() will
 replace $name with $value, and @_[2..$#_].
@@ -438,7 +445,9 @@ EOD
 
 
 
-=item config_delete($name);
+=head2 config_delete()
+
+    config_delete($name);
 
 delete's $name from %CONFIG.
 
@@ -451,7 +460,9 @@ delete's $name from %CONFIG.
     }
 
 
-=item __clear_CONFIG();
+=head2 __clear_CONFIG()
+
+    __clear_CONFIG();
 
 Clears the %CONFIG variable that is shared between this subroutine and config().
 
@@ -462,7 +473,9 @@ Clears the %CONFIG variable that is shared between this subroutine and config().
     }
 
 
-=item debug_CONFIG();
+=head2 debug_CONFIG()
+
+    debug_CONFIG();
 
 Data::Dumper::Dumper()'s %CONFIG and prints it.
 
@@ -485,9 +498,9 @@ Below is a API Reference, for instructions on how to customize your
 Fetchwarefile beyond fetchware's configuration subroutines allow please see
 L<CUSTOMIZING YOUR FETCHWAREFILE>.
 
-=over
+=head2 make_config_sub()
 
-=item make_config_sub($name, $one_or_many_values)
+    make_config_sub($name, $one_or_many_values)
 
 A function factory that builds many functions that are the exact same, but have
 different names. It supports three types of functions determined by
@@ -511,6 +524,7 @@ was called from. This package is then prepended to the string that is eval'd to
 create the designated subroutine in the caller's package. This is needed so that
 App::Fetchware "subclasses" can import this function, and enjoy its simple
 interface to create custom configuration subroutines.
+
 =back
 
 =over
@@ -764,13 +778,17 @@ EOD
 # working directory for later use if its needed.
 my $original_cwd;
 
-=item start()
+=head2 start()
+
+    my $temp_dir = start();
 
 =over
 =item Configuration subroutines used:
 =over
 =item none
+
 =back
+
 =back
 
 Creates a temp directory using File::Temp, and sets that directory up so that it
@@ -816,14 +834,23 @@ EOD
 
 
 
-=item lookup()
+=head2 lookup()
+
+    my $download_url = lookup();
+    lookup sub {
+        # Callback that replaces lookup()'s behavior.
+        # Callback receives the same arguments as lookup(), and is must return
+        # the same number and type of arguments that lookup() returns.
+    };
 
 =over
 =item Configuration subroutines used:
 =over
 =item lookup_url
 =item lookup_method
+
 =back
+
 =back
 
 Accesses C<lookup_url> as a http/ftp directory listing, and uses C<lookup_method>
@@ -839,6 +866,7 @@ listing must be a listing of all of the available versions of the program this
 Fetchwarefile belongs to.
 
 Only ftp://, http://, and file:// URL scheme's are supported.
+
 =back
 
 C<lookup_method> can be either C<'timestamp'> or C<'versionstring'>, any other
@@ -917,7 +945,9 @@ App::Fetchware to extend it!
 
 =cut
 
-=item check_lookup_config()
+=head2 check_lookup_config()
+
+    check_lookup_config();
 
 Verifies the configurations parameters lookup() uses are correct. These are
 C<lookup_url> and C<lookup_method>. If they are wrong die() is called. If they
@@ -954,7 +984,9 @@ EOD
 }
 
 
-=item get_directory_listing()
+=head2 get_directory_listing()
+
+    my $directory_listing = get_directory_listing();
 
 Downloads a directory listing that lookup() uses to determine what the latest
 version of your program is. It is returned.
@@ -968,6 +1000,7 @@ type 'ftp' will be the output of Net::Ftp's dir() method.
 
 Type 'file' will just be a listing of files in the provided C<lookup_url>
 directory.
+
 =back
 
 =cut
@@ -978,7 +1011,9 @@ sub get_directory_listing {
 }
 
 
-=item parse_directory_listing($directory_listing);
+=head2 parse_directory_listing()
+
+    my $file_listing = parse_directory_listing($directory_listing);
 
 Based on URL scheme of C<'file'>, C<'http'>, or C<'ftp'>,
 parse_directory_listing() will call file_parse_filelist(), ftp_parse_filelist(),
@@ -989,6 +1024,7 @@ results are returned.
 =item SIDE EFFECTS
 parse_directory_listing() returns to a array of arrays of the filenames and
 timestamps that make up the directory listing.
+
 =back
 
 =cut
@@ -1013,7 +1049,9 @@ diag "end pdl";
 }
 
 
-=item determine_download_url($filename_listing)
+=head2 determine_download_url()
+
+    my $download_url = determine_download_url($filename_listing);
 
 Runs the C<lookup_method> to determine what the lastest filename is, and that
 one is then concatenated with C<lookup_url> to determine the $download_url,
@@ -1023,6 +1061,7 @@ which is then returned to the caller.
 =item SIDE EFFECTS
 determine_download_url(); returns $download_url to the URL that download() will
 use to download the archive of your program.
+
 =back
 
 =cut
@@ -1050,7 +1089,9 @@ diag "end ddurl";
 }
 
 
-=item ftp_parse_filelist($ftp_listing)
+=head2 ftp_parse_filelist()
+
+    $filename_listing = ftp_parse_filelist($ftp_listing);
 
 Takes an array ref as its first parameter, and parses out the filenames and
 timstamps of what is assumed to be C<Net::FTP->dir()> I<long> directory listing
@@ -1121,7 +1162,9 @@ Returns a array of arrays of filenames and timestamps.
 
 
 
-=item http_parse_filelist
+=head2 http_parse_filelist()
+
+    $filename_listing = http_parse_filelist($http_listing);
 
 Takes an scalar of downloaded HTML output, and parses it using
 HTML::Linkextractor to build and return an array of arrays of filenames and
@@ -1194,7 +1237,9 @@ EOD
 
 
 
-=item file_parse_filelist
+=head2 file_parse_filelist()
+
+    my $filename_listing = file_parse_filelist($file_listing);
 
 Parses the provided filelist by C<stat>ing each file, and creating a properly
 formatted timestamp to return in kdjfkdj format.
@@ -1225,7 +1270,9 @@ sub file_parse_filelist {
 }
 
 
-=item lookup_by_timestamp($filename_listing)
+=head2 lookup_by_timestamp()
+
+    my $download_url = lookup_by_timestamp($filename_listing);
 
 Implements the 'timestamp' lookup algorithm. It takes the timestamps placed in
 its first argument, normalizes them into a standard descending format
@@ -1257,7 +1304,9 @@ diag "end lbt";
 }
 
 
-=item lookup_by_versionstring($filename_listing)
+=head2 lookup_by_versionstring()
+
+    my $download_url = lookup_by_versionstring($filename_listing);
 
 Determines the $download_url used by download() by cleverly C<split>ing the
 filenames on C</\D+/>, which will return a list of version numbers. Then
@@ -1296,7 +1345,9 @@ sub  lookup_by_versionstring {
 
 
 
-=item lookup_determine_downloadurl($file_listing)
+=item lookup_determine_downloadurl()
+
+    my $download_url = lookup_determine_downloadurl($file_listing);
 
 Given a $file_listing of files with the same timestamp or versionstring,
 determine which one is a downloadable archive, a tarball or zip file. And
@@ -1382,14 +1433,28 @@ EOD
 }
 
 
+###BUGALERT### download() seems to be in the wrong place. Should I make it a
+#=head1 to fix it? Or just use PodWeaver:
+#[Collect / download() API REFERENCE]
+#command = download_api
+# I dunno. Try both, and see which is better.
 
-=item download($download_url)
+=head2 download()
+
+    my $package_path = download($download_url);
+    download sub {
+        # Callback that replaces download()'s behavior.
+        # Callback receives the same arguments as download(), and is must return
+        # the same number and type of arguments that download() returns.
+    };
 
 =over
 =item Configuration subroutines used:
 =over
 =item none
+
 =back
+
 =back
 
 Downloads $download_url to C<tempdir 'whatever/you/specify';> or to
@@ -1403,6 +1468,7 @@ archive for unarchive() to untar or unzip.
 Uses Net::FTP and HTTP::Tiny to download ftp and http files. No other types of
 downloading are supported, and fetchware is stuck with whatever limitations or
 bugs Net::FTP or HTTP::Tiny impose.
+
 =back
 
 =cut
@@ -1462,7 +1528,9 @@ App::Fetchware to extend it!
 =cut
 
 
-=item determine_package_path($tempdir, $filename)
+=item determine_package_path()
+
+    my $package_path = determine_package_path($tempdir, $filename)
 
 Determines what $package_path is based on the provided $tempdir and
 $filename. $package_path is the path used by unarchive() to unarchive the
@@ -1483,7 +1551,14 @@ sub determine_package_path {
 
 
 
-=item verify($download_url, $package_path)
+=head2 verify()
+
+    verify($download_url, $package_path)
+    verify sub {
+        # Callback that replaces verify()'s behavior.
+        # Callback receives the same arguments as verify(), and is must return
+        # the same number and type of arguments that verify() returns.
+    };
 
 =over
 =item Configuration subroutines used:
@@ -1494,7 +1569,9 @@ sub determine_package_path {
 =item md5_url 'a browser-like url';
 =item verify_method 'md5,sha,gpg';
 =item verify_failure_ok 'True/False';
+
 =back
+
 =back
 
 Verifies the downloaded package stored in $package_path by downloading
@@ -1507,6 +1584,7 @@ helper subroutines C<{gpg,sha1,md5,digest}_verify()>.
 Uses gpg command line or Crypt::OpenPGP for Windows, and the interface to gpg is
 a little brittle, while Crypt::OpenPGP is complex, poorly maintained, and bug
 ridden, but still usable.
+
 =back
 
 =cut
@@ -1666,7 +1744,9 @@ App::Fetchware to extend it!
 =cut
 
 
-=item gpg_verify($download_url);
+=head2 gpg_verify()
+
+    'Package Verified' = gpg_verify($download_url);
 
 ###BUGALERT### Update statement regarding use of Crypt::OpenPGP.
 Verifies the downloaded source code distribution using the command line program
@@ -1775,7 +1855,10 @@ EOD
 }
 
 
-=item sha1_verify($download_url, $package_path);
+=head2 sha1_verify()
+
+    'Package verified' = sha1_verify($download_url, $package_path);
+    undef = sha1_verify($download_url, $package_path);
 
 Verifies the downloaded software archive's integrity using the SHA Digest
 specified by the C<sha_url 'ftp://sha.url/package.sha'> config option. Returns
@@ -1794,6 +1877,7 @@ your software package's master mirror. For example, Apache provides MD5 and SHA1
 sums, but it does not mirror them--you must download them directly from Apache's
 servers. To do this specify a C<sha1_url 'master.mirror/package.sha1';> in your
 Fetchwarefile.
+
 =back
 
 =cut 
@@ -1805,7 +1889,10 @@ sub sha1_verify {
 }
 
 
-=item md5_verify($download_url, $package_path);
+=head2 md5_verify()
+
+    'Package verified' = md5_verify($download_url, $package_path);
+    undef = md5_verify($download_url, $package_path);
 
 Verifies the downloaded software archive's integrity using the MD5 Digest
 specified by the C<md5_url 'ftp://sha.url/package.sha'> config option. Returns
@@ -1824,6 +1911,7 @@ your software package's master mirror. For example, Apache provides MD5 and SHA1
 sums, but it does not mirror them--you must download them directly from Apache's
 servers. To do this specify a C<md5_url 'master.mirror/package.md5';> in your
 Fetchwarefile.
+
 =back
 
 =cut 
@@ -1835,7 +1923,10 @@ sub md5_verify {
 }
 
 
-=item digest_verify($digest_type, $download_url, $package_path);
+=head2 digest_verify()
+
+    'Package verified' = digest_verify($digest_type, $download_url, $package_path);
+    undef = digest_verify($digest_type, $download_url, $package_path);
 
 Verifies the downloaded software archive's integrity using the specified
 $digest_type, which also determines the
@@ -1849,6 +1940,7 @@ digest used, you can do this easily, because digest_verify() uses L<Digest>,
 which supports a number of Digest::* modules of different Digest algorithms.
 Simply do this by override verify() to call 
 C<digest_verify('Digest's name for your Digest::* algorithm');>
+
 =back
 
 =over
@@ -1865,6 +1957,7 @@ not provide gpg signing, I recommend that you download your $digest_type sums
 provides MD5 and SHA1 sums, but it does not mirror them--you must download them
 directly from Apache's servers. To do this specify a
 C<$digest_type_url 'master.mirror/package.$digest_type';>' in your Fetchwarefile.
+
 =back
 
 =cut 
@@ -1984,13 +2077,22 @@ EOD
 
 
 
-=item unarchive($package_path)
+=head2 unarchive()
+
+    my $build_path = unarchive($package_path)
+    unarchive sub {
+        # Callback that replaces unarchive()'s behavior.
+        # Callback receives the same arguments as unarchive(), and is must return
+        # the same number and type of arguments that unarchive() returns.
+    };
 
 =over
 =item Configuration subroutines used:
 =over
 =item none
+
 =back
+
 =back
 
 Uses L<Archive::Tar> or L<Archive::Zip> to turn .tar.{gz,bz2,xz} or .zip into a
@@ -2007,6 +2109,7 @@ Archive::Extract prevents fetchware from checking if there is an absolute path
 in the archive, and throwing a fatal error, because Archive::Extract B<only>
 extracts files it gives you B<zero> chance of listing them except after you
 already extract them.
+
 =back
 
 =cut
@@ -2107,7 +2210,9 @@ App::Fetchware to extend it!
 
 =cut
 
-=item check_archive_files($files);
+=head2 check_archive_files()
+
+    my $build_path = check_archive_files($files);
 
 Checks if all of the files in the archive are contained in one B<main>
 directory, and spits out a warning if they are not. Also checks if
@@ -2181,7 +2286,14 @@ EOD
 
 
 
-=item build($build_path)
+=item build()
+
+    'build succeeded' = build($build_path)
+    build sub {
+        # Callback that replaces build()'s behavior.
+        # Callback receives the same arguments as build(), and is must return
+        # the same number and type of arguments that build() returns.
+    };
 
 =over
 =item Configuration subroutines used:
@@ -2190,7 +2302,9 @@ EOD
 =item configure_options
 =item make_options
 =item build_commands
+
 =back
+
 =back
 
 Changes directory to $build_path, and then executes the default build
@@ -2210,6 +2324,7 @@ Also, simply executes the commands you specify or the default ones if you
 specify none. Fetchware will check if the commands you specify exist and are
 executable, but the kernel will do it for you and any errors will be in
 fetchware's output.
+
 =back
 
 =cut
@@ -2310,7 +2425,9 @@ EOD
 }
 
 
-=item run_configure()
+=head2 run_configure()
+
+    run_configure();
 
 Runs C<./configure> as part of build() or uninstall(), which also annoying needs
 to run it.
@@ -2329,6 +2446,7 @@ builddir     = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
 VPATH        = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
 
 Why arn't relative paths good enough for Autotools?
+
 =back
 
 =cut
@@ -2364,13 +2482,22 @@ EOD
 }
 
 
-=item install()
+=head2 install()
+
+    'install succeeded' = install();
+    install sub {
+        # Callback that replaces install()'s behavior.
+        # Callback receives the same arguments as install(), and is must return
+        # the same number and type of arguments that install() returns.
+    };
 
 =over
 =item Configuration subroutines used:
 =over
 =item install_commands
+
 =back
+
 =back
 
 Executes C<make install>, which installs the specified software, or executes
@@ -2386,6 +2513,7 @@ Also, simply executes the commands you specify or the default ones if you
 specify none. Fetchware will check if the commands you specify exist and are
 executable, but the kernel will do it for you and any errors will be in
 fetchware's output.
+
 =back
 
 =cut
@@ -2466,13 +2594,22 @@ EOM
 
 
 
-=item uninstall($build_path)
+=head2 uninstall()
+
+    'uninstall succeeded' = uninstall($build_path)
+    uninstall sub {
+        # Callback that replaces uninstall()'s behavior.
+        # Callback receives the same arguments as uninstall(), and is must return
+        # the same number and type of arguments that uninstall() returns.
+    };
 
 =over
 =item Configuration subroutines used:
 =over
 =item uninstall_commands
+
 =back
+
 =back
 
 Cd's to $build_path, and then executes C<make uninstall>, which installs the
@@ -2489,6 +2626,7 @@ Also, simply executes the commands you specify or the default ones if you
 specify none. Fetchware will check if the commands you specify exist and are
 executable, but the kernel will do it for you and any errors will be in
 fetchware's output.
+
 =back
 
 =cut
@@ -2599,13 +2737,17 @@ EOM
 
 
 
-=item end()
+=head2 end()
+
+    end();
 
 =over
 =item Configuration subroutines used:
 =over
 =item none
+
 =back
+
 =back
 
 end() is called after all of the other main fetchware subroutines such as
@@ -2658,9 +2800,10 @@ Fetchwarefile to provide easier testing.
 
 =cut 
 
-=over
 
-=item eval_ok($code, $expected_exception_text_or_regex, $test_name)
+=head2 eval_ok()
+
+    eval_ok($code, $expected_exception_text_or_regex, $test_name);
 
 Executes the $code coderef, and compares its thrown exception, C<$@>, to
 $expected_exception_text_or_regex, and uses $test_name as the name for the test if
@@ -2691,7 +2834,9 @@ sub eval_ok {
 }
 
 
-=item print_ok(\&printer, $expected, $test_name)
+=head2 print_ok()
+
+    print_ok(\&printer, $expected, $test_name);
 
 Tests if $expected is in the output that C<\&printer->()> produces on C<STDOUT>.
 
@@ -2705,15 +2850,21 @@ L<ref()> function.
 =item * If $expected is a SCALAR according to ref()
 =over
 =item * Then Use eq to determine if the test passes.
+
 =back
+
 =item * If $expected is a Regexp according to ref()
 =over
 =item * Then use a regex comparision just like Test::More's like() function.
+
 =back
+
 =item * If $expected is a CODEREF according to ref()
 =over
 =item * Then execute the coderef and use the result of that expression to determine if the test passed or failed .
+
 =back
+
 =back
 
 =over
@@ -2726,6 +2877,7 @@ executed with run_prog().
 I also have not tested other possibilities, such as using IO::Handle to
 manipulate STDOUT, or tie()ing STDOUT like Test::Output does. These methods
 probably would not survive a fork() and an exec() though either.
+
 =back
 
 =cut
@@ -2771,7 +2923,9 @@ sub print_ok {
 }
 
 
-=item skip_all_unless_release_testing()
+=head2 skip_all_unless_release_testing()
+
+    skip_all_unless_release_testing();
 
 Skips all tests in your test file or subtest() if fetchware's testing
 environment variable, C<FETCHWARE_RELEASE_TESTING>, is set to its proper value.
@@ -2785,7 +2939,9 @@ sub skip_all_unless_release_testing {
 }
 
 
-=item make_clean
+=head2 make_clean()
+
+    make_clean();
 
 Runs C<make clean> and then chdirs to the parent directory. This subroutine is
 used in build() and install()'s test scripts to run make clean in between test
@@ -2800,7 +2956,9 @@ sub make_clean {
 }
 
 
-=item make_test_dist($file_name, $ver_num, rel2abs($destination_directory));
+=head2 make_test_dist()
+
+    my $test_dist_path = make_test_dist($file_name, $ver_num, rel2abs($destination_directory));
 
 Makes a C<$filename-$ver_num.fpkg> fetchware package that can be used for
 testing fetchware's functionality without actually installing anything. All of
@@ -2935,7 +3093,9 @@ EOD
 }
 
 
-=item md5sum_file($archive_to_md5)
+=head2 md5sum_file()
+
+    my $md5sum_fil_path = emd5sum_file($archive_to_md5);
 
 Uses Digest::MD5 to generate a md5sum just like the md5sum program does, and
 instead of returning the output it returns the full path to a file containing
@@ -2996,7 +3156,9 @@ EOD
 
 
 
-=item expected_filename_listing()
+=head2 expected_filename_listing()
+
+    my $expected_filename_listing = expected_filename_listing()
 
 Returns a crazy string meant for use with Test::Deep for testing that Apache
 directory listings have been parsed correctly by lookup().
@@ -3046,7 +3208,9 @@ EOC
 
 
 
-=item my $temp_dir = create_tempdir();
+=head2 create_tempdir()
+
+    my $temp_dir = create_tempdir();
 
 Creates a temporary directory, chmod 700's it, and chdir()'s into it.
 
@@ -3113,7 +3277,9 @@ EOD
 }
 
 
-=item cleanup_tempdir();
+=head2 cleanup_tempdir()
+
+    cleanup_tempdir();
 
 Cleans up B<any> temporary files or directories that anything in this process used
 File::Temp to create. You cannot only clean up one directory or another;
@@ -3153,7 +3319,7 @@ EOD
 }
 
 
-=item Standards for using msg() and vmsg()
+=head2 Standards for using msg() and vmsg()
 
 msg() should be used to describe the main events that happen, while vmsg()
 should be used to describe what all of the main subroutine calls do.
@@ -3168,7 +3334,10 @@ prototypes. This makes them stand out from regular old subroutine calls more.
 
 =cut
 
-=item msg('message to print to STDOUT');
+=head2 msg()
+
+    msg 'message to print to STDOUT' ;
+    msg('message to print to STDOUT');
 
 msg() simply takes a list of scalars, and it prints them to STDOUT according to
 any verbose (-v), or quiet (-q) options that the user may have provided to
@@ -3180,6 +3349,7 @@ command line option.
 
 =over
 =item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
+
 =back
 
 =cut
@@ -3203,7 +3373,10 @@ sub msg (@) {
 }
 
 
-=item vmsg('message to print to STDOUT');
+=head2 vmsg()
+
+    vmsg 'message to print to STDOUT' ;
+    vmsg('message to print to STDOUT');
 
 vmsg() simply takes a list of scalars, and it prints them to STDOUT according to
 any verbose (-v), or quiet (-q) options that the user may have provided to
@@ -3215,6 +3388,7 @@ command line option.
 
 =over
 =item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
+
 =back
 
 =cut
@@ -3244,7 +3418,9 @@ sub vmsg (@) {
 }
 
 
-=item run_prog($program, @args);
+=head2 run_prog()
+
+    run_prog($program, @args);
 
 run_prog() uses L<system> to execute the program for you. Only the secure way of
 avoiding the shell is used, so you can not use any shell redirection or any
@@ -3261,6 +3437,7 @@ avoided, because they always use the shell.
 
 =over
 =item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
+
 =back
 
 =cut
@@ -3311,7 +3488,9 @@ EOD
 
 
 
-=item download_dirlist($ftp_or_http_url)
+=head2 download_dirlist()
+
+    my $dir_list = download_dirlist($ftp_or_http_url)
 
 Downloads a ftp or http url and assumes that it will be downloading a directory
 listing instead of an actual file. To download an actual file use
@@ -3347,7 +3526,9 @@ EOD
 }
 
 
-=item ftp_download_dirlist
+=head2 ftp_download_dirlist()
+
+    my $dir_list = ftp_download_dirlist($ftp_url);
 
 Uses Net::Ftp's dir() method to obtain a I<long> directory listing. lookup()
 needs it in I<long> format, so that the timestamp algorithm has access to each
@@ -3397,7 +3578,9 @@ EOD
 }
 
 
-=item http_download_dirlist
+=head2 http_download_dirlist()
+
+    my $dir_list = http_download_dirlist($http_url);
 
 Uses HTTP::Tiny to download a HTML directory listing from a HTTP Web server.
 
@@ -3438,7 +3621,9 @@ EOD
 }
 
 
-=item file_download_dirlist($local_lookup_url)
+=head2 file_download_dirlist()
+
+    my $file_listing = file_download_dirlist($local_lookup_url)
 
 Glob's provided $local_lookup_url, and builds a directory listing of all files
 in the provided directory. Then list_file_dirlist() returns a list of all of the
@@ -3448,6 +3633,7 @@ files in the current directory.
 =item SIDE EFFECTS
 Does what ls or dir do, but natively inside perl, so I don't have to worry about
 what OS I'm running on.
+
 =back
 
 =cut
@@ -3478,7 +3664,9 @@ diag "end lfd file_listing";
 
 
 
-=item download_file($url)
+=head2 download_file()
+
+    my $filename = download_file($url)
 
 Downloads a $url and assumes it is a file that will be downloaded instead of a
 file listing that will be returned. download_file() returns the file name of the
@@ -3511,7 +3699,9 @@ EOD
 }
 
 
-=item download_ftp_url($url);
+=head2 download_ftp_url()
+
+    my $filename = download_ftp_url($url);
 
 Uses Net::FTP to download the specified FTP URL using binary mode.
 
@@ -3580,7 +3770,9 @@ EOD
 }
 
 
-=item download_http_url($url);
+=head2 download_http_url()
+
+    my $filename = download_http_url($url);
 
 Uses HTTP::Tiny to download the specified HTTP URL.
 
@@ -3673,7 +3865,9 @@ EOS
 
 
 
-=item download_file_url($url);
+=head2 download_file_url()
+
+    my $filename = download_file_url($url);
 
 Uses File::Copy to copy ("download") the local file to the current working
 directory.
@@ -3702,7 +3896,9 @@ EOD
 
 
 
-=item just_filename($path);
+=head2 just_filename()
+
+    my $filename = just_filename($path);
 
 Uses File::Spec::Functions splitpath() to chop off everything except the
 filename of the provided $path. Does zero error checking, so it will return
@@ -3718,7 +3914,9 @@ sub just_filename {
 }
 
 
-=item do_nothing();
+=head2 do_nothing()
+
+    do_nothing();
 
 do_nothing() does nothing but return. It simply returns doing nothing. It is
 meant to be used by App::Fetchware "subclasses" that "override" App::Fetchware's
@@ -3731,10 +3929,7 @@ sub do_nothing {
 }
 
 
-# End UTILITY SUBROUTINES =over.
-=back
 
-=cut
 
 
 1;

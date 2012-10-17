@@ -167,6 +167,8 @@ command line.
 
 =head2 cmd_install()
 
+    my $installed_fetchware_package_path = cmd_install($filename|@ARGV)
+
 cmd_install() implements fetchware's install command, which installs a package
 based on the specified Fetchwarefile or fetchware package. If no filename was
 provided or the filename doesn't exist then, cmd_install() calls new() to create
@@ -271,6 +273,8 @@ EOD
 
 =head2 cmd_uninstall()
 
+    my $uninstall_package_path = cmd_uninstall($uninstall_package_path|@ARGV);
+
 Uninstalls the given package. Note the given package does B<not> have to be an
 exact match, but it does have to be unique if you have two versions of the same
 software installed such as httpd-2.2 and httpd-2.4. In that case you'd have to
@@ -283,6 +287,7 @@ argument to uninstall a fetchware package! Instead, you must provide the name
 and perhaps the name and version number of the already installed software
 package. For a list of such package names just run C<fetchware list> to list all
 installed fetchware packages.
+
 =back
 
 =cut
@@ -354,6 +359,8 @@ EOD
 #exist then prompt the user to fill one out!!!
 =head2 cmd_new()
 
+    my $fetchware_package_path = cmd_new($program_name);
+
 cmd_new() implements fetchware's new command. See L<whereeverthehell> for detailed
 documentation for the specifics of the new command. This chunk of POD is about
 its implementation. cmd_new() calls a bunch of helper subroutines that implement
@@ -365,6 +372,7 @@ user. The algorithm is dead stupid:
 =item 2. Analyze the contents of the output from the lookup_url.
 =item 3. Build the Fetchwarefile according to the output.
 =item 4. Ask other questions as needed.
+
 =back
 
 cmd_new() uses Term::UI, which in turn uses Term::ReadLine to implement the
@@ -472,7 +480,9 @@ interface for helping to build new Fetchwarefiles and fetchware packages.
 
 
 
-=item name_program($term);
+=head2 name_program();
+
+    my $program_name = name_program($term);
 
 Asks the user to provide a name for the program that will that corresponds to
 Fetchwarefile's C<program> configuration subroutine. This directive is currently
@@ -501,7 +511,9 @@ EOM
 }
 
 
-=item opening_message();
+=head2 opening_message();
+
+    opending_message();
 
 Prints new()'s opening message. It takes no parameters including the message to
 be printed; instead, it simply prints the message only it can access to
@@ -531,7 +543,9 @@ EOM
 }
 
 
-=item my $lookup_url = get_lookup_url($term);
+=head2 get_lookup_url()
+
+    my $lookup_url = get_lookup_url($term);
 
 Uses $term argument as a L<Term::ReadLine>/L<Term::UI> object to interactively
 explain what a lookup_url is, and to ask the user to provide one and press
@@ -575,7 +589,9 @@ How to determine your application's lookup_url:
 }
 
 
-=item my $filename_listing = download_lookup_url($term, $lookup_url);
+=head2 download_lookup_url()
+
+    my $filename_listing = download_lookup_url($term, $lookup_url);
 
 Attempts to download the lookup_url the user provides. Returns it after parsing
 it using parse_directory_listing() from L<App::Fetchware> that lookup() itself
@@ -637,7 +653,9 @@ EOD
 }
 
 
-=item $filter = analyze_lookup_listing($term);
+=head2 analyze_lookup_listing()
+
+    my $filter = analyze_lookup_listing($term);
 
 ###BUGALERT### Write docs for this sub after I figure out what it should do, and
 #test and debug it.
@@ -720,7 +738,9 @@ EOA
 }
 
 
-=item append_to_fetchwarefile(\$fetchwarefile, $config_file_option, $config_file_value, $description)
+=head2 append_to_fetchwarefile()
+
+    append_to_fetchwarefile(\$fetchwarefile, $config_file_option, $config_file_value, $description)
 
 Turns $description into a comment as described below, and then appends it to the
 $fetchwarefile. Then $config_file_option and $config_file_value are also
@@ -733,6 +753,7 @@ prepended to make it a proper comment so fetchware skips parsing it.
 =item NOTE
 Notice the backslack infront of the $fetchwarefile argument above. It is there,
 because the argument $fetchwarefile must be a reference to a scalar.
+
 =back
 
 =cut
@@ -765,7 +786,9 @@ EOD
 }
 
 
-=item prompt_for_other_options($term);
+=head2 prompt_for_other_options()
+
+    prompt_for_other_options($term);
 
 Asks user if they would like to add any other options to their Fetchwarefile. If
 they answer no, then everything else this subroutine does is skipped. If they
@@ -1036,7 +1059,9 @@ EOP
 }
 
 
-=item append_options_to_fetchwarefile(\%options, \$fetchwarefile);
+=head2 append_options_to_fetchwarefile()
+
+    append_options_to_fetchwarefile(\%options, \$fetchwarefile);
 
 Takes a hash ref of name value fetchwarefile configuration options and a
 scalar ref representing your Fetchwarefile, and then it appends your
@@ -1173,7 +1198,9 @@ EOD
 
 ###BUGALERT### I don't think App::Fetchware's download utilities even use mirror
 #if the default lookup_url fails!!!!
-=item add_mirrors($term, \$fetchwarefile);
+=head2 add_mirrors()
+
+    add_mirrors($term, \$fetchwarefile);
 
 Prompts the user if they would like to add additional mirrors to their
 fetchwarefile. These mirrors will be tried in the order they are listed if the
@@ -1241,7 +1268,9 @@ EOP
 }
 
 
-=item edit_manually($term, \$fetchwarefile);
+=head2 edit_manually()
+
+    $fetchwarefile = edit_manually($term, \$fetchwarefile);
 
 edit_manually() asks the user if they would like to edit the specified
 $fetchwarefile manually. If the user answers no, then nothing is done. But if
@@ -1321,12 +1350,15 @@ EOM
 }
 
 
-=item ask_to_install_now_to_test_fetchwarefile($term, \$fetchwarefile, $program_name);
+=head2 ask_to_install_now_to_test_fetchwarefile()
+
+    my $fetchware_package_path = ask_to_install_now_to_test_fetchwarefile($term, \$fetchwarefile, $program_name);
+    my $fetchwarefile_filename = ask_to_install_now_to_test_fetchwarefile($term, \$fetchwarefile, $program_name);
 
 This subroutine asks the user if they want to install the Fetchwarefile that
 this subroutine has been called with. If they say yes, then the Fetchwarefile is
 passed on to cmd_install() to do all of the installation stuff. If they say no,
-then fetchware saves the file to C<"$proram_name.Fetchwarefile"> or
+then fetchware saves the file to C<"$program_name.Fetchwarefile"> or
 ask_to_install_now_to_test_fetchwarefile() will ask the user where to save the
 file until the user picks a filename that does not exist.
 
@@ -1334,6 +1366,7 @@ file until the user picks a filename that does not exist.
 NOTE: ask_to_install_now_to_test_fetchwarefile() has an infinite loop in it! It
 asks the user forever until they provide a filename that doesn't exist. Should a
 limit be placed on this? Should it only ask just once?
+
 =back
 
 If you answer yes to install your Fetchwarefile, then
@@ -1420,8 +1453,17 @@ EOD
     }
 }
 
+###BUGALERT### The POD is screwed up here. It thinks the cmd_*() subs below are
+#part of cmd_new()'s API REFERENCE, and they're not. Should I use PodWeaver's:
+#[Collect / COMMAND LINE OPTION SUBROUTINES]
+#command = cmd_line_opt
+# And then use =cmd_line_opt to fix this????
+
 
 =head2 cmd_upgrade()
+
+    my $installed_fetchware_package_path = cmd_upgrade($upgrade_name);
+    'No upgrade needed.' = cmd_upgrade($upgrade_name);
 
 Subroutine implementing Fetchware's upgrade command. This subroutine and command
 upgrade one and only one package that must be specified on the command line as
@@ -1570,6 +1612,9 @@ EOM
 
 =head2 cmd_upgrade_all()
 
+    my @upgraded_packages = cmd_upgrade_all();
+    'No upgrade needed.' = cmd_upgrade_all();
+
 Implements the C<fetchware upgrade-all> command, which upgrades all installed
 packages simply by looping over the fetchware database and running cmd_upgrade()
 on each one.
@@ -1638,6 +1683,8 @@ diag("cmd_upgrade() return[$upgraded_packages[-1]]");
 
 
 =head2 cmd_look()
+
+    my $look_path = cmd_look($filename);
 
 Looks up the latest version of the specified Fetchwarefile or fetchware package,
 and downloads, verifies, and unarchives the specified source code distribution,
@@ -1728,6 +1775,8 @@ EOD
 
 =head2 cmd_list()
 
+    cmd_list();
+
 Lists B<all> of the packages fetchware has stored in its
 fetchware_database_path().
 
@@ -1756,6 +1805,8 @@ sub cmd_list {
 
 
 =head2 cmd_help()
+
+    cmd_help();
 
 Prints a help message to C<STDOUT> listing usage, all command options, and examples.
 
@@ -1809,7 +1860,7 @@ HELP
 
 
 
-=head1 FETCHWARE API REFERENCE
+=head1 COMMAND LINE FETCHWARE API REFERENCE
 
 Below are the helper subroutines used by install(), uninstall(), new(), and so
 on.
@@ -1817,7 +1868,9 @@ on.
 =cut
 
 
-=item parse_fetchwarefile($fetchwarefile_path);
+=head2 parse_fetchwarefile()
+
+    'Evaled config file successfully' = parse_fetchwarefile($fetchwarefile_path);
 
 Eval's the $fetchwarefile_path to effectively "parse" it.
 
@@ -1853,7 +1906,9 @@ EOD
 }
 
 
-=item create_fetchware_package($fetchwarefile_path, $unarchived_package_path);
+=head2 create_fetchware_package()
+
+    my $fetchware_package_full_path = create_fetchware_package($fetchwarefile_path, $unarchived_package_path);
 
 Creates a fetchware package, ending in .fpkg, using $unarchived_package_path, as
 the directory to archive. Also, adds the C<Fetchwarefile> indicated by the
@@ -1967,7 +2022,9 @@ EOD
 }
 
 
-=item fetchware_database_path();
+=head2 fetchware_database_path()
+
+    my $fetchware_database_path = fetchware_database_path();
 
 Returns the correct path for the fetchware package database based on operating
 system and if super user or not.
@@ -2018,7 +2075,9 @@ sub fetchware_database_path {
 }
 
 
-=item determine_fetchware_package_path($fetchware_package);
+=head2 determine_fetchware_package_path()
+
+    my $fetchware_package_filename = determine_fetchware_package_path($fetchware_package);
 
 Looks up the $fetchware_package in C<fetchware_database_path()>, and returns the
 full path to that given $fetchware_package.
@@ -2029,6 +2088,7 @@ determine_fetchware_package_path() could potentially come up with more than one
 result if you have multiple versions of apache or other similarly named packages
 installed at the same time. If this happens an exception is thrown asking the
 user to specify a more specific name to query the fetchware database with.
+
 =back
 
 =cut
@@ -2083,13 +2143,14 @@ EOD
 }
 
 
-=item extract_fetchwarefile($fetchware_package_path, $extract_it_here);
+=head2 extract_fetchwarefile()
+
+    my $fetchwarefile_path = extract_fetchwarefile($fetchware_package_path, $extract_it_here);
 
 Extracts out the Fetchwarefile of the provided fetchware package as specified by
-$fetchware_package_path, and returns the content of the file as a scalar. Throws
-an exception if it fails.
+$fetchware_package_path, and returns the path of the file. Throws an exceptionif it fails.
 
-Returns $fetchwarefile_content.
+Returns $fetchwarefile_path.
 
 =cut
 
@@ -2143,7 +2204,9 @@ EOD
 }
 
 
-=item copy_fpkg_to_fpkg_database($fetchwarefile_path);
+=head2 copy_fpkg_to_fpkg_database()
+
+    my $fetchware_package_path = copy_fpkg_to_fpkg_database($fetchwarefile_path);
 
 Installs (just copies) the specified fetchware package to the fetchware
 database, which is /var/log/fetchware on UNIX, C:\FETCHWARE on Windows with
@@ -2185,7 +2248,9 @@ EOD
 }
 
 
-=item uninstall_fetchware_package_from_database($uninstall_package_name);
+=head2 uninstall_fetchware_package_from_database()
+
+    my uninstall_fetchware_package_from_database($uninstall_package_name);
 
 Deletes the specified $uninstall_package_name from the fetchware package
 database. Throws an exception on error.
@@ -2211,14 +2276,12 @@ EOD
 }
 
 
+=head2 create_test_fetchwarefile()
 
-
-###BUGALERT### Create a head1 for this TEST SUBROUTINE.
-
-=item create_test_fetchwarefile($fetchwarefile_content);
+    my $fetchwarefile_path = create_test_fetchwarefile($fetchwarefile_content);
 
 Writes the provided $fetchwarefile_content to a C<Fetchwarefile> inside a
-tempdir, and returns the $fetchwarefile_path.
+File::Temp::tempfile(), and returns that file's path, $fetchwarefile_path.
 
 =cut
 

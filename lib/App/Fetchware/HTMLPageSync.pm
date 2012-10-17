@@ -94,7 +94,9 @@ Fetchwarefile's that make use of App::Fetchware::HTMLPageSync. This API is the
 same that regular old App::Fetchware uses for most standard FOSS software.
 
 
-=item my $temp_file = start();
+=head2 start()
+
+    my $temp_file = start();
 
 start() creats a temp dir, chmod 700's it, and chdir()'s to it just like the one
 in App::Fetchware does. App::Fetchware::HTMLPageSync
@@ -102,7 +104,9 @@ in App::Fetchware does. App::Fetchware::HTMLPageSync
 =cut
 
 
-=item my $download_url = lookup();
+=head2 lookup()
+
+    my $download_url = lookup();
 
 lookup() downloads the user specified C<html_page_url>, parses it using
 HTML::TreeBuilder, and uses various yet to be written config subs if specified
@@ -226,7 +230,9 @@ EOM
 }
 
 
-=item download($temp_dir, $download_url);
+=head2 download()
+
+    download($temp_dir, $download_url);
 
 download() uses App::Fetchware's utility function download_http_url() to
 download all of the urls that lookup() returned. If the user specifed a
@@ -276,7 +282,9 @@ EOM
 
 
 
-=item verify($download_url, $package_path);
+=head2 verify()
+
+    verify($download_url, $package_path);
 
 verify() simply calls App::Fetchware's :UTIL subroutine do_nothing(), which as
 you can tell from its name does nothing, but return. The reason for the useless
@@ -297,7 +305,9 @@ EOM
 
 ###BUGALERT### Decide if overridden subs should use original names or if they
 #should change them. I think they should change them!
-=item unarchive($package_path);
+=head2 unarchive()
+
+    unarchive($package_path);
 
 unarchive() takes the $package_path, which is really an array ref of the paths
 of the files that download() copied, and copies them the the user specified
@@ -332,7 +342,9 @@ EOD
 }
 
 
-=item build($build_path);
+=head2 build()
+
+    build($build_path);
 
 build() does the same thing as unarchive() and verify(), and that is nothing by
 calling App::Fetchware's do_nothing() subroutine to better document the fact
@@ -348,7 +360,9 @@ EOM
 }
 
 
-=item install();
+=head2 install()
+
+    install();
 
 install() does nothing by calling App::Fetchware's :UTIL subroutine
 do_nothing(), which does nothing.
@@ -363,7 +377,9 @@ EOM
 }
 
 
-=item end();
+=head2 end()
+
+    end();
 
 end() chdir()s back to the original directory, and cleans up the temp directory
 just like the one in App::Fetchware does. App::Fetchware::HTMLPageSync
@@ -371,7 +387,9 @@ just like the one in App::Fetchware does. App::Fetchware::HTMLPageSync
 =cut
 
 
-=item uninstall($build_path);
+=head2 uninstall()
+
+    uninstall($build_path);
 
 Uninstalls App::Fetchware::HTMLPageSync by recursivly deleting the
 C<destination_directory> where it stores the wallpapers or whatever you
