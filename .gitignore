@@ -4,3 +4,4 @@
 test-dist*.tar.gz
 .prove
 *.html
+.build
