@@ -13,6 +13,10 @@ use Fcntl ':mode';
 use File::Spec::Functions 'devnull';
 use File::Copy 'cp';
 
+use App::Fetchware::Util ':UTIL';
+use App::Fetchware::Config ':CONFIG';
+use Test::Fetchware ':TESTING';
+
 # Test::More version 0.98 is needed for proper subtest support.
 use Test::More 0.98 tests => '8'; #Update if this changes.
 
@@ -24,7 +28,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 
 # Test if I can load the module "inside a BEGIN block so its functions are exported
 # and compile-time, and prototypes are properly honored."
-BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_VERIFY :TESTING :UTIL)); }
+BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_VERIFY)); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
 diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");

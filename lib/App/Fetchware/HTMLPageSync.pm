@@ -8,9 +8,8 @@ use 5.010;
 
 # Load only the fetchware API subroutines that A::P::HTMLPageSync does not
 # override by implementing them here in its own subroutine.
-use App::Fetchware qw(start end temp_dir mirror config make_config_sub
-    do_nothing
-    :UTIL);
+use App::Fetchware qw(start end temp_dir mirror config make_config_sub);
+use App::Fetchware::Util ':UTIL';
 
 # Local imports.
 use File::Copy 'cp';

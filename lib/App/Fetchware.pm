@@ -7,13 +7,9 @@ use strict;
 use warnings;
 
 # CPAN modules making Fetchwarefile better.
-use File::Temp 'tempdir';
-use File::Spec::Functions qw(catfile catdir splitpath updir splitdir
-    file_name_is_absolute rel2abs);
+use File::Spec::Functions qw(catfile splitpath splitdir file_name_is_absolute);
 use Path::Class;
 use Data::Dumper;
-use Net::FTP;
-use HTTP::Tiny;
 use File::Copy 'cp';
 use HTML::TreeBuilder;
 use Scalar::Util 'blessed';
@@ -26,9 +22,10 @@ use Digest::MD5;
 #use Crypt::OpenPGP;
 use Archive::Extract;
 use Archive::Tar;
-use Test::More 0.98; # some utility test subroutines need it.
-use Perl::OSType 'is_os_type';
 use Cwd;
+
+use App::Fetchware::Util ':UTIL';
+use App::Fetchware::Config ':CONFIG';
 
 # Enable Perl 6 knockoffs.
 use 5.010;
@@ -110,7 +107,7 @@ our %EXPORT_TAGS = (
     OVERRIDE_LOOKUP => [qw(
         check_lookup_config
         get_directory_listing
-        parse_directory_listing
+       parse_directory_listing
         determine_download_url
         ftp_parse_filelist
         http_parse_filelist
@@ -137,45 +134,6 @@ our %EXPORT_TAGS = (
     )],
     OVERRIDE_BUILD => [qw()],
     OVERRIDE_INSTALL => [qw()],
-    # Testing also imports lookup(), download(), etc, so that test scripts don't
-    # need to add them.
-    TESTING => [qw(
-        eval_ok
-        print_ok
-        skip_all_unless_release_testing
-        __clear_CONFIG
-        debug_CONFIG
-        config_replace
-        config_delete
-        make_clean
-        make_test_dist
-        md5sum_file
-        expected_filename_listing
-        start
-        lookup
-        download
-        verify
-        unarchive
-        build
-        install
-        end
-        uninstall
-    )],
-    UTIL => [qw(
-        msg
-        vmsg
-        run_prog
-        download_dirlist
-        ftp_download_dirlist
-        http_download_dirlist
-        file_download_dirlist
-        download_file
-        download_ftp_url
-        download_http_url
-        download_file_url
-        just_filename
-        do_nothing
-    )],
 );
 # OVERRIDE_ALL is simply all other tags combined.
 @{$EXPORT_TAGS{OVERRIDE_ALL}} = map {@{$_}} values %EXPORT_TAGS;
@@ -289,215 +247,6 @@ install and use L<Sub::Import> if you demand more control over imports.
 =cut
 
 
-=head2 override
-
-    override LIST;
-
-Used instead of C<fetchware;> to override fetchware's default behavior. This
-should only be used if fetchware's configuration options do B<not> provide the
-customization that your particular program may need.
-
-The LIST your provide is a fake hash of steps you want to override as keys and
-the coderefs to a replacement  those subroutines like:
-
-=over
-=item * override lookup => \&overridden_lookup,
-=item * download => sub { code refs work too; };
-
-=back
-
-
-=cut
-
-sub override (@) {
-    my %opts = @_;
-    #diag("OVERRIDE");
-    #$Data::Dumper::Deparse = 1; # Turn on deparsing coderefs.
-    #diag explain \%opts;
-
-    # override the parts that need overriden as specified in %opts.
-
-    # Then execute just like fetchware; does, but exchanging the default steps
-    # with the overriden ones.
-
-    die <<EOD if keys %opts == 0;
-App-Fetchware: syntax error: you called override with no options. It must be
-called with a fake hash of name => value, pairs where the names are the names of
-the Fetchwarefile steps you would like to override, and the values are a coderef
-to a subroutine that implements that steps behavior. See perldoc App::Fetchware.
-EOD
-
-
-    my $override = Sub::Override->new();
-
-    for my $sub (keys %opts) {
-        die <<EOD unless grep { $_ eq $sub } @EXPORT_OK;
-App-Fetchware: run-time error. override was called specifying a subroutine to
-override that it is not allowed to override. override is only allowed to
-override App::Fetchware's *own* routines as listed in [@EXPORT_OK].
-See perldoc App::Fetchware.
-EOD
-        $override->replace("App::Fetchware::$sub", $opts{$sub});
-    }
-    #diag("Did I override them?");
-    #diag explain $override;
-
-    # Call fetchware after overriding what ever subs that need overridden.
-    ###BUGALERT### Must rewrite ALL override() support!!!!!!!!!!!
-    #fetchware;
-
-    # When $override falls out of scope at the end of 
-
-    # Return success.
-    return 'overrode specified subs and executed them';
-}
-
-
-
-
-
-BEGIN { # BEGIN BLOCK due to api subs needing prototypes.
-
-
-{ # Containing bare block for %CONFIG
-    my %CONFIG;
-    
-=head2 config()
-
-    $config_sub_value = config($config_sub_name, $config_sub_value);
-
-config() stores all of the configuration options that are parsed (actually
-executed) in your Fetchwarefile. They are stored in the %CONFIG variable that is
-lexically only shared with the private __clear_CONFIG() subroutine, which when
-executed simply clears %CONFIG for the next run of App::Fetchware in
-bin/fetchware's upgrade_all() subroutine, which is the only place multiple
-Fetchwarefiles may be parsed in on execution of bin/fetchware.
-
-If config() is given more than 2 args, then the second arg, and all of the other
-arguments are stored in %CONFIG as an C<ARRAY> ref. Also storing a second
-argument where there was a previously defined() argument will cause that
-element of %CONFIG to be promoted to being an C<ARRAY> ref.
-
-=cut
-
-    sub config {
-        my ($config_sub_name, $config_sub_value) = @_;
-
-        ###BUGALERT### Does *not* support ONEARRREFs!!!!!! Which are actually
-        #needed.
-        # Only one argument just lookup and return it.
-        if (@_ == 1) {
-            ref $CONFIG{$config_sub_name} eq 'ARRAY'
-            ? return @{$CONFIG{$config_sub_name}}
-            : return $CONFIG{$config_sub_name};
-        # More than one argument store the provided values in %CONFIG.
-        # If more than one argument then the rest will be store in an ARRAY ref.
-        } elsif (@_ > 1) {
-            if (ref $CONFIG{$config_sub_name} eq 'ARRAY') {
-                # If config() is provided with more than 2 args, then the second
-                # arg ($config_sub_value) and the third to $#_ args are also
-                # added to %CONFIG.
-                if (@_ > 2) {
-                    push @{$CONFIG{$config_sub_name}}, $config_sub_value, @_[2..$#_]
-                } else {
-                    push @{$CONFIG{$config_sub_name}}, $config_sub_value;
-                }
-            } else {
-                # If there is already a value in that %CONFIG entry then turn it
-                # into an ARRAY ref.
-                if (defined($CONFIG{$config_sub_name})) {
-                    $CONFIG{$config_sub_name}
-                        =
-                        [$CONFIG{$config_sub_name}, $config_sub_value];
-                } else {
-                    $CONFIG{$config_sub_name} = $config_sub_value;
-                }
-            }
-        }
-    }
-
-
-
-=head2 config_replace()
-
-    config_replace($name, $value);
-
-Replaces $name with $value. If C<scalar @_> > 2, then config_replace() will
-replace $name with $value, and @_[2..$#_].
-
-=cut
-
-    sub config_replace {
-        my ($config_sub_name, $config_sub_value) = @_;
-
-        if (@_ == 1) {
-            die <<EOD;
-App::Fetchware: run-time error. config_replace() was called with only one
-argument, but it requres two arguments. Please add the other option. Please see
-perldoc App::Fetchware.
-EOD
-        } elsif (@_ == 2) {
-            $CONFIG{$config_sub_name} = $config_sub_value;
-        } elsif (@_ > 2) {
-            $CONFIG{$config_sub_name} = [$config_sub_value, @_[2..$#_]];
-        }
-    }
-
-
-
-=head2 config_delete()
-
-    config_delete($name);
-
-delete's $name from %CONFIG.
-
-=cut
-
-    sub config_delete {
-        my $config_sub_name = shift;
-
-        delete $CONFIG{$config_sub_name};
-    }
-
-
-=head2 __clear_CONFIG()
-
-    __clear_CONFIG();
-
-Clears the %CONFIG variable that is shared between this subroutine and config().
-
-=cut
-
-    sub __clear_CONFIG {
-        %CONFIG = ();
-    }
-
-
-=head2 debug_CONFIG()
-
-    debug_CONFIG();
-
-Data::Dumper::Dumper()'s %CONFIG and prints it.
-
-=cut
-
-    sub debug_CONFIG {
-        print Dumper(\%CONFIG);
-    }
-
-} # Ending bare block for %CONFIG
-
-
-=head1 App::Fetchware API SUBROUTINES
-
-These subroutines constitute App::Fetchware's API that C<Fetchwarefile>'s may
-use to customize fetchware's default behavior using C<override> instead of
-C<fetchware>
-
-Below is a API Reference, for instructions on how to customize your
-Fetchwarefile beyond fetchware's configuration subroutines allow please see
-L<CUSTOMIZING YOUR FETCHWAREFILE>.
-
 =head2 make_config_sub()
 
     make_config_sub($name, $one_or_many_values)
@@ -601,36 +350,36 @@ make_config_sub() except for fetchware() and override().
     }
 
 
-    sub make_config_sub {
-        my ($name, $one_or_many_values) = @_;
+sub make_config_sub {
+    my ($name, $one_or_many_values) = @_;
 
-        # Obtain caller's package name, so that the new configuration subroutine
-        # can be created in the caller's package instead of our own.
-        my $package = caller;
+    # Obtain caller's package name, so that the new configuration subroutine
+    # can be created in the caller's package instead of our own.
+    my $package = caller;
 
-        die <<EOD unless defined $name;
+    die <<EOD unless defined $name;
 App-Fetchware: internal syntax error: make_config_sub() was called without a
 name. It must receive a name parameter as its first paramter. See perldoc
 App::Fetchware.
 EOD
-        use Test::More;
-        unless ($one_or_many_values eq 'ONE'
-                or $one_or_many_values eq 'ONEARRREF',
-                or $one_or_many_values eq 'MANY'
-                or $one_or_many_values eq 'BOOLEAN') {
-            die <<EOD;
+    use Test::More;
+    unless ($one_or_many_values eq 'ONE'
+            or $one_or_many_values eq 'ONEARRREF',
+            or $one_or_many_values eq 'MANY'
+            or $one_or_many_values eq 'BOOLEAN') {
+        die <<EOD;
 App-Fetchware: internal syntax error: make_config_sub() was called without a
 one_or_many_values parameter as its second parameter. Or the parameter it was
 called with was invalid. Only 'ONE', 'MANY', and 'BOOLEAN' are acceptable
 values. See perldoc App::Fetchware.
 EOD
-        }
+    }
 
-        given($one_or_many_values) {
-            when('ONE') {
-                ###BUGALERT### the ($) sub prototype needed for ditching parens must
-                #be seen at compile time. Is "eval time" considered compile time?
-                my $eval = <<'EOE'; 
+    given($one_or_many_values) {
+        when('ONE') {
+            ###BUGALERT### the ($) sub prototype needed for ditching parens must
+            #be seen at compile time. Is "eval time" considered compile time?
+            my $eval = <<'EOE'; 
 package $package;
 
 sub $name (@) {
@@ -656,9 +405,9 @@ EOD
 }
 1; # return true from eval
 EOE
-                $eval =~ s/\$name/$name/g;
-                $eval =~ s/\$package/$package/g;
-                eval $eval or die <<EOD;
+            $eval =~ s/\$name/$name/g;
+            $eval =~ s/\$package/$package/g;
+            eval $eval or die <<EOD;
 1App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [$@]. See perldoc App::Fetchware.
 EOD
@@ -670,10 +419,10 @@ EOD
 # config_iter, or whatever makes sense.
 # Then update build, install, and uninstall to use them properly when accessing
 # *_commands config options.
-            } when('ONEARRREF') {
-                ###BUGALERT### the (@) sub prototype needed for ditching parens must
-                #be seen at compile time. Is "eval time" considered compile time?
-                my $eval = <<'EOE'; 
+        } when('ONEARRREF') {
+            ###BUGALERT### the (@) sub prototype needed for ditching parens must
+            #be seen at compile time. Is "eval time" considered compile time?
+            my $eval = <<'EOE'; 
 package $package;
 
 sub $name (@) {
@@ -693,15 +442,15 @@ EOD
 }
 1; # return true from eval
 EOE
-                $eval =~ s/\$name/$name/g;
-                $eval =~ s/\$package/$package/g;
-                eval $eval or die <<EOD;
+            $eval =~ s/\$name/$name/g;
+            $eval =~ s/\$package/$package/g;
+            eval $eval or die <<EOD;
 2App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [$@]. See perldoc App::Fetchware.
 EOD
-            }
-            when('MANY') {
-                my $eval = <<'EOE';
+        }
+        when('MANY') {
+            my $eval = <<'EOE';
 package $package;
 
 sub $name (@) {
@@ -717,14 +466,14 @@ sub $name (@) {
 }
 1; # return true from eval
 EOE
-                $eval =~ s/\$name/$name/g;
-                $eval =~ s/\$package/$package/g;
-                eval $eval or die <<EOD;
+            $eval =~ s/\$name/$name/g;
+            $eval =~ s/\$package/$package/g;
+            eval $eval or die <<EOD;
 3App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [\$@]. See perldoc App::Fetchware.
 EOD
-            } when('BOOLEAN') {
-                my $eval = <<'EOE';
+        } when('BOOLEAN') {
+            my $eval = <<'EOE';
 package $package;
 
 sub $name (@) {
@@ -760,23 +509,84 @@ EOD
 }
 1; # return true from eval
 EOE
-                $eval =~ s/\$name/$name/g;
-                $eval =~ s/\$package/$package/g;
-                eval $eval or die <<EOD;
+            $eval =~ s/\$name/$name/g;
+            $eval =~ s/\$package/$package/g;
+            eval $eval or die <<EOD;
 4App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [\$@]. See perldoc App::Fetchware.
 EOD
-            }
         }
     }
+}
 
 
-} # End BEGIN BLOCK.
+=head2 override
+
+    override LIST;
+
+Used instead of C<fetchware;> to override fetchware's default behavior. This
+should only be used if fetchware's configuration options do B<not> provide the
+customization that your particular program may need.
+
+The LIST your provide is a fake hash of steps you want to override as keys and
+the coderefs to a replacement  those subroutines like:
+
+=over
+=item * override lookup => \&overridden_lookup,
+=item * download => sub { code refs work too; };
+
+=back
 
 
-# $original_cwd is a globalish lexical variable that stores fetchware's original
-# working directory for later use if its needed.
-my $original_cwd;
+=cut
+
+sub override (@) {
+    my %opts = @_;
+    #diag("OVERRIDE");
+    #$Data::Dumper::Deparse = 1; # Turn on deparsing coderefs.
+    #diag explain \%opts;
+
+    # override the parts that need overriden as specified in %opts.
+
+    # Then execute just like fetchware; does, but exchanging the default steps
+    # with the overriden ones.
+
+    die <<EOD if keys %opts == 0;
+App-Fetchware: syntax error: you called override with no options. It must be
+called with a fake hash of name => value, pairs where the names are the names of
+the Fetchwarefile steps you would like to override, and the values are a coderef
+to a subroutine that implements that steps behavior. See perldoc App::Fetchware.
+EOD
+
+
+    my $override = Sub::Override->new();
+
+    for my $sub (keys %opts) {
+        die <<EOD unless grep { $_ eq $sub } @EXPORT_OK;
+App-Fetchware: run-time error. override was called specifying a subroutine to
+override that it is not allowed to override. override is only allowed to
+override App::Fetchware's *own* routines as listed in [@EXPORT_OK].
+See perldoc App::Fetchware.
+EOD
+        $override->replace("App::Fetchware::$sub", $opts{$sub});
+    }
+    #diag("Did I override them?");
+    #diag explain $override;
+
+    # Call fetchware after overriding what ever subs that need overridden.
+    ###BUGALERT### Must rewrite ALL override() support!!!!!!!!!!!
+    #fetchware;
+
+    # When $override falls out of scope at the end of 
+
+    # Return success.
+    return 'overrode specified subs and executed them';
+}
+
+
+
+
+
 
 =head2 start()
 
@@ -799,39 +609,37 @@ the directory they should use for storing file operations.
 
 =cut
 
-sub start (;$$) {
-    # Based on what package we're called in, either accept a callback as an
-    # argument and save it for later, or execute the already saved callback.
-    state $callback; # A state variable to keep its value between calls.
-    if (caller ne 'fetchware') {
-        $callback = shift;
-        die <<EOD if ref $callback ne 'CODE';
+    sub start (;$$) {
+        # Based on what package we're called in, either accept a callback as an
+        # argument and save it for later, or execute the already saved callback.
+        state $callback; # A state variable to keep its value between calls.
+        if (caller ne 'fetchware') {
+            $callback = shift;
+            die <<EOD if ref $callback ne 'CODE';
 fetchware: start() was called from a package other than 'fetchware', and with an
 argument that was not a code reference. Outside of package 'fetchware' this
 subroutine can only be called with a code reference as its one and only
 argument.
 EOD
-        return 'Callback added.';
-    # We *were* called in package fetchware.
-    } else {
-        # Only execute and return the specified $callback, if it has previously
-        # been defined. If it has not, then execute the rest of this subroutine
-        # normally.
-        if (defined $callback and ref $callback eq 'CODE') {
-            return $callback->(@_);
+            return 'Callback added.';
+        # We *were* called in package fetchware.
+        } else {
+            # Only execute and return the specified $callback, if it has
+            # previously been defined. If it has not, then execute the rest of
+            # this subroutine normally.
+            if (defined $callback and ref $callback eq 'CODE') {
+                return $callback->(@_);
+            }
         }
+
+
+        my %opts = @_;
+
+        # Forward opts to create_tempdir(), which does the heavy lifting.
+        my $temp_dir = create_tempdir(%opts);
+
+        return $temp_dir;
     }
-
-
-    my %opts = @_;
-
-    # Forward opts to create_tempdir(), which does the heavy lifting.
-    my $temp_dir = create_tempdir(%opts);
-
-    return $temp_dir;
-}
-
-
 
 
 =head2 lookup()
@@ -900,6 +708,7 @@ EOD
 
     msg "Looking up download url using lookup_url [@{[config('lookup_url')]}]";
 
+use Test::More;
 diag "lookup_url[@{[config('lookup_url')]}]";
     # die if lookup_url wasn't specified.
     # die if lookup_method was specified wrong.
@@ -2592,8 +2401,6 @@ EOM
 
 
 
-
-
 =head2 uninstall()
 
     'uninstall succeeded' = uninstall($build_path)
@@ -2725,18 +2532,6 @@ EOM
 
 
 
-
-
-# new hooks here!
-
-
-
-
-
-
-
-
-
 =head2 end()
 
     end();
@@ -2789,1146 +2584,6 @@ EOD
     # Use cleanup_tempdir() to cleanup your tempdir for us.
     cleanup_tempdir();
 }
-
-
-
-=head1 UTILITY SUBROUTINES
-
-These subroutines provide utility functions for testing and downloading files
-and dirlists that may also be helpful for anyone who's writing a custom
-Fetchwarefile to provide easier testing.
-
-=cut 
-
-
-=head2 eval_ok()
-
-    eval_ok($code, $expected_exception_text_or_regex, $test_name);
-
-Executes the $code coderef, and compares its thrown exception, C<$@>, to
-$expected_exception_text_or_regex, and uses $test_name as the name for the test if
-provided.
-
-If $expected_exception_text_or_regex is a string then Test::More's is() is used,
-and if $expected_exception_text_or_regex is a C<'Regexp'> according to ref(),
-then like() is used, which will treat $expected_exception_text_or_regex as a
-regex instead of as just a string.
-
-=cut
-
-sub eval_ok {
-    my ($code, $expected_exception_text_or_regex, $test_name) = @_;
-    eval {$code->()};
-    # Test if an exception was actually thrown.
-    if (not defined $@) {
-        BAIL_OUT("[$test_name]'s provided code did not actually throw an exception");
-    }
-    
-    # Support regexing the thrown exception's test if needed.
-    if (ref $expected_exception_text_or_regex ne 'Regexp') {
-        is($@, $expected_exception_text_or_regex, $test_name);
-    } elsif (ref $expected_exception_text_or_regex eq 'Regexp') {
-        like($@, qr/$expected_exception_text_or_regex/, $test_name);
-    }
-
-}
-
-
-=head2 print_ok()
-
-    print_ok(\&printer, $expected, $test_name);
-
-Tests if $expected is in the output that C<\&printer->()> produces on C<STDOUT>.
-
-It passes $test_name along to the underlying L<Test::More> function that it uses
-to do the test.
-
-$expected can be a C<SCALAR>, C<Regexp>, or C<CODEREF> as returned by Perl's
-L<ref()> function.
-
-=over
-=item * If $expected is a SCALAR according to ref()
-=over
-=item * Then Use eq to determine if the test passes.
-
-=back
-
-=item * If $expected is a Regexp according to ref()
-=over
-=item * Then use a regex comparision just like Test::More's like() function.
-
-=back
-
-=item * If $expected is a CODEREF according to ref()
-=over
-=item * Then execute the coderef and use the result of that expression to determine if the test passed or failed .
-
-=back
-
-=back
-
-=over
-NOTICE: C<print_ok()'s> manipuation of STDOUT only works for the current Perl
-process. STDOUT may be inherited by forks, but for some reason my knowledge of
-Perl and Unix lacks a better explanation other than that print_ok() does not
-work for testing what C<fork()ed> and C<exec()ed> processes do such as those
-executed with run_prog().
-
-I also have not tested other possibilities, such as using IO::Handle to
-manipulate STDOUT, or tie()ing STDOUT like Test::Output does. These methods
-probably would not survive a fork() and an exec() though either.
-
-=back
-
-=cut
-
-###BUGALERT### Some code like in t/bin-fetchware-upgrade(-all)?.t uses copy and
-#pasted code that this function is based on. Replace that crap with print_ok().
-####BUGALERT## Add tests for it!!!!!!!!!!!!!!!!
-sub print_ok {
-    my ($printer, $expected, $test_name) = @_;
-
-    my $error;
-    my $stdout;
-    # Use eval to catch errors that $printer->() could possibly throw.
-    eval {
-        local *STDOUT;
-        # Turn on Autoflush mode, so each time print is called it causes perl to
-        # flush STDOUT's buffer. Otherwise a write could happen, that may not
-        # actually get written before this eval closes, causing $stdout to stay
-        # undef instead of getting whatever was written to STDOUT.
-        $| = 1;
-        open STDOUT, '>', \$stdout
-            or $error = 'Can\'t open STDOUT to test cmd_upgrade using cmd_list';
-
-        # Execute $printer
-        $printer->();
-
-        close STDOUT
-            or $error = 'WTF! closing STDOUT actually failed! Huh?';
-    };
-    $error = $@ if $@;
-    fail($error) if defined $error;
-
-    if (ref($expected) eq undef) {
-        is($stdout, $expected,
-            $test_name);
-    } elsif (ref($expected) eq 'Regexp') {
-        like($stdout, $expected,
-            $test_name);
-    } elsif (ref($expected) eq 'CODEREF') {
-        ok($expected->(),
-            $test_name);
-    }
-}
-
-
-=head2 skip_all_unless_release_testing()
-
-    skip_all_unless_release_testing();
-
-Skips all tests in your test file or subtest() if fetchware's testing
-environment variable, C<FETCHWARE_RELEASE_TESTING>, is set to its proper value.
-
-=cut
-
-sub skip_all_unless_release_testing {
-    plan skip_all => 'Not testing for release.'
-        if $ENV{FETCHWARE_RELEASE_TESTING}
-            ne '***setting this will install software on your computer!!!!!!!***';
-}
-
-
-=head2 make_clean()
-
-    make_clean();
-
-Runs C<make clean> and then chdirs to the parent directory. This subroutine is
-used in build() and install()'s test scripts to run make clean in between test
-runs. If you override build() or install() you may wish to use make_clean to
-automate this for you.
-
-=cut
-
-sub make_clean {
-    system('make', 'clean');
-    chdir(updir()) or fail(q{Can't chdir(updir())!});
-}
-
-
-=head2 make_test_dist()
-
-    my $test_dist_path = make_test_dist($file_name, $ver_num, rel2abs($destination_directory));
-
-Makes a C<$filename-$ver_num.fpkg> fetchware package that can be used for
-testing fetchware's functionality without actually installing anything. All of
-the tests in the t/ directory use this, while all of the tests in the xt/
-directory use real programs like apache and ctags to test fetchware's
-functionality.
-
-Reuses start() to create a temp directory that is used to put the test-dist's
-files in. Then an archive is created based on $original_cwd or
-$destination_directory if provided, which is the current working directory
-before you call make_test_dist(). After the archive is created in $original_cwd,
-make_test_dist() deletes the $temp_dir using end().
-
-If $destination_directory is not provided as an argument, then make_test_dist()
-will just use cwd(), your current working directory.
-
-Returns the full path to the created test-dist fetchwware package.
-
-=cut
-
-sub make_test_dist {
-    my $file_name = shift;
-    my $ver_num = shift;
-    my $destination_directory;
-    if ($destination_directory = shift) {
-        $destination_directory = rel2abs($destination_directory);
-
-    } else {
-        $destination_directory = $original_cwd;
-    }
-
-    # Create a temp dir to create or test-dist-1.$ver_num directory in.
-    my $temp_dir = create_tempdir();
-
-    # Append $ver_num to $file_name to complete the dist's name.
-    my $dist_name = "$file_name-$ver_num";
-
-diag("dist_name[$dist_name]");
-    mkdir($dist_name) or die <<EOD;
-fetchware: Run-time error. Fetchware failed to create the directory
-[$dist_name] in the current directory of [$temp_dir]. The OS error was
-[$!].
-EOD
-    my $configure_path = catfile($dist_name, 'configure');
-    my %test_dist_files = (
-        './Fetchwarefile' => <<EOF
-# $file_name is a fake "test distribution" mean for testing fetchware's basic installing, upgrading, and
-# so on functionality.
-use App::Fetchware;
-
-program '$file_name';
-
-# Need to filter out the cruft.
-filter '$file_name';
-
-lookup_url 'file://t';
-EOF
-        ,
-
-        $configure_path => <<EOF 
-#!/bin/sh
-
-# A Test ./configure file for testing Fetchware's install, upgrade, and so on
-# functionality.
-
-echo "fetchware: ./configure ran successfully!"
-EOF
-        ,
-        catfile($dist_name, 'Makefile') => <<EOF 
-# Makefile for test-dist, which is a "test distribution" for testing Fetchware's
-# install, upgrade, and so on functionality.
-
-all:
-	sh -c 'echo "fetchware: make ran successfully!"'
-
-install:
-	sh -c 'echo "fetchware: make install ran successfully!"'
-
-uninstall:
-	sh -c 'echo "fetchware: make uninstall ran successfully!"'
-
-build-package:
-	sh -c 'echo "Build package and creating md5sum."'
-
-	sh -c '(cd .. && tar --create --gzip --verbose --file test-dist-1.00.fpkg  ./Fetchwarefile test-dist-1.00)'
-
-	sh -c '(cd .. && md5sum test-dist-1.00.fpkg > test-dist-1.00.fpkg.md5)'
-
-	sh -c 'echo "Build package and creating md5sum for upgrade version."'
-
-	sh -c 'cp -R ../test-dist-1.00 ../test-dist-1.01'
-
-	sh -c '(cd .. && tar --create --gzip --verbose --file test-dist-1.00/test-dist-1.01.fpkg  ./Fetchwarefile test-dist-1.01)'
-
-	sh -c 'rm -r ../test-dist-1.01'
-
-	sh -c 'md5sum test-dist-1.01.fpkg > test-dist-1.01.fpkg.md5'
-EOF
-        ,
-    );
-
-    for my $file_to_create (keys %test_dist_files) {
-        open(my $fh, '>', $file_to_create) or die <<EOD;
-fetchware: Run-time error. Fetchware failed to open
-[$file_to_create] for writing to create the Configure script that
-test-dist needs to work properly. The OS error was [$!].
-EOD
-        print $fh $test_dist_files{$file_to_create};
-        close $fh;
-    }
-
-    # chmod() ./configure, so it can be executed.
-    chmod(0755, $configure_path) or die <<EOC;
-fetchware: run-time error. fetchware failed to chmod [$configure_path] to add
-execute permissions, which ./configure needs. Os error [$!].
-EOC
-
-    my $test_dist_filename = catfile($destination_directory, "$dist_name.fpkg");
-diag("test_dist_filename[$test_dist_filename]");
-
-    # Create a tar archive of all of the files needed for test-dist.
-    Archive::Tar->create_archive($test_dist_filename, COMPRESS_GZIP,
-        keys %test_dist_files) or die <<EOD;
-fetchware: Run-time error. Fetchware failed to create the test-dist archive for
-testing [$test_dist_filename] The error was [@{[Archive::Tar->error()]}].
-EOD
-
-    # Cd back to $original_cwd and delete $temp_dir.
-    cleanup_tempdir();
-
-    return rel2abs($test_dist_filename);
-}
-
-
-=head2 md5sum_file()
-
-    my $md5sum_fil_path = emd5sum_file($archive_to_md5);
-
-Uses Digest::MD5 to generate a md5sum just like the md5sum program does, and
-instead of returning the output it returns the full path to a file containing
-the md5sum called C<"$archive_to_md5.md5">.
-
-=cut
-
-sub md5sum_file {
-    my $archive_to_md5 = shift;
-
-    open(my $package_fh, '<', $archive_to_md5)
-        or die <<EOD;
-App-Fetchware: run-time error. Fetchware failed to open the file it downloaded
-while trying to read it in order to check its MD5 sum. The file was
-[$archive_to_md5]. See perldoc App::Fetchware.
-EOD
-
-    my $digest = Digest::MD5->new();
-
-    # Digest requires the filehandle to have binmode set.
-    binmode $package_fh;
-
-    my $calculated_digest;
-    eval {
-        # Add the file for digesting.
-        $digest->addfile($package_fh);
-        # Actually digest it.
-        $calculated_digest = $digest->hexdigest();
-    };
-    if ($@) {
-        die <<EOD;
-App-Fetchware: run-time error. Digest::MD5 croak()ed an error [$@].
-See perldoc App::Fetchware.
-EOD
-    }
-
-    close $package_fh or die <<EOD;
-App-Fetchware: run-time error Fetchware failed to close the file
-[$archive_to_md5] after opening it for reading. See perldoc App::Fetchware.
-EOD
-    
-    my $md5sum_file = rel2abs($archive_to_md5);
-    $md5sum_file = "$md5sum_file.md5";
-    open(my $md5_fh, '>', $md5sum_file) or die <<EOD;
-fetchware: run-time error. Failed to open [$md5sum_file] while calculating a
-md5sum. Os error [$!].
-EOD
-
-    print $md5_fh "$calculated_digest  @{[file($archive_to_md5)->basename()]}";
-
-    close $md5_fh or die <<EOD;
-App-Fetchware: run-time error Fetchware failed to close the file
-[$md5sum_file] after opening it for reading. See perldoc App::Fetchware.
-EOD
-
-    return $md5sum_file;
-}
-
-
-
-=head2 expected_filename_listing()
-
-    my $expected_filename_listing = expected_filename_listing()
-
-Returns a crazy string meant for use with Test::Deep for testing that Apache
-directory listings have been parsed correctly by lookup().
-
-=cut
-
-sub expected_filename_listing {
-    my $expected_filename_listing = <<'EOC';
-        array_each(
-            array_each(any(
-                re(qr/Announcement2.\d.(html|txt)/),
-                re(qr/CHANGES_2\.\d(\.\d+)?/),
-                re(qr/CURRENT(-|_)IS(-|_)\d\.\d+?\.\d+/),
-                re(qr/
-                    HEADER.html
-                    |
-                    KEYS
-                    |
-                    README.html
-                    |
-                    binaries
-                    |
-                    docs
-                    |
-                    flood
-                /x),
-                re(qr/httpd-2\.\d\.\d+?-win32-src\.zip(\.asc)?/),
-                re(qr/httpd-2\.\d\.\d+?\.tar\.(bz2|gz)(\.asc)?/),
-                re(qr/httpd-2\.\d\.\d+?-deps\.tar\.(bz2|gz)(\.asc)?/),
-                re(qr/
-                    libapreq
-                    |
-                    mod_fcgid
-                    |
-                    mod_ftp
-                    |
-                    patches
-                /x),
-                re(qr/\d{12}/)
-                ) # end any
-            )
-        );
-EOC
-
-    return $expected_filename_listing;
-}
-
-
-
-=head2 create_tempdir()
-
-    my $temp_dir = create_tempdir();
-
-Creates a temporary directory, chmod 700's it, and chdir()'s into it.
-
-Accepts the fake hash argument C<KeepTempDir => 1>, which tells create_tempdir()
-to B<not> delete the temporary directory when the program exits.
-
-=cut
-
-sub create_tempdir {
-    my %opts = @_;
-
-    msg 'Creating temp dir to use to install your package.';
-
-    # Ask for better security.
-    File::Temp->safe_level( File::Temp::HIGH );
-
-    # Create the temp dir in the portable locations as returned by
-    # File::Spec->tempdir() using the specified template (the weird $$ is this
-    # processes process id), and cleaning up at program exit.
-    my $exception;
-    my $temp_dir;
-    eval {
-        unless (defined $opts{KeepTempDir}) {
-            $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
-
-            vmsg "Created temp dir [$temp_dir] that will be deleted on exit";
-        } else {
-            $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1);
-
-            vmsg "Created temp dir [$temp_dir] that will be kept on exit";
-
-        }
-
-        # Must chown 700 so gpg's localized keyfiles are good.
-        chown 0700, $temp_dir;
-
-        use Test::More;
-        diag("tempdir[$temp_dir]");
-        $exception = $@;
-        1; # return true unless an exception is thrown.
-    } or die <<EOD;
-App-Fetchware: run-time error. Fetchware tried to use File::Temp's tempdir()
-subroutine to create a temporary file, but tempdir() threw an exception. That
-exception was [$exception]. See perldoc App::Fetchware.
-EOD
-
-    vmsg "Saving original working directory as [$original_cwd]";
-    $original_cwd = cwd();
-    diag("cwd[@{[$original_cwd]}]");
-    # Change directory to $CONFIG{TempDir} to make unarchiving and building happen
-    # in a temporary directory, and to allow for multiple concurrent fetchware
-    # runs at the same time.
-    chdir $temp_dir or die <<EOD;
-App-Fetchware: run-time error. Fetchware failed to change its directory to the
-temporary directory that it successfully created. This just shouldn't happen,
-and is weird, and may be a bug. See perldoc App::Fetchware.
-EOD
-    diag("cwd[@{[cwd()]}]");
-    vmsg "Successfully changed working directory to [$temp_dir].";
-
-    msg "Temporary directory created [$temp_dir]";
-
-    return $temp_dir;
-}
-
-
-=head2 cleanup_tempdir()
-
-    cleanup_tempdir();
-
-Cleans up B<any> temporary files or directories that anything in this process used
-File::Temp to create. You cannot only clean up one directory or another;
-instead, you must just use this sparingly or in an END block although file::Temp
-takes care of that for you unless you asked it not to.
-
-=cut
-
-sub cleanup_tempdir {
-    msg 'Cleaning up temporary directory temporary directory.';
-    # chdir to $original_cwd directory, so File::Temp can delete the tempdir. This
-    # is necessary, because operating systems do not allow you to delete a
-    # directory that a running program has as its cwd.
-
-    vmsg 'Changing directory to [$original_cwd].';
-    chdir($original_cwd) or die <<EOD;
-App-Fetchware: run-time error. Fetchware failed to chdir() to [$original_cwd]. See
-perldoc App::Fetchware.
-EOD
-
-    # Call File::Temp's cleanup subrouttine to delete fetchware's temp
-    # directory.
-    ###BUGALERT### Below doesn't seem to work!!
-    vmsg 'Cleaning up temporary directory.';
-    File::Temp::cleanup();
-    ###BUGALERT### Should end() clear %CONFIG for next invocation of App::Fetchware
-    # Clear %CONFIG for next run of App::Fetchware.
-    # Is this a design defect? It's a pretty lame hack! Does my() do this for
-    # me?
-    ###BUGALERT###YYYYYYEEEEEEEEEESSSSSSSSSSSS!!!! It probbly should. It would
-    #remove many calls to __clear_CONFIG() from the test suite.
-###BUGALERT### Just take %CONFIG OO!!! App::Fetchware::Config!!! Problem solved.
-    vmsg 'Clearing internal %CONFIG variable that hold your parsed Fetchwarefile.';
-    __clear_CONFIG();
-
-    msg 'Cleaned up temporary directory.';
-}
-
-
-=head2 Standards for using msg() and vmsg()
-
-msg() should be used to describe the main events that happen, while vmsg()
-should be used to describe what all of the main subroutine calls do.
-
-For example, cmd_uninstall() has a msg() at the beginning and at the end, and so
-do the main App::Fetchware subroutines that it uses such as start(), download(),
-unarchive(), end() and so on. They both use vmsg() to add more detailed messages
-about the particular even "internal" things they do.
-
-msg() and vmsg() are also used without parens due to their appropriate
-prototypes. This makes them stand out from regular old subroutine calls more.
-
-=cut
-
-=head2 msg()
-
-    msg 'message to print to STDOUT' ;
-    msg('message to print to STDOUT');
-
-msg() simply takes a list of scalars, and it prints them to STDOUT according to
-any verbose (-v), or quiet (-q) options that the user may have provided to
-fetchware.
-
-msg() will still print its arguments if the user provided a -v (verbose)
-argument, but it will B<not> print its argument if the user provided a -q (quiet)
-command line option.
-
-=over
-=item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
-
-=back
-
-=cut
-
-sub msg (@) {
-
-    # If fetchware was not run in quiet mode, -q.
-    unless ($fetchware::quiet > 0) {
-        # print are arguments. Use say if the last one doesn't end with a
-        # newline. $#_ is the last subscript of the @_ variable.
-        if ($_[$#_] =~ /\w*\n\w*\z/) {
-            print @_;
-        } else {
-            say @_;
-        }
-    # Quiet mode is turned on.
-    } else {
-        # Don't print anything.
-        return;
-    }
-}
-
-
-=head2 vmsg()
-
-    vmsg 'message to print to STDOUT' ;
-    vmsg('message to print to STDOUT');
-
-vmsg() simply takes a list of scalars, and it prints them to STDOUT according to
-any verbose (-v), or quiet (-q) options that the user may have provided to
-fetchware.
-
-vmsg() will B<only> print its arguments if the user provided a -v (verbose)
-argument, but it will B<not> print its argument if the user provided a -q (quiet)
-command line option.
-
-=over
-=item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
-
-=back
-
-=cut
-
-sub vmsg (@) {
-
-    # If fetchware was not run in quiet mode, -q.
-    ###BUGALERT### Can I do something like:
-    #eval "use constant quiet => 0;" so that the iffs below can be resolved at
-    #run-time to make vmsg() and msg() faster???
-    unless ($fetchware::quiet > 0) {
-        # If verbose is also turned on.
-        if ($fetchware::verbose > 0) {
-            # print our arguments. Use say if the last one doesn't end with a
-            # newline. $#_ is the last subscript of the @_ variable.
-            if ($_[$#_] =~ /\w*\n\w*\z/) {
-                print @_;
-            } else {
-                say @_;
-            }
-        }
-    # Quiet mode is turned on.
-    } else {
-        # Don't print anything.
-        return;
-    }
-}
-
-
-=head2 run_prog()
-
-    run_prog($program, @args);
-
-run_prog() uses L<system> to execute the program for you. Only the secure way of
-avoiding the shell is used, so you can not use any shell redirection or any
-shell builtins.
-
-If the user ran fetchware with -v (verbose) then run_prog() changes none of its
-behavior it still just executes the program. However, if the user runs the
-program with -q (quiet) specified, then the the command is run using a piped
-open to capture the output of the program. This captured output is then ignored,
-because the user asked to never be bothered with the output. This piped open
-uses the safer shell avoiding syntax on systems with L<fork>, and systems
-without L<fork>, Windows,  the older less safe syntax is used. Backticks are
-avoided, because they always use the shell.
-
-=over
-=item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
-
-=back
-
-=cut
-
-###BUGALERT### Add support for dry-run functionality!!!!
-sub run_prog ($;@) {
-    my ($program, @args) = @_;
-
-    # If fetchware is run without -q.
-    unless ($fetchware::quiet > 0) {
-        system($program, @args) == 0 or die <<EOD;
-fetchware: run-time error. Fetchware failed to execute the specified program
-[$program] with the arguments [@args]. The OS error was [$!], and the return
-value was [@{[$? >> 8]}]. Please see perldoc App::Fetchware::Diagnostics.
-EOD
-    # If fetchware is run with -q.
-    } else {
-        # Use a piped open() to capture STDOUT, so that STDOUT is not printed to
-        # the terminal like it usually is therby "quiet"ing it.
-        # If not on Windows use safer open call that doesn't work on Windows.
-        unless (is_os_type('Windows', $^O)) {
-            open(my $fh, '-|', "$program", @args) or die <<EOD;
-fetchware: run-time error. Fetchware failed to execute the specified program
-while capturing its input to prevent it from being copied to the screen, because
-you ran fetchware with it's --quite or -q option. The program was [$program],
-and its arguments were [@args]. OS error [$!], and exit value [$?]. Please see
-perldoc App::Fetchware::Diagnostics.
-EOD
-            # Close $fh, to cause perl to wait for the command to do its
-            # outputing to STDOUT.
-            close $fh;
-        # We're on Windows.
-        } else {
-            open(my $fh, '-|', "$program @args") or die <<EOD;
-fetchware: run-time error. Fetchware failed to execute the specified program
-while capturing its input to prevent it from being copied to the screen, because
-you ran fetchware with it's --quite or -q option. The program was [$program],
-and its arguments were [@args]. OS error [$!], and exit value [$?]. Please see
-perldoc App::Fetchware::Diagnostics.
-EOD
-            # Close $fh, to cause perl to wait for the command to do its
-            # outputing to STDOUT.
-            close $fh;
-        }
-    }
-}
-
-
-
-
-=head2 download_dirlist()
-
-    my $dir_list = download_dirlist($ftp_or_http_url)
-
-Downloads a ftp or http url and assumes that it will be downloading a directory
-listing instead of an actual file. To download an actual file use
-L<download_file()>. download_dirlist returns the directory listing that it
-obtained from the ftp or http server. ftp server will be an arrayref of C<ls -l>
-like output, while the http output will be a scalar of the HTML dirlisting
-provided by the http server.
-
-=cut
-
-sub download_dirlist {
-    my $url = shift;
-
-    my $dirlist;
-    given ($url) {
-        when (m!^ftp://.*$!) {
-            $dirlist = ftp_download_dirlist($url);
-        } when (m!^http://.*$!) {
-            $dirlist = http_download_dirlist($url);
-        } when (m!^file://.*$!) {
-          $dirlist = file_download_dirlist($url);
-        } default {
-            die <<EOD;
-App-Fetchware: run-time syntax error: the url parameter your provided in
-your call to download_dirlist() [$url] does not have a supported URL scheme (the
-http:// or ftp:// part). The only supported download types, schemes, are FTP and
-HTTP. See perldoc App::Fetchware.
-EOD
-        }
-    }
-
-    return $dirlist;
-}
-
-
-=head2 ftp_download_dirlist()
-
-    my $dir_list = ftp_download_dirlist($ftp_url);
-
-Uses Net::Ftp's dir() method to obtain a I<long> directory listing. lookup()
-needs it in I<long> format, so that the timestamp algorithm has access to each
-file's timestamp.
-
-Returns an array ref of the directory listing.
-
-=cut
-
-sub ftp_download_dirlist {
-    my $ftp_url = shift;
-    use Test::More;
-    diag("ftp_url[$ftp_url]");
-    $ftp_url =~ m!^ftp://([-a-z,A-Z,0-9,\.]+)(/.*)?!;
-    my $site = $1;
-    my $path = $2;
-    use Test::More;
-    diag("site[$site]path[$path]");
-
-    # Add debugging later based on fetchware commandline args.
-    # for debugging: $ftp = Net::FTP->new('$site','Debug' => 10);
-    # open a connection and log in!
-    my $ftp;
-    $ftp = Net::FTP->new($site)
-        or die <<EOD;
-App-Fetchware: run-time error. fetchware failed to connect to the ftp server at
-domain [$site]. The system error was [$@].
-See man App::Fetchware.
-EOD
-
-    $ftp->login("anonymous",'-anonymous@')
-        or die <<EOD;
-App-Fetchware: run-time error. fetchware failed to log in to the ftp server at
-domain [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
-EOD
-
-
-    my @dir_listing = $ftp->dir($path)
-        or die <<EOD;
-App-Fetchware: run-time error. fetchware failed to get a long directory listing
-of [$path] on server [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
-EOD
-
-    $ftp->quit();
-
-    return \@dir_listing;
-}
-
-
-=head2 http_download_dirlist()
-
-    my $dir_list = http_download_dirlist($http_url);
-
-Uses HTTP::Tiny to download a HTML directory listing from a HTTP Web server.
-
-Returns an scalar of the HTML ladden directory listing.
-
-=cut
-
-sub http_download_dirlist {
-    my $http_url = shift;
-
-    my $response = HTTP::Tiny->new->get($http_url);
-
-    die <<EOD unless $response->{success};
-App-Fetchware: run-time error. HTTP::Tiny failed to download a directory listing
-of your provided lookup_url. HTTP status code [$response->{status} $response->{reason}]
-HTTP headers [@{[Data::Dumper::Dumper($response->{headers})]}].
-See man App::Fetchware.
-EOD
-
-    use Test::More;
-    diag("$response->{status} $response->{reason}\n");
-
-    while (my ($k, $v) = each %{$response->{headers}}) {
-        for (ref $v eq 'ARRAY' ? @$v : $v) {
-            diag("$k: $_\n");
-        }
-    }
-
-    diag($response->{content}) if length $response->{content};
-    die <<EOD unless length $response->{content};
-App-Fetchware: run-time error. The lookup_url you provided downloaded nothing.
-HTTP status code [$response->{status} $response->{reason}]
-HTTP headers [@{[Data::Dumper::Dumper($response)]}].
-See man App::Fetchware.
-EOD
-    diag explain $response;
-    return $response->{content};
-}
-
-
-=head2 file_download_dirlist()
-
-    my $file_listing = file_download_dirlist($local_lookup_url)
-
-Glob's provided $local_lookup_url, and builds a directory listing of all files
-in the provided directory. Then list_file_dirlist() returns a list of all of the
-files in the current directory.
-
-=over
-=item SIDE EFFECTS
-Does what ls or dir do, but natively inside perl, so I don't have to worry about
-what OS I'm running on.
-
-=back
-
-=cut
-
-sub file_download_dirlist {
-    my $local_lookup_url = shift;
-
-diag "before[$local_lookup_url]";
-    $local_lookup_url =~ s!^file://!!; # Strip scheme garbage.
-diag "after[$local_lookup_url]";
-
-    # Prepend $original_cwd if $local_lookup_url is a relative path.
-    unless (file_name_is_absolute($local_lookup_url)) {
-diag "origcwd[$original_cwd]";
-        $local_lookup_url =  catdir($original_cwd, $local_lookup_url);
-    }
-
-    my @file_listing;
-    for my $file (glob catfile($local_lookup_url, '*')) {
-diag "lfdfile[$file]";
-        push @file_listing, $file;
-    }
-diag "lfd file_listing";
-diag explain \@file_listing;
-diag "end lfd file_listing";
-    return \@file_listing;
-}
-
-
-
-=head2 download_file()
-
-    my $filename = download_file($url)
-
-Downloads a $url and assumes it is a file that will be downloaded instead of a
-file listing that will be returned. download_file() returns the file name of the
-file it downloads.
-
-=cut
-
-sub download_file {
-    my $url = shift;
-
-    my $filename;
-    given ($url) {
-        when (m!^ftp://!) {
-            $filename = download_ftp_url($url);
-        } when (m!^http://!) {
-            $filename = download_http_url($url);
-        } when (m!^file://!) {
-            $filename = download_file_url($url);   
-        } default {
-            die <<EOD;
-App-Fetchware: run-time syntax error: the url parameter your provided in
-your call to download_file() [$url] does not have a supported URL scheme (the
-http:// or ftp:// part). The only supported download types, schemes, are FTP and
-HTTP. See perldoc App::Fetchware.
-EOD
-        }
-    }
-
-    return $filename;
-}
-
-
-=head2 download_ftp_url()
-
-    my $filename = download_ftp_url($url);
-
-Uses Net::FTP to download the specified FTP URL using binary mode.
-
-=cut
-
-sub download_ftp_url {
-    my $ftp_url = shift;
-
-    use Test::More;
-    diag("ftp_url[$ftp_url]");
-    $ftp_url =~ m!^ftp://([-a-z,A-Z,0-9,\.]+)(/.*)?!;
-    my $site = $1;
-    my $path = $2;
-    use Test::More;
-    diag("FIRSTpath[$path]");
-    my ($volume, $directories, $file) = splitpath($path);
-    diag("site[$site]path[$path]dirs[$directories]file[$file]");
-
-    # for debugging: $ftp = Net::FTP->new('site','Debug',10);
-    # open a connection and log in!
-
-    my $ftp = Net::FTP->new($site)
-        or die <<EOD;
-App-Fetchware: run-time error. fetchware failed to connect to the ftp server at
-domain [$site]. The system error was [$@].
-See man App::Fetchware.
-EOD
-    
-    $ftp->login("anonymous",'-anonymous@')
-        or die <<EOD;
-App-Fetchware: run-time error. fetchware failed to log in to the ftp server at
-domain [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
-EOD
-
-    # set transfer mode to binary
-    $ftp->binary()
-        or die <<EOD;
-App-Fetchware: run-time error. fetchware failed to swtich to binary mode while
-trying to download a the file [$path] from site [$site]. The ftp error was
-[@{[$ftp->message]}]. See perldoc App::Fetchware.
-EOD
-
-    # change the directory on the ftp site
-    $ftp->cwd($directories)
-        or die <<EOD;
-App-Fetchware: run-time error. fetchware failed to cwd() to [$path] on site
-[$site]. The ftp error was [@{[$ftp->message]}]. See perldoc App::Fetchware.
-EOD
-
-
-    # Download the file to the current directory. The start() subroutine should
-    # have cd()d to a tempdir for fetchware to use.
-    $ftp->get($file)
-        or die <<EOD;
-App-Fetchware: run-time error. fetchware failed to download the file [$file]
-from path [$path] on server [$site]. The ftp error message was
-[@{[$ftp->message]}]. See perldoc App::Fetchware.
-EOD
-
-    # ftp done!
-    $ftp->quit;
-
-    # The caller needs the $filename to determine the $package_path later.
-    diag("FILE[$file]");
-    return $file;
-}
-
-
-=head2 download_http_url()
-
-    my $filename = download_http_url($url);
-
-Uses HTTP::Tiny to download the specified HTTP URL.
-
-Supports adding extra arguments to HTTP::Tiny's new() constructor. These
-arguments are B<not> checked for correctness; instead, they are simply forwarded
-to HTTP::Tiny, which does not check them for correctness either. HTTP::Tiny
-simply loops over its internal listing of what is arguments should be, and then
-accesses the arguments if they exist.
-
-This was really only implemented to allow App::Fetchware::HTMLPageSync to change
-its user agent string to avoid being blocked or freaking out Web developers that
-they're being screen scraped by some obnoxious bot as HTMLPageSync is wimply and
-harmless, and only downloads one page. 
-
-You would add an argument like this:
-download_http_url($http_url, agent => 'Firefox');
-
-See HTTP::Tiny's documentation for what these options are.
-
-=cut
-
-sub download_http_url {
-    my $http_url = shift;
-
-    # Forward any other options over to HTTP::Tiny. This is used mostly to
-    # support changing user agent strings, but why not support them all.
-    my %opts = @_ if @_ % 2 == 0;
-
-    my $http = HTTP::Tiny->new(%opts);
-    my $response = $http->get($http_url);
-
-    die <<EOD unless $response->{success};
-App-Fetchware: run-time error. HTTP::Tiny failed to download a directory listing
-of your provided lookup_url. HTTP status code [$response->{status} $response->{reason}]
-HTTP headers [@{[Data::Dumper::Dumper($response->{headers})]}].
-See man App::Fetchware.
-EOD
-
-    use Test::More;
-    diag("$response->{status} $response->{reason}\n");
-
-    while (my ($k, $v) = each %{$response->{headers}}) {
-        for (ref $v eq 'ARRAY' ? @$v : $v) {
-            diag("$k: $_\n");
-        }
-    }
-
-    # In this case the content is binary, so it will mess up your terminal.
-    #diag($response->{content}) if length $response->{content};
-    die <<EOD unless length $response->{content};
-App-Fetchware: run-time error. The lookup_url you provided downloaded nothing.
-HTTP status code [$response->{status} $response->{reason}]
-HTTP headers [@{[Data::Dumper::Dumper($response)]}].
-See man App::Fetchware.
-EOD
-    # Contains $response->{content}, which may be binary terminal killing
-    # garbage.
-    #diag explain $response;
-
-    # Must convert the worthless $response->{content} variable into a real file
-    # on the filesystem. Note: start() should have cd()d us into a suitable
-    # tempdir.
-    my $path = $http_url;
-    $path =~ s!^http://!!;
-    diag("path[$path]");
-    # Determine filename from the $path.
-    my ($volume, $directories, $filename) = splitpath($path);
-    diag("filename[$filename]");
-    # If $filename is empty string, then its probably a index directory listing.
-    $filename ||= 'index.html';
-    ###BUGALERT### Need binmode() on Windows???
-    open(my $fh, '>', $filename) or die <<EOD;
-App-Fetchware: run-time error. Fetchware failed to open a file necessary for
-fetchware to store HTTP::Tiny's output. Os error [$!]. See perldoc
-App::Fetchware.
-EOD
-    # Write HTTP::Tiny's downloaded file to a real file on the filesystem.
-    print $fh $response->{content};
-    close $fh
-        or die <<EOS;
-App-Fetchware: run-time error. Fetchware failed to close the file it created to
-save the content it downloaded from HTTP::Tiny. This file was [$filename]. OS
-error [$!]. See perldoc App::Fetchware.
-EOS
-
-    # The caller needs the $filename to determine the $package_path later.
-    diag("httpFILE[$filename]");
-    return $filename;
-}
-
-
-
-=head2 download_file_url()
-
-    my $filename = download_file_url($url);
-
-Uses File::Copy to copy ("download") the local file to the current working
-directory.
-
-=cut
-
-sub download_file_url {
-    my $url = shift;
-
-    $url =~ s!^file://!!; # Strip useless URL scheme.
-    
-    # Prepend $original_cwd only if the $url is *not* absolute, which will mess
-    # it up.
-    $url = catdir($original_cwd, $url) unless file_name_is_absolute($url);
-
-    # Download the file:// URL to the current directory, which should already be
-    # in $temp_dir, because of start()'s chdir().
-    cp($url, cwd()) or die <<EOD;
-App::Fetchware: run-time error. Fetchware failed to copy the download URL
-[$url] to the working directory [@{[cwd()]}]. Os error [$!].
-EOD
-
-    # Return just file filename of the downloaded file.
-    return file($url)->basename();
-}
-
-
-
-=head2 just_filename()
-
-    my $filename = just_filename($path);
-
-Uses File::Spec::Functions splitpath() to chop off everything except the
-filename of the provided $path. Does zero error checking, so it will return
-whatever value splitpath() returns as its last return value.
-
-=cut
-
-sub just_filename {
-    my $path = shift;
-    my ($volume, $directories, $filename) = splitpath($path);
-
-    return $filename;
-}
-
-
-=head2 do_nothing()
-
-    do_nothing();
-
-do_nothing() does nothing but return. It simply returns doing nothing. It is
-meant to be used by App::Fetchware "subclasses" that "override" App::Fetchware's
-API subroutines to make those API subroutines do nothing.
-
-=cut
-
-sub do_nothing {
-    return;
-}
-
-
 
 
 

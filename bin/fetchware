@@ -20,8 +20,13 @@ use 5.010;
 # Use Getopt::Long for options parsing beyond fetchware's simple commands such
 # as install, new, uninstall, help, and so on.
 use Getopt::Long qw(:config bundling pass_through);
-use App::Fetchware qw(config get_directory_listing
-    parse_directory_listing __clear_CONFIG config_replace msg vmsg run_prog);
+#use App::Fetchware qw( get_directory_listing parse_directory_listing);
+###BUGALERT### This breaks App::Fetchware's encapsulation, and screws up its API
+#fix this bug by extracting the fetchwarefile without relying on start() having
+#already created the temp directory!!!!!!
+use App::Fetchware qw(start get_directory_listing parse_directory_listing);
+use App::Fetchware::Config qw(config __clear_CONFIG config_replace);
+use App::Fetchware::Util qw(msg vmsg run_prog);
 use Archive::Tar;
 use File::Copy qw(mv cp);
 use File::Spec::Functions qw(curdir catdir catfile catpath tmpdir splitpath
@@ -201,6 +206,10 @@ sub cmd_install {
         # dir.
         $filename = rel2abs($filename);
 
+###BUGALERT### Fix this massive bug that screws up App::Fetchware's API!!!
+# start() *must* be called after extract_fetchwarefile() and parse_fetchware()
+# that way the user can customize start()'s behavior if they need to! Other wise
+# start() cannot be overriden properly!!!!!!!!!!
         my $temp_dir = start();
 
         my $fetchwarefile_path;

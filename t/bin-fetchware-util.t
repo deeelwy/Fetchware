@@ -11,7 +11,8 @@ use 5.010;
 # Test::More version 0.98 is needed for proper subtest support.
 use Test::More 0.98 tests => '7'; #Update if this changes.
 
-use App::Fetchware qw(:TESTING config);
+use App::Fetchware::Config ':CONFIG';
+use Test::Fetchware ':TESTING';
 use Cwd 'cwd';
 use File::Spec::Functions qw(catfile splitpath splitdir catdir catpath);
 use Path::Class;

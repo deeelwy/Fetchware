@@ -13,6 +13,8 @@ use 5.010;
 use Test::More 0.98 tests => '5'; #Update if this changes.
 use File::Spec::Functions 'devnull';
 
+use Test::Fetchware ':TESTING';
+
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
 # Delete *bad* elements from environment to make it safer as recommended by
@@ -21,7 +23,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 
 # Test if I can load the module "inside a BEGIN block so its functions are exported
 # and compile-time, and prototypes are properly honored."
-BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_UNARCHIVE :TESTING)); }
+BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_UNARCHIVE)); }
 
 
 # Print the subroutines that App::Fetchware imported by default when I used it.

@@ -17,7 +17,9 @@ use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
 use Test::More 0.98 tests => '10'; #Update if this changes.
-use App::Fetchware qw(!:DEFAULT :TESTING);
+use App::Fetchware '!:DEFAULT';
+use Test::Fetchware ':TESTING';
+use App::Fetchware::Config ':CONFIG';
 use Test::Deep;
 use Path::Class;
 use File::Spec::Functions 'updir';

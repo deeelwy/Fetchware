@@ -10,7 +10,8 @@ use 5.010;
 # Test::More version 0.98 is needed for proper subtest support.
 use Test::More 0.98 tests => '4'; #Update if this changes.
 
-use App::Fetchware qw(:TESTING config);
+use App::Fetchware::Config ':CONFIG';
+use Test::Fetchware ':TESTING';
 use Cwd 'cwd';
 use File::Copy 'cp';
 use File::Spec::Functions qw(catfile splitpath);
@@ -41,7 +42,8 @@ subtest 'test cmd_upgrade_all() success' => sub {
     # which will screw up the installation and upgrading of httpd below.
     for my $fetchware_package (glob catfile(fetchware_database_path(), '*')) {
         # Clean up $fetchware_package.
-        if ($fetchware_package =~ /httpd|ctags|test-dist|another-dist/) {
+        if ($fetchware_package =~
+            /httpd|ctags|test-dist|another-dist|App-Fetchware/) {
             ok((unlink $fetchware_package),
                 'checked cmd_upgrade() clean up fetchware database path')
                 if -e $fetchware_package

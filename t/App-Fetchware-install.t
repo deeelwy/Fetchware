@@ -13,6 +13,9 @@ use 5.010;
 use Test::More 0.98 tests => '8'; #Update if this changes.
 use File::Copy 'cp';
 
+use App::Fetchware::Config ':CONFIG';
+use Test::Fetchware ':TESTING';
+
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
 # Delete *bad* elements from environment to make it safer as recommended by
@@ -21,7 +24,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 
 # Test if I can load the module "inside a BEGIN block so its functions are exported
 # and compile-time, and prototypes are properly honored."
-BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_BUILD :TESTING )); }
+BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_BUILD)); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
 diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");

@@ -10,9 +10,13 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '14'; #Update if this changes.
+use Test::More;# 0.98 tests => '14'; #Update if this changes.
 use File::Spec::Functions qw(rel2abs);
 use Test::Deep;
+
+use Test::Fetchware ':TESTING';
+use App::Fetchware::Util ':UTIL';
+use App::Fetchware::Config ':CONFIG';
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -22,12 +26,11 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 
 # Test if I can load the module "inside a BEGIN block so its functions are exported
 # and compile-time, and prototypes are properly honored."
-BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_LOOKUP :TESTING :UTIL)); }
+BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_LOOKUP)); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
 diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
-my $class = 'App::Fetchware';
 
 ###BUGALERT### Redo tests to use Test::Deep so I don't need to update the test
 #when new versions of Apache come out!!!
@@ -333,7 +336,7 @@ subtest 'test overriding lookup()' => sub {
     package main;
     use App::Fetchware;
 
-    lookup { return 'Overrode lookup()!' };
+    lookup sub { return 'Overrode lookup()!' };
 
     # Switch back to being in package fetchware, so that lookup() will try out
     # the callback I gave it in the lookup() call above.
@@ -345,7 +348,7 @@ subtest 'test overriding lookup()' => sub {
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-#done_testing();
+done_testing();
 
 
 # Testing subroutine only used in this test file.

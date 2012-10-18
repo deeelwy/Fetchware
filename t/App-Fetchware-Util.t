@@ -1,17 +1,18 @@
 #!perl
-# App-Fetchware-util.t tests App::Fetchware's utility subroutines, which
-# provied helper functions such as testing & file & dirlist downloading.
+# App-Fetchware-Util.t tests App::Fetchware::Util's utility subroutines, which
+# provied helper functions such as logging and file & dirlist downloading.
 use strict;
 use warnings;
 use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '16'; #Update if this changes.
+use Test::More 0.98 tests => '15'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir);
 use URI::Split 'uri_split';
 use Cwd 'cwd';
+use Test::Fetchware ':TESTING';
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -22,16 +23,15 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 # Test if I can load the module "inside a BEGIN block so its functions are exported
 # and compile-time, and prototypes are properly honored."
 # There is no ':OVERRIDE_START' to bother importing.
-BEGIN { use_ok('App::Fetchware', qw(:TESTING :UTIL )); }
+BEGIN { use_ok('App::Fetchware::Util', ':UTIL'); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
-diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
-
-my $class = 'App::Fetchware';
+diag("App::Fetchware's default imports [@App::Fetchware::Util::EXPORT]");
 
 
 
-#subtest 'UTIL end TESTING export what they should' => sub {
+###BUGALERT### Add tests for :UTIL subs that have no tests!!!
+subtest 'UTIL export what they should' => sub {
     my @expected_util_exports = qw(
         msg
         vmsg
@@ -45,51 +45,23 @@ my $class = 'App::Fetchware';
         download_http_url
         download_file_url
         just_filename
+        do_nothing
+        create_tempdir
+        original_cwd
+        cleanup_tempdir
     );
 
-    my @expected_testing_exports = qw(
-        eval_ok
-        print_ok
-        skip_all_unless_release_testing
-        __clear_CONFIG
-        debug_CONFIG
-        config_replace
-        config_delete
-        make_clean
-        make_test_dist
-        md5sum_file
-        start
-        lookup
-        download
-        verify
-        unarchive
-        build
-        install
-        end
-        uninstall
-    );
     # sort them to make the testing their equality very easy.
     @expected_util_exports = sort @expected_util_exports;
-    @expected_testing_exports = sort @expected_testing_exports;
-    my @sorted_util_tag = sort @{$App::Fetchware::EXPORT_TAGS{UTIL}};
-    my @sorted_testing_tag = sort @{$App::Fetchware::EXPORT_TAGS{TESTING}};
+    my @sorted_util_tag = sort @{$App::Fetchware::Util::EXPORT_TAGS{UTIL}};
 
     ok(@expected_util_exports ~~ @sorted_util_tag, 
         'checked for correct UTIL @EXPORT_TAG');
-
-    for my $i (0..$#sorted_testing_tag) {
-        unless ($sorted_testing_tag[$i] eq $expected_testing_exports[$i]) {
-            fail('checked for correct TESTING @EXPORT_TAG failed');
-        }
-    }
-    pass('checked for correct TESTING @EXPORT_TAG');
-
-#};
+};
 
 
 ###BUGALERT###Need to add tests for :TESTING exports & specifc subtests for eval_ok(),
 # skip_all_unless_release_testing(), and clear_CONFIG().
-###BUGALERT### Add tests for config*() subs.
 
 
 subtest 'test ftp_download_dirlist()' => sub {
@@ -366,6 +338,10 @@ subtest 'test md5sum_file()' => sub {
     # formatting in tar and gzip.
     like($got_md5sum, qr/[0-9a-f]{32}  test-dist-1.00.fpkg/,
         'checked md5sum_file() success');
+
+    # Clean up junk temp files.
+    ok(unlink($test_dist, $test_dist_md5),
+        'cleaned up test md5sum_file()');
 };
 
 

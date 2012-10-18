@@ -10,7 +10,8 @@ use 5.010;
 # Test::More version 0.98 is needed for proper subtest support.
 use Test::More 0.98 tests => '4'; #Update if this changes.
 
-use App::Fetchware qw(:TESTING config);
+use App::Fetchware::Config ':CONFIG';
+use Test::Fetchware ':TESTING';
 use Cwd 'cwd';
 use File::Copy 'mv';
 use File::Spec::Functions qw(catfile splitpath);
@@ -64,7 +65,7 @@ diag("$fetchwarefile");
     # I obviously must install apache before I can test uninstalling it :)
     $fetchware_package_path = cmd_install($fetchwarefile_path);
     # And then test if the install was successful.
-    ok(grep /httpd-2\.2/, glob(catfile(fetchware_database_path(), '*')),
+    ok(grep /ctags/, glob(catfile(fetchware_database_path(), '*')),
         'check cmd_install(Fetchware) success.');
 
     # Clear internal %CONFIG variable, because I have to pare a Fetchwarefile

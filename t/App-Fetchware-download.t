@@ -16,6 +16,9 @@ use File::Spec::Functions qw(splitpath catfile);
 use URI::Split 'uri_split';
 use Cwd 'cwd';
 
+use Test::Fetchware ':TESTING';
+use App::Fetchware::Config ':CONFIG';
+
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
 # Delete *bad* elements from environment to make it safer as recommended by
@@ -24,7 +27,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 
 # Test if I can load the module "inside a BEGIN block so its functions are exported
 # and compile-time, and prototypes are properly honored."
-BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_DOWNLOAD :TESTING)); }
+BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_DOWNLOAD)); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
 diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
