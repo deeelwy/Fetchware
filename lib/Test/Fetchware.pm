@@ -181,17 +181,50 @@ sub print_ok {
 
 =head2 skip_all_unless_release_testing()
 
-    skip_all_unless_release_testing();
+    subtest 'some subtest that tests fetchware' => sub {
+        skip_all_unless_release_testing();
+
+        # ... Your tests go here that will be skipped unless
+        # FETCHWARE_RELEASE_TESTING among other env vars are set properly.
+    };
 
 Skips all tests in your test file or subtest() if fetchware's testing
-environment variable, C<FETCHWARE_RELEASE_TESTING>, is set to its proper value.
+environment variable, C<FETCHWARE_RELEASE_TESTING>, is not set to its proper
+value. Furthermore, other C<FETCHWARE_*> environment variables must also be set
+for C<FETCHWARE_RELEASE_TESTING> to work properly. See L<Where ever that will be
+when I write it>
 
 =cut
 
 sub skip_all_unless_release_testing {
-    plan skip_all => 'Not testing for release.'
-        if $ENV{FETCHWARE_RELEASE_TESTING}
-            ne '***setting this will install software on your computer!!!!!!!***';
+    if ($ENV{FETCHWARE_RELEASE_TESTING}
+        ne '***setting this will install software on your computer!!!!!!!***'
+        # Enforce having *all* other FETCHWARE_* env vars set too to make it
+        # even harder to easily enable FETCHWARE_RELEASE_TESTING. This is
+        # because FETCHWARE_RELEASE_TESTING *installs* software on your
+        # computer.
+        #
+        # Furthermore, the env vars below are required for
+        # FETCHWARE_RELEASE_TESTING to work properly, so without them being set,
+        # then FETCHWARE_RELEASE_TESTING will not work properly, because these
+        # env vars will be undef; therefore, check to see if they're enabled.
+        and
+        defined $ENV{FETCHWARE_FTP_LOOKUP_URL}
+        and
+        defined $ENV{FETCHWARE_HTTP_LOOKUP_URL}
+        and
+        defined $ENV{FETCHWARE_FTP_DOWNLOAD_URL}
+        and
+        defined $ENV{FETCHWARE_HTTP_DOWNLOAD_URL}
+        and
+        defined $ENV{FETCHWARE_LOCAL_URL}
+        and
+        defined $ENV{FETCHWARE_LOCAL_BUILD_URL}
+        and
+        defined $ENV{FETCHWARE_LOCAL_UPGRADE_URL}
+    ) {
+        plan skip_all => 'Not testing for release.'
+    }
 }
 
 
