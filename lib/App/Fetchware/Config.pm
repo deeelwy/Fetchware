@@ -38,6 +38,9 @@ our @EXPORT_OK = map {@{$_}} values %EXPORT_TAGS;
 my %CONFIG;
 
 
+=head1 CONFIG SUBROUTINES
+
+
 =head2 config()
 
     $config_sub_value = config($config_sub_name, $config_sub_value);
@@ -164,3 +167,132 @@ sub debug_CONFIG {
 
 
 1;
+__END__
+
+=head1 SYNOPSIS
+
+    use App::Fetchware::Config ':CONFIG';
+
+    my $some_config_sub_value = config('some_config_sub');
+    $config_sub_value = config($config_sub_name, $config_sub_value);
+
+    # You can also take advantage of config('config_sub_name') returning the
+    # value if it exists or returning false if it does not to make ifs testing
+    # if the value exists or not.
+    if (config('config_sub_name')) {
+        # config_sub_name exists in %CONFIG.
+    } else {
+        # config_sub_name does not exist in %CONFIG.
+    }
+
+    config_replace($name, $value);
+
+    config_delete($name);
+
+    __clear_CONFIG();
+
+    debug_CONFIG();
+
+=cut
+
+
+=head1 DESCRIPTION
+
+App::Fetchware::Config maintains an abstraction layer between fetchware and
+fetchware's internal Fetchwarefile represenation, which is inside C<%CONFIG>
+inside App::Fetchware::Config.
+
+App::Fetchware::Config gives the user a small, flexible API for manipulating
+fetchware's internal represenation of the user's Fetchwarefile. This API allows
+the user to get (via config()), set (via config()), replace (via
+config_replace()), delete (via config_delete()), delete all (via
+__clear_CONFIG()), and even debug (via debug_CONFIG()) the internal
+representation of the users Fetchwarefile.
+
+=over
+
+=item NOTICE
+App::Fetchware::Config's represenation of your Fetchwarefile is per process. If
+you parse a new Fetchwarefile it will conflict with the existing C<%CONFIG>, and
+various exceptions may be thrown. 
+
+C<%CONFIG> is a B<global> per process variable! You B<can not> try to maniuplate
+more than one Fetchwarefile in memory at one time! It will not work! You can
+however use __clear_CONFIG() to clear the global %CONFIG, so that you can use it
+again. This is mostly just done in fetchware's test suite, so this design
+limitation is not such a big deal.
+
+=back
+
+=cut
+
+
+=head1 ERRORS
+
+As with the rest of App::Fetchware, App::Fetchware::Config does not return any
+error codes; instead, all errors are die()'d if it's Test::Fetchware's error, or
+croak()'d if its the caller's fault. These exceptions are simple strings, and
+###BUGALERT### Actually implement croak or more likely confess() support!!!
+are listed in the L</DIAGNOSTICS> section below.
+
+=cut
+
+
+=head1 DIAGNOSTICS
+
+Below all diagnostics App::Fetchware::Config will spit out due to exceptions
+that it throws are listed below. Any additional information on how to correct
+these problems is listed below them before the next one.
+
+=over
+
+=item App::Fetchware: run-time error. config_replace() was called with only one argument, but it requres two arguments. Please add the other option. Please see perldoc App::Fetchware.
+
+=back
+
+=cut
+
+
+=head1 CAVEATS
+
+App::Fetchware::Config's represenation of your Fetchwarefile is per process. If
+you parse a new Fetchwarefile it will conflict with the existing C<%CONFIG>, and
+various exceptions may be thrown. 
+
+C<%CONFIG> is a B<global> per process variable! You B<can not> try to maniuplate
+more than one Fetchwarefile in memory at one time! It will not work! You can
+however use __clear_CONFIG() to clear the global %CONFIG, so that you can use it
+again. This is mostly just done in fetchware's test suite, so this design
+limitation is not such a big deal.
+
+=cut
+
+
+=head1 BUGS 
+
+App::Fetchware::Config's represenation of your Fetchwarefile is per process. If
+you parse a new Fetchwarefile it will conflict with the existing C<%CONFIG>, and
+various exceptions may be thrown. 
+
+C<%CONFIG> is a B<global> per process variable! You B<can not> try to maniuplate
+more than one Fetchwarefile in memory at one time! It will not work! You can
+however use __clear_CONFIG() to clear the global %CONFIG, so that you can use it
+again. This is mostly just done in fetchware's test suite, so this design
+limitation is not such a big deal.
+
+=cut
+
+
+=head1 RESTRICTIONS 
+
+App::Fetchware::Config's represenation of your Fetchwarefile is per process. If
+you parse a new Fetchwarefile it will conflict with the existing C<%CONFIG>, and
+various exceptions may be thrown. 
+
+C<%CONFIG> is a B<global> per process variable! You B<can not> try to maniuplate
+more than one Fetchwarefile in memory at one time! It will not work! You can
+however use __clear_CONFIG() to clear the global %CONFIG, so that you can use it
+again. This is mostly just done in fetchware's test suite, so this design
+limitation is not such a big deal.
+
+=cut
