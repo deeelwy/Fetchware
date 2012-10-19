@@ -1,8 +1,5 @@
 package Test::Fetchware;
 # ABSTRACT: Provides testing subroutines for App::Fetchware.
-###BUGALERT### Uses die instead of croak. croak is the preferred way of throwing
-#exceptions in modules. croak says that the caller was the one who caused the
-#error not the specific code that actually threw the error.
 use strict;
 use warnings;
 
@@ -49,12 +46,6 @@ our @EXPORT_OK = map {@{$_}} values %EXPORT_TAGS;
 
 
 =head1 TESTING SUBROUTINES
-
-These subroutines provide utility functions for testing and downloading files
-and dirlists that may also be helpful for anyone who's writing a custom
-Fetchwarefile to provide easier testing.
-
-=cut 
 
 
 =head2 eval_ok()
@@ -387,7 +378,7 @@ EOD
 
 =head2 md5sum_file()
 
-    my $md5sum_fil_path = emd5sum_file($archive_to_md5);
+    my $md5sum_fil_path = md5sum_file($archive_to_md5);
 
 Uses Digest::MD5 to generate a md5sum just like the md5sum program does, and
 instead of returning the output it returns the full path to a file containing
@@ -499,13 +490,107 @@ EOC
 }
 
 
-
-
-
-
-
-
-
-
-
 1;
+__END__
+
+=head1 SYNOPSIS
+
+    use Test::Fetchware ':TESTING';
+
+    eval_ok($code, $expected_exception_text_or_regex, $test_name);
+    eval_ok(sub { some_code_that_dies()},
+        <<EOE, 'check some_code_that_dies() exception()');
+    some_code_that_dies() died with this message!
+    EOE
+    eval_ok(sub { some_code_whose_messages_change(),
+        qr/A regex that matches some_code_whose_messages_change() error message/,
+        'checked some_code_whose_messages_change() exception');
+
+    print_ok(\&printer, $expected, $test_name);
+    print_ok(sub { some_func_that_prints()},
+        \$expected, 'checked some_func_that_prints() printed $expected');
+    print_ok(sub {some_func_that_prints()},
+        qr/some regex that matches what some_func_that_prints() prints/,
+        'checked some_func_that_prints() printed matched expected regex');
+    print_ok(sub { some_func_that_prints()},
+
+    sub { # a coderef that returns true of some_func_that_prints() printed what it
+        #should print and returns false if it did not
+        }, 'checked some_func_that_prints() printed matched coderefs expectations.');
+
+    subtest 'some subtest that tests fetchware' => sub {
+        skip_all_unless_release_testing();
+
+        # ... Your tests go here that will be skipped unless
+        # FETCHWARE_RELEASE_TESTING among other env vars are set properly.
+    };
+
+    make_clean();
+
+    my $test_dist_path = make_test_dist($file_name, $ver_num, rel2abs($destination_directory));
+
+    my $md5sum_fil_path = md5sum_file($archive_to_md5);
+
+
+    my $expected_filename_listing = expected_filename_listing()
+
+=cut
+
+=head1 DESCRIPTION
+
+These subroutines provide miscellaneous subroutines that App::Fetchware's test
+suite uses. Some are quite specific such as make_test_dist(), while others are
+simple subroutines replacing entire CPAN modules such as eval_ok (similar to
+Test::Exception) and print_ok (similar to Test::Output). I wrote them instead of
+using the CPAN dependency, because all it would take is a relatively simple
+function that I could easily write and test. And their interfaces disagreed with
+me. 
+
+=cut
+
+=head1 ERRORS
+
+As with the rest of App::Fetchware, Test::Fetchware does not return any error
+codes; instead, all errors are die()'d if it's Test::Fetchware's error, or
+croak()'d if its the caller's fault. These exceptions are simple strings, and
+are listed in the L</DIAGNOSTICS> section below.
+
+=cut
+
+=head1 DIAGNOSTICS
+
+Below all diagnostics fetchware will spit out due to exceptions that it throws
+are listed below. Any additional information on how to correct these problems is
+listed below them before the next one.
+
+=over
+
+=item fetchware: Run-time error. Fetchware failed to create the directory [$dist_name] in the current directory of [$temp_dir]. The OS error was [$!].
+
+=item fetchware: Run-time error. Fetchware failed to open [$file_to_create] for writing to create the Configure script that test-dist needs to work properly. The OS error was [$!].
+
+=item fetchware: run-time error. fetchware failed to chmod [$configure_path] to add execute permissions, which ./configure needs. Os error [$!].
+
+=item fetchware: Run-time error. Fetchware failed to create the test-dist archive for testing [$test_dist_filename] The error was [@{[Archive::Tar->error()]}].
+
+=item App-Fetchware: run-time error. Fetchware failed to open the file it downloaded while trying to read it in order to check its MD5 sum. The file was [$archive_to_md5]. See perldoc App::Fetchware.
+
+=item App-Fetchware: run-time error. Digest::MD5 croak()ed an error [$@].  See perldoc App::Fetchware.
+
+=item App-Fetchware: run-time error Fetchware failed to close the file [$archive_to_md5] after opening it for reading. See perldoc App::Fetchware.
+
+=item fetchware: run-time error. Failed to open [$md5sum_file] while calculating a md5sum. Os error [$!].
+
+=item App-Fetchware: run-time error Fetchware failed to close the file [$md5sum_file] after opening it for reading. See perldoc App::Fetchware.
+
+=back
+
+=cut
+
+=head1 SEE ALSO
+
+L<Test::Exception> is similar to Test::Fetchware's eval_ok().
+
+L<Test::Output> is similar to Test::Fetchware's print_ok().
+
+=cut
