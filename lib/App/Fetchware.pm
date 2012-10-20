@@ -107,7 +107,7 @@ our %EXPORT_TAGS = (
     OVERRIDE_LOOKUP => [qw(
         check_lookup_config
         get_directory_listing
-       parse_directory_listing
+        parse_directory_listing
         determine_download_url
         ftp_parse_filelist
         http_parse_filelist
