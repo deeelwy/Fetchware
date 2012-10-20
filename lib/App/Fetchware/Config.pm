@@ -230,17 +230,17 @@ limitation is not such a big deal.
 =head1 ERRORS
 
 As with the rest of App::Fetchware, App::Fetchware::Config does not return any
-error codes; instead, all errors are die()'d if it's Test::Fetchware's error, or
-croak()'d if its the caller's fault. These exceptions are simple strings, and
+error codes; instead, all errors are die()'d if it's App::Fetchware::Config's
+error, or croak()'d if its the caller's fault. These exceptions are simple
+strings, and are listed in the L</DIAGNOSTICS> section below.
 ###BUGALERT### Actually implement croak or more likely confess() support!!!
-are listed in the L</DIAGNOSTICS> section below.
 
 =cut
 
 
 =head1 DIAGNOSTICS
 
-Below all diagnostics App::Fetchware::Config will spit out due to exceptions
+Below all diagnostics App::Fetchware::Util will spit out due to exceptions
 that it throws are listed below. Any additional information on how to correct
 these problems is listed below them before the next one.
 
