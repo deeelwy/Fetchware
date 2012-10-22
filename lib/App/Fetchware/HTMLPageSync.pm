@@ -77,20 +77,17 @@ BEGIN {
     }
 }
 
-=head1 MOTIVATION
-
-I want to automatically parse a Web page with links to wall papers that I want
-to download. Only I want software to do it for me. That's where this
-App::Fetchware "subclass" comes in.
-
-=cut
 
 
 =head1 App::Fetchware::HTMLPageSync API SUBROUTINES
 
 This is App::Fetchware::HTMLPageSync's API that fetchware uses to execute any
 Fetchwarefile's that make use of App::Fetchware::HTMLPageSync. This API is the
-same that regular old App::Fetchware uses for most standard FOSS software.
+same that regular old App::Fetchware uses for most standard FOSS software, and
+this internal documentation is only needed when debugging HTMLPageSync's code or
+when studying it to create your own fetchware extension.
+
+=cut
 
 
 =head2 start()
@@ -100,6 +97,10 @@ same that regular old App::Fetchware uses for most standard FOSS software.
 start() creats a temp dir, chmod 700's it, and chdir()'s to it just like the one
 in App::Fetchware does. App::Fetchware::HTMLPageSync
 
+start() is imported from App::Fetchware, and also exported by
+App::Fetchware::HTMLPageSync. This is how App::Fetchware::HTMLPageSync
+"subclasses" App::Fetchware.
+
 =cut
 
 
@@ -108,8 +109,9 @@ in App::Fetchware does. App::Fetchware::HTMLPageSync
     my $download_url = lookup();
 
 lookup() downloads the user specified C<html_page_url>, parses it using
-HTML::TreeBuilder, and uses various yet to be written config subs if specified
-to maniuplate the tree to determine what download urls the user wants.
+HTML::TreeBuilder, and uses C<html_treebuilder_callback> and
+C<download_http_url> if specified to maniuplate the tree to determine what
+download urls the user wants.
 
 This list of download urls is returned as an array reference, $download_url.
 
@@ -304,6 +306,7 @@ EOM
 
 ###BUGALERT### Decide if overridden subs should use original names or if they
 #should change them. I think they should change them!
+
 =head2 unarchive()
 
     unarchive($package_path);
@@ -345,8 +348,8 @@ EOD
 
     build($build_path);
 
-build() does the same thing as unarchive() and verify(), and that is nothing by
-calling App::Fetchware's do_nothing() subroutine to better document the fact
+build() does the same thing as verify(), and that is nothing by calling
+App::Fetchware's do_nothing() subroutine to better document the fact
 that it does nothing.
 
 =cut
@@ -383,6 +386,11 @@ EOM
 end() chdir()s back to the original directory, and cleans up the temp directory
 just like the one in App::Fetchware does. App::Fetchware::HTMLPageSync
 
+
+end() is imported from App::Fetchware, and also exported by
+App::Fetchware::HTMLPageSync. This is how App::Fetchware::HTMLPageSync
+"subclasses" App::Fetchware.
+
 =cut
 
 
@@ -401,6 +409,7 @@ like to keep your contents of your C<destination_directory> then either manually
 delete the pacakge you want to delete from your fetchware database directory, or
 just recursively copy the contents of your C<destination_directory> to a backup
 directory somewhere else.
+
 =back
 
 =cut
@@ -444,8 +453,459 @@ EOD
 }
 
 
-
-
-
-
 1;
+
+__END__
+
+
+=head1 SYNOPSIS
+
+=head2 Example App::Fetchware::HTMLPageSync Fetchwarefile.
+
+    page_name 'Cool Wallpapers';
+
+    html_page_url 'http://some-html-page-with-cool.urls';
+
+    destination_directory 'wallpapers';
+
+    # pretend to be firefox
+    user_agent 'Mozilla/5.0 (X11; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1';
+
+    # Customize the callbacks.
+    html_treebuilder_callback sub {
+        # Get one HTML::Element.
+        my $h = shift;
+
+        # Return true or false to indicate if this HTML::Element shoudd be a
+        # download link.
+        if (something) {
+            return 'True';
+        } else {
+            return undef;
+        }
+    };
+
+    download_links_callback sub {
+        my @download_urls = @_;
+
+        my @wanted_download_urls;
+        for my $link (@download_urls) {
+            # Pick ones to keep.
+            puse @wanted_download_urls, $link;
+        }
+
+        return @wanted_download_urls;
+    };
+
+=head2 App::Fetchware::HTMLPageSync App::Fetchware-like API.
+
+    my $temp_file = start();
+
+    my $download_url = lookup();
+
+    download($temp_dir, $download_url);
+
+    verify($download_url, $package_path);
+
+    unarchive($package_path);
+
+    build($build_path);
+
+    install();
+
+    uninstall($build_path);
+
+=cut
+
+
+=head1 MOTIVATION
+
+I want to automatically parse a Web page with links to wall papers that I want
+to download. Only I want software to do it for me. That's where this
+App::Fetchware extension comes in.
+
+=cut
+
+
+=head1 DESCRIPTION
+
+App::Fetchware::HTMLPageSync as you can tell from its name is an example
+App::Fetchware extension. It's not a large extension, but instead is a simple one
+meant to show how easy it is extend App::Fetchware.
+
+App::Fetchware::HTMLPageSync parses the Web page you specify to create a list of
+download links. Then it downloads those links, and installs them to your
+C<destination_directory>.
+
+In order to use App::Fetchware::HTMLPageSync to help you mirror the download
+links on a HTML page you need to
+L<create a App::Fetchware::HTMLPageSync Fetchwarefile.|/"CREATING A App::Fetchware::HTMLPageSync FETCHWAREFILE">
+Then you'll need to
+L<learn how to use that Fetchwarefile with fetchware.|/"USING YOUR App::Fetchware::HTMLPageSync FETCHWAREFILE WITH FETCHWARE">
+
+=cut
+
+
+=head1 CREATING A App::Fetchware::HTMLPageSync FETCHWAREFILE
+
+In order to use App::Fetchware::HTMLPageSync you must first create a
+Fetchwarefile to use it. In a future release I intend to expand App::Fetchware's
+simple API to incude the ability for App::Fetchware extensions to extend
+fetchware's simple new command, which will simply ask you a few questions and
+create a new Fetchwarefile for you. Till then, you'll have to create one
+manually.
+
+=over
+
+=item B<1. Name it>
+
+Use your text editor to create a file with a C<.Fetchwarefile> file extension.
+Use of this convention is not required, but it makes it obvious what type of
+file it is. Then, just copy and paste the example text below, and replace
+C<[page_name]> with what you choose your C<page_name> to be. C<page_name> is
+simply a configuration opton that simply names your Fetchwarefile. It is not
+actually used for anything other than to name your Fetchwarefile to document
+what program or behavior this Fetchwarefile manages.
+
+    use App::Fetchware::HTMLPageSync;
+
+    # [page_name] - explain what [page_name] does.
+
+    page_name '[page_name]';
+
+Fetchwarefiles are actually small, well structured, Perl programs that can
+contain arbitrary perl code to customize fetchware's behavior, or, in most
+cases, simply specify a number of fetchware or a fetchware extension's (as in
+this case) configuration options. Below is my filled in example
+App::Fetchware::HTMLPageSync fetchwarefile.
+
+    use App::Fetchware::HTMLPageSync;
+
+    # Cool Wallpapers - Downloads cool wall papers.
+
+    page_name 'Cool Wallpapers';
+
+Notice the C<use App::Fetchware::HTMLPageSync;> line at the top. That line is
+absolutely critical for this Fetchwarefile to work properly, because it is what
+allows fetchware to use Perl's own syntax as a nice easy to use syntax for
+Fetchwarefiles. If you do not use the matching C<use App::Fetchware...;> line,
+then fetchware will spit out crazy errors from Perl's own compiler listing all
+of the syntax errors you have. If you ever receive that error, just ensure you
+have the correct C<use App::Fetchware...;> line at the top of your
+Fetchwarefile.
+
+=item B<2. Determine your html_page_url>
+
+At the heart of App::Fetchware::HTMLPageSync is its C<html_page_url>, which is
+the URL to the HTML page you want HTMLPageSync to download and parse out links
+to wallpaper or whatever else you'd like to automate downloading. To figure this
+out just use your browser to find the HTML page you want to use, and then copy
+and paste the url between the single quotes C<'> as shown in the example below.
+
+    html_page_url '';
+
+And then after you copy the url.
+
+    html_page_url 'http://some.url/something.html';
+
+=item B<3. Determine your destination_directory>
+
+HTMLPageSync also needs to know your C<destination_directory>. This is the
+directory that HTMLPageSync will copy your downloaded files to. This directory
+will also be deleted when you uninstall this HTMLPageSync fetchware package just
+like a standard App::Fetchware package would uninstall any installed software
+when it is uninstalled. Just copy and paste the example below, and fill in the
+space between the single quotes C<'>.
+
+    destination_directory '';
+
+After pasting it should look like.
+
+    destination_directory '~/wallpapers';
+
+=item B<4. Specifiy other options>
+
+That's all there is to it unless you need to further customize HTMLPageSync's
+behavior to get just the links you need to download.
+
+At this point you can install your new Fetchwarefile with:
+
+    fetchware install [path to your new fetchwarefile]
+
+Or you can futher customize it as shown next.
+
+=item B<5. Specify an optional user_agent>
+
+Many sites don't like bots downloading stuff from them wasting their bandwidth,
+and will even limit what you can do based on your user agent, which is the HTTP
+standard's name for your browser. This option allows you to pretend to be
+something other than HTMLPageSync's underlying library, L<HTTP::Tiny>. Just copy
+and past the example below, and paste what you want you user agent to be between
+the single quotes C<'> as before.
+
+    user_agent '';
+
+And after pasting.
+
+    user_agent 'Mozilla/5.0 (X11; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1';
+
+=item B<6. Specify an optonal html_treebuilder_callback>
+
+C<html_treebuilder_callback> specifies an optional anonymous Perl subroutine
+reference that will replace the default one that HTMLPageSync uses. The default
+one limits the download to only image format links, which is flexible enough for
+downloading wallpapers.
+
+If you want to download something different, then paste the example below in
+your Fetchwarefile.
+
+    html_treebuilder_callback sub {
+        # Get one HTML::Element.
+        my $h = shift;
+
+        # Return true or false to indicate if this HTML::Element shoudd be a
+        # download link.
+        if (something) {
+            return 'True';
+        } else {
+            return undef;
+        }
+    };
+
+And create a Perl anonymous subroutine C<CODEREF> that will
+be executed instead of the default one. This requires knowledge of the Perl
+programming language. The one below limits itself to only pdfs and MS word
+documents.
+
+    # Download pdfs and word documents only.
+    html_treebuilder_callback sub {
+        my $tag = shift;
+        my $link = $tag->attr('href');
+        if (defined $link) {
+            # If the anchor tag is an image...
+            if ($link =~ /\.(pdf|doc|docx)$/) {
+                # ...return true...
+                return 'True';
+            } else {
+                # ...if not return false.
+                return undef; #false
+            }
+        }
+    };
+
+=item B<7. Specify an optional download_links_callbacks>
+
+C<download_links_callback> specifies an optional anonymous Perl subroutine
+reference that will replace the default one that HTMLPageSync uses. The default
+one removes the HTML::Element skin each download link is wrapped in, because of
+the use of L<HTML::TreeBuilder>. This simply strips off the object-oriented crap
+its wrapped in, and turns it into a simply string scalar.
+
+If you want to post process the download link in some other way, then just copy
+and paste the code below into your Fetchwarefile, and add whatever other Perl
+code you may need. This requires knowledge of the Perl programming language.
+
+    download_links_callback sub {
+        my @download_urls = @_;
+
+        my @wanted_download_urls;
+        for my $link (@download_urls) {
+            # Pick ones to keep.
+            puse @wanted_download_urls, $link;
+        }
+
+        return @wanted_download_urls;
+    };
+
+=back
+
+=cut
+
+
+=head1 USING YOUR App::Fetchware::HTMLPageSync FETCHWAREFILE WITH FETCHWARE
+
+After you have
+L<created your Fetchwarefile|/"CREATING A App::Fetchware::HTMLPageSync FETCHWAREFILE">
+as shown above you need to actually use the fetchware command line program to
+install, upgrade, and uninstall your App::Fetchware::HTMLPageSync Fetchwarefile.
+
+Take note how fetchware's package management metaphor does not quite line up
+with what App::Fetchware::HTMLPageSync does. Why would a HTML page mirroring
+script be installed, upgraded, or uninstalled? Well HTMLPageSync simply adapts
+fetchware's package management metaphor to its own enviroment performing the
+likely action for when one of fetchware's behaviors are executed.
+
+=over
+
+=item install
+
+A C<fetchware install> while using a HTMLPageSync Fetchwarefile causes fetchware
+to download your C<html_page_url>, parse it, download any matching links, and
+then copy them to your C<destination_directory> as you specify in your
+Fetchwarefile.
+
+=item upgrade
+
+A C<fetchware upgrade> while using a HTMLPageSync Fetchwarefile will simply run
+the same thing as install all over again.
+
+=item uninstall
+
+A C<fetchware uninstall> will cause fetchware to delete this fetchware package
+from its database as well as recursively deleting everything inside your
+C<destination_directory> as well as that directory itself. So when you uninstall
+a HTMLPageSync fetchware package ensure that you really want to, because it will
+delete whatever files it downloaded for you in the first place.
+###BUGALERT### Create a new boolean config option to turn this off if the
+#user wants to.
+
+=back
+
+=cut
+
+
+=head1 HOW App::Fetchware::HTMLPageSync OVERRIDES App::Fetchware
+
+This sections documents how App::Fetchware::HTMLPageSync overrides
+App::Fetchware's API, and is only interesting if you're debugging
+App::Fetchware::HTMLPageSync, or you're writing your own App::Fetcwhare
+extension. If not, you don't need to know these details.
+
+=head2 App::Fetchware API Subroutines
+
+HTMLPageSync is a App::Fetchware extension, which just means that it properly
+implements  and exports App::Fetchware's API. See
+L<something I haven't written yet for more details>
+
+=head3 start() and end()
+
+HTMLPageSync just imports start() and end() from App::Fetchware to take
+advantage of their ability to manage a temporary directory.
+
+=head3 lookup()
+
+lookup() is overridden, and downloads the C<html_page_url>, which is the main
+configuration option that HTMLPageSync uses. Then lookup() parses that
+C<html_page_url>, and determines what the download urls should be. If the
+C<html_trebuilder_callback> and C<download_links_callbacks> exist, then they are
+called to customize lookup()'s default bahavior. See their descriptions below.
+
+=head3 download()
+
+download() downloads the array ref of download links that lookup() returns.
+
+=head3 verify()
+
+verify() is overridden to do nothing.
+
+=head3 unarchive()
+
+unarchive() takes its argument, which is an arrayref of of the paths of the
+files that were downloaded to the tempdir created by start(), and copies them to
+the user's provided C<destination_directory>.
+
+=head3 build() and install()
+
+Both are overridden to do nothing.
+
+=head3 uninstall()
+
+uninstall() recursively deletes your C<destination_directory> where it stores
+whatever links you choose to download.
+
+=head3 end() and start()
+
+HTMLPageSync just imports end() and start() from App::Fetchware to take
+advantage of their ability to manage a temporary directory.
+
+
+=head2 App::Fetchware::HTMLPageSync's Configuration Subroutines
+
+Because HTMLPageSync is a App::Fetchware extension, it can not just use the same
+configuration subroutines that App::Fetchware uses. Instead, it must create its
+own configuration subroutines with App::Fetchware's make_config_sub() internal
+API subroutine that is used inside a C<BEGIN {...}> block to create all of the
+configuration options that App::Fetchware or one of its extensions need. These
+configuration subroutines are the configuration options that you use in your
+App::Fetchware or App::Fetchware extension.
+
+=head3 page_name [MANDATORY]
+
+HTMLPageSync's equivelent to App::Fetchware's C<program_name>. It's simply the
+name of the page or what you want to download on that page.
+
+=head3 html_page_url [MANDATORY]
+
+HTMLPageSync's equivelent to App::Fetchware's C<lookup_url>, and is just as
+mandatory. This is the url of the HTML page that will be downloaded and
+processed.
+
+=head3 destination_directory [MANDATORY]
+
+This option is also mandatory, and it specifies the directory where the files
+that you want to download are downloaded to.
+
+=head3 user_agent [OPTIONAL]
+
+This option is optional, and it allows you to have HTML::Tiny pretend to be a
+Web browser or perhaps bot if you want to.
+
+=head3 html_treebuilder_callback [OPTIONAL]
+
+This optional option allows you to specify a perl C<CODEREF> that lookup() will
+execute instead of its default callback that just looks for images.
+
+It receives one parameter, which is an HTML::Element at the first C<a>,
+anchor/link tag.
+
+It must C<return 'True';> to indicate that that link should be included in the
+list of download links, or return false, C<return undef>, to indicate that that
+link should not be included in the list of download links.
+
+=head3 download_links_callback [OPTIONAL]
+
+This optional option specifies an optional callback that will allow you to do
+post processing of the list of downloaded urls. This is needed, because the
+result sof the C<html_treebuilder_callback> are still HTML::Element objects that
+need to be converted to just string download urls. That is what the default
+C<download_links_callback> does.
+
+It receives a list of all of the download HTML::Elements that
+C<html_treebuilder_callback> returned true on. It is called only once, and
+should return a list of string download links for download later by HTML::Tiny
+in download().
+
+=cut
+
+
+=head1 ERRORS
+
+As with the rest of App::Fetchware, App::Fetchware::Config does not return any
+error codes; instead, all errors are die()'d if it's App::Fetchware::Config's
+error, or croak()'d if its the caller's fault. These exceptions are simple
+strings, and are listed in the L</DIAGNOSTICS> section below.
+###BUGALERT### Actually implement croak or more likely confess() support!!!
+
+=cut
+
+
+=head1 CAVEATS
+
+Certain features of App::Fetchware::HTMLPageSync require knowledge of the Perl
+programming language in order for you to make use of them. However, this is
+limited to optional callbacks that are not needed for most uses. These features
+are the C<html_treebuilder_callback> and C<download_links_callback> callbacks.
+
+=cut
+
+
+
+##TODO##=head1 DIAGNOSTICS
+##TODO##
+##TODO##App::Fetchware throws many exceptions. These exceptions are not listed below,
+##TODO##because I have not yet added additional information explaining them. This is
+##TODO##because fetchware throws very verbose error messages that don't need extra
+##TODO##explanation. This section is reserved for when I have to actually add further
+##TODO##information regarding one of these exceptions.
+##TODO##
+##TODO##=cut
