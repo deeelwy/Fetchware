@@ -958,63 +958,16 @@ strings, and are listed in the L</DIAGNOSTICS> section below.
 =cut
 
 
-=head1 DIAGNOSTICS
 
-Below all diagnostics App::Fetchware::Config will spit out due to exceptions
-that it throws are listed below. Any additional information on how to correct
-these problems is listed below them before the next one.
-
-=over
-
-=item fetchware: run-time error. Fetchware failed to execute the specified program [$program] with the arguments [@args]. The OS error was [$!], and the return value was [@{[$? >> 8]}]. Please see perldoc App::Fetchware::Diagnostics.
-
-=item fetchware: run-time error. Fetchware failed to execute the specified program while capturing its input to prevent it from being copied to the screen, because you ran fetchware with it's --quite or -q option. The program was [$program], and its arguments were [@args]. OS error [$!], and exit value [$?]. Please see perldoc App::Fetchware::Diagnostics.
-
-=item fetchware: run-time error. Fetchware failed to execute the specified program while capturing its input to prevent it from being copied to the screen, because you ran fetchware with it's --quite or -q option. The program was [$program], and its arguments were [@args]. OS error [$!], and exit value [$?]. Please see perldoc App::Fetchware::Diagnostics.
-
-=item App-Fetchware: run-time syntax error: the url parameter your provided in your call to download_dirlist() [$url] does not have a supported URL scheme (the http:// or ftp:// part). The only supported download types, schemes, are FTP and HTTP. See perldoc App::Fetchware.
-
-=item App-Fetchware: run-time error. fetchware failed to connect to the ftp server at domain [$site]. The system error was [$@].  See man App::Fetchware.  
-
-=item App-Fetchware: run-time error. fetchware failed to log in to the ftp server at domain [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
-
-=item App-Fetchware: run-time error. fetchware failed to get a long directory listing of [$path] on server [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.  
-
-=item App-Fetchware: run-time error. HTTP::Tiny failed to download a directory listing of your provided lookup_url. HTTP status code [$response->{status} $response->{reason}] HTTP headers [@{[Data::Dumper::Dumper($response->{headers})]}].  See man App::Fetchware.
-
-=item App-Fetchware: run-time error. The lookup_url you provided downloaded nothing.  HTTP status code [$response->{status} $response->{reason}] HTTP headers [@{[Data::Dumper::Dumper($response)]}].  See man App::Fetchware.
-
-=item App-Fetchware: run-time syntax error: the url parameter your provided in your call to download_file() [$url] does not have a supported URL scheme (the http:// or ftp:// part). The only supported download types, schemes, are FTP and HTTP. See perldoc App::Fetchware.
-
-=item App-Fetchware: run-time error. fetchware failed to connect to the ftp server at domain [$site]. The system error was [$@].  See man App::Fetchware.
-
-=item App-Fetchware: run-time error. fetchware failed to log in to the ftp server at domain [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
-
-=item App-Fetchware: run-time error. fetchware failed to swtich to binary mode while trying to download a the file [$path] from site [$site]. The ftp error was [@{[$ftp->message]}]. See perldoc App::Fetchware.
-
-=item App-Fetchware: run-time error. fetchware failed to cwd() to [$path] on site [$site]. The ftp error was [@{[$ftp->message]}]. See perldoc App::Fetchware.
-
-=item App-Fetchware: run-time error. fetchware failed to download the file [$file] from path [$path] on server [$site]. The ftp error message was [@{[$ftp->message]}]. See perldoc App::Fetchware.
-
-=item App-Fetchware: run-time error. HTTP::Tiny failed to download a directory listing of your provided lookup_url. HTTP status code [$response->{status} $response->{reason}] HTTP headers [@{[Data::Dumper::Dumper($response->{headers})]}].  See man App::Fetchware.
-
-=item App-Fetchware: run-time error. The lookup_url you provided downloaded nothing.  HTTP status code [$response->{status} $response->{reason}] HTTP headers [@{[Data::Dumper::Dumper($response)]}].  See man App::Fetchware.
-
-=item App-Fetchware: run-time error. Fetchware failed to open a file necessary for fetchware to store HTTP::Tiny's output. Os error [$!]. See perldoc App::Fetchware.
-
-=item App-Fetchware: run-time error. Fetchware failed to close the file it created to save the content it downloaded from HTTP::Tiny. This file was [$filename]. OS error [$!]. See perldoc App::Fetchware.
-
-=item App::Fetchware: run-time error. Fetchware failed to copy the download URL [$url] to the working directory [@{[cwd()]}]. Os error [$!].
-
-=item App-Fetchware: run-time error. Fetchware tried to use File::Temp's tempdir() subroutine to create a temporary file, but tempdir() threw an exception. That exception was [$exception]. See perldoc App::Fetchware.
-
-=item App-Fetchware: run-time error. Fetchware failed to change its directory to the temporary directory that it successfully created. This just shouldn't happen, and is weird, and may be a bug. See perldoc App::Fetchware.
-
-=item App-Fetchware: run-time error. Fetchware failed to chdir() to [@{[original_cwd()]}]. See perldoc App::Fetchware.
-
-=back
-
-=cut
+##TODO##=head1 DIAGNOSTICS
+##TODO##
+##TODO##App::Fetchware throws many exceptions. These exceptions are not listed below,
+##TODO##because I have not yet added additional information explaining them. This is
+##TODO##because fetchware throws very verbose error messages that don't need extra
+##TODO##explanation. This section is reserved for when I have to actually add further
+##TODO##information regarding one of these exceptions.
+##TODO##
+##TODO##=cut
 
 
 =head1 CAVEATS

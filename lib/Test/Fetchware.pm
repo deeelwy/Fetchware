@@ -557,35 +557,16 @@ are listed in the L</DIAGNOSTICS> section below.
 
 =cut
 
-=head1 DIAGNOSTICS
 
-Below all diagnostics fetchware will spit out due to exceptions that it throws
-are listed below. Any additional information on how to correct these problems is
-listed below them before the next one.
-
-=over
-
-=item fetchware: Run-time error. Fetchware failed to create the directory [$dist_name] in the current directory of [$temp_dir]. The OS error was [$!].
-
-=item fetchware: Run-time error. Fetchware failed to open [$file_to_create] for writing to create the Configure script that test-dist needs to work properly. The OS error was [$!].
-
-=item fetchware: run-time error. fetchware failed to chmod [$configure_path] to add execute permissions, which ./configure needs. Os error [$!].
-
-=item fetchware: Run-time error. Fetchware failed to create the test-dist archive for testing [$test_dist_filename] The error was [@{[Archive::Tar->error()]}].
-
-=item App-Fetchware: run-time error. Fetchware failed to open the file it downloaded while trying to read it in order to check its MD5 sum. The file was [$archive_to_md5]. See perldoc App::Fetchware.
-
-=item App-Fetchware: run-time error. Digest::MD5 croak()ed an error [$@].  See perldoc App::Fetchware.
-
-=item App-Fetchware: run-time error Fetchware failed to close the file [$archive_to_md5] after opening it for reading. See perldoc App::Fetchware.
-
-=item fetchware: run-time error. Failed to open [$md5sum_file] while calculating a md5sum. Os error [$!].
-
-=item App-Fetchware: run-time error Fetchware failed to close the file [$md5sum_file] after opening it for reading. See perldoc App::Fetchware.
-
-=back
-
-=cut
+##TODO##=head1 DIAGNOSTICS
+##TODO##
+##TODO##App::Fetchware throws many exceptions. These exceptions are not listed below,
+##TODO##because I have not yet added additional information explaining them. This is
+##TODO##because fetchware throws very verbose error messages that don't need extra
+##TODO##explanation. This section is reserved for when I have to actually add further
+##TODO##information regarding one of these exceptions.
+##TODO##
+##TODO##=cut
 
 =head1 SEE ALSO
 

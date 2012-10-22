@@ -238,19 +238,16 @@ strings, and are listed in the L</DIAGNOSTICS> section below.
 =cut
 
 
-=head1 DIAGNOSTICS
 
-Below all diagnostics App::Fetchware::Util will spit out due to exceptions
-that it throws are listed below. Any additional information on how to correct
-these problems is listed below them before the next one.
-
-=over
-
-=item App::Fetchware: run-time error. config_replace() was called with only one argument, but it requres two arguments. Please add the other option. Please see perldoc App::Fetchware.
-
-=back
-
-=cut
+##TODO##=head1 DIAGNOSTICS
+##TODO##
+##TODO##App::Fetchware throws many exceptions. These exceptions are not listed below,
+##TODO##because I have not yet added additional information explaining them. This is
+##TODO##because fetchware throws very verbose error messages that don't need extra
+##TODO##explanation. This section is reserved for when I have to actually add further
+##TODO##information regarding one of these exceptions.
+##TODO##
+##TODO##=cut
 
 
 =head1 CAVEATS
