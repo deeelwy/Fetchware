@@ -366,6 +366,17 @@ EOD
 ###BUGALERT### Support ~/.Fetchwarefile, or whatever File::HomeDir wants it to
 #be. Test if ~/.Fetchwarefile exists, if it does do nothing, but if it does not
 #exist then prompt the user to fill one out!!!
+
+############BUGALERT########################BUGALERT##################
+############BUGALERT########################BUGALERT##################
+###BUGALERT### Modify analyze_lookup_listing() to print the directory listing
+#for the user to peruse, and have the user choose what program they want to
+#install from the listing. Then use that as the basis for the filter option.
+#httpd-2.4.1.tar.bz2 would simply be m/(\w+?)[.-_\d]+?/ And $1 is the filter
+#option. If the match fails to the existing manual crap.
+############BUGALERT########################BUGALERT##################
+############BUGALERT########################BUGALERT##################
+
 =head2 cmd_new()
 
     my $fetchware_package_path = cmd_new($program_name);
