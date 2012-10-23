@@ -737,19 +737,19 @@ likely action for when one of fetchware's behaviors are executed.
 
 =over
 
-=item install
+=item B<install>
 
 A C<fetchware install> while using a HTMLPageSync Fetchwarefile causes fetchware
 to download your C<html_page_url>, parse it, download any matching links, and
 then copy them to your C<destination_directory> as you specify in your
 Fetchwarefile.
 
-=item upgrade
+=item B<upgrade>
 
 A C<fetchware upgrade> while using a HTMLPageSync Fetchwarefile will simply run
 the same thing as install all over again.
 
-=item uninstall
+=item B<uninstall>
 
 A C<fetchware uninstall> will cause fetchware to delete this fetchware package
 from its database as well as recursively deleting everything inside your
