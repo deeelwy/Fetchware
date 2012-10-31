@@ -136,13 +136,16 @@ our %EXPORT_TAGS = (
 our @EXPORT_OK = @{$EXPORT_TAGS{OVERRIDE_ALL}};
 
 
+###BUGALERT### Delete the =head1 below? Is it redundant now?
 
 =head1 FETCHWAREFILE API SUBROUTINES
 
-The subroutines below B<are> Fetchwarefile's API subroutines, but I<more
-importantly> also Fetchwarefile's configuration file syntax See the SECTION
+The subroutines below B<are> Fetchwarefile's API subroutines or helper
+subroutines for App::Fetchware's API subroutines, but I<more importantly> also
+Fetchwarefile's configuration file syntax See the section
 L<FETCHWAREFILE CONFIGURATION SYNTAX> for more information regarding using these
 subroutines as Fetchwarefile configuration syntax.
+###BUGALERT### Link to sections on craxy Fetchwarefile stuff and extensions too.
 
 
 =over
@@ -218,28 +221,7 @@ die()ing printing an error message.
 
 
 
-=head1 CUSTOMIZING YOUR FETCHWAREFILE
 
-###BUGALERT### This is totally *wrong* rewrite to the way fetchware can be
-#overridden and extended now!!!!!!!
-When fetchware's default behavior and configuration are B<not> enough you can
-replace your call to C<fetchware;> with C<override;> that allows you to replace
-each of the steps fetchware follows to install your software.
-
-If you only want to replace the lookup() step with your own, then just replace
-your call to C<fetchware;> with a call to C<override> specifing what steps you
-would like to replace as explained below.
-
-If you also would like to have access to the functions fetchware itself uses to
-implement each step, then specify the :OVERRIDE_<STEPNAME> tag when C<use>ing
-App::Fetchware like C<use App::Fetchware :OVERRIDE_LOOKUP> to import the
-subroutines fetchware itself uses to implement the lookup() step of
-installation.  You can also use C<:OVERRIDE_ALL> to import all of the
-subroutines fetchware uses to implement its behavior.  Feel free to specify a
-list of the specifc subroutines that you need to avoid namespace polution, or
-install and use L<Sub::Import> if you demand more control over imports.
-
-=cut
 
 
 =head2 make_config_sub()
@@ -515,68 +497,6 @@ EOD
 }
 
 
-=head2 override
-
-    override LIST;
-
-Used instead of C<fetchware;> to override fetchware's default behavior. This
-should only be used if fetchware's configuration options do B<not> provide the
-customization that your particular program may need.
-
-The LIST your provide is a fake hash of steps you want to override as keys and
-the coderefs to a replacement  those subroutines like:
-
-=over
-=item * override lookup => \&overridden_lookup,
-=item * download => sub { code refs work too; };
-
-=back
-
-
-=cut
-
-sub override (@) {
-    my %opts = @_;
-    #diag("OVERRIDE");
-    #$Data::Dumper::Deparse = 1; # Turn on deparsing coderefs.
-    #diag explain \%opts;
-
-    # override the parts that need overriden as specified in %opts.
-
-    # Then execute just like fetchware; does, but exchanging the default steps
-    # with the overriden ones.
-
-    die <<EOD if keys %opts == 0;
-App-Fetchware: syntax error: you called override with no options. It must be
-called with a fake hash of name => value, pairs where the names are the names of
-the Fetchwarefile steps you would like to override, and the values are a coderef
-to a subroutine that implements that steps behavior. See perldoc App::Fetchware.
-EOD
-
-
-    my $override = Sub::Override->new();
-
-    for my $sub (keys %opts) {
-        die <<EOD unless grep { $_ eq $sub } @EXPORT_OK;
-App-Fetchware: run-time error. override was called specifying a subroutine to
-override that it is not allowed to override. override is only allowed to
-override App::Fetchware's *own* routines as listed in [@EXPORT_OK].
-See perldoc App::Fetchware.
-EOD
-        $override->replace("App::Fetchware::$sub", $opts{$sub});
-    }
-    #diag("Did I override them?");
-    #diag explain $override;
-
-    # Call fetchware after overriding what ever subs that need overridden.
-    ###BUGALERT### Must rewrite ALL override() support!!!!!!!!!!!
-    #fetchware;
-
-    # When $override falls out of scope at the end of 
-
-    # Return success.
-    return 'overrode specified subs and executed them';
-}
 
 
 
