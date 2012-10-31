@@ -185,6 +185,9 @@ value. Furthermore, other C<FETCHWARE_*> environment variables must also be set
 for C<FETCHWARE_RELEASE_TESTING> to work properly. See L<Where ever that will be
 when I write it>
 
+
+###BUGALERT## Expand with how to actually use this.
+
 =cut
 
 sub skip_all_unless_release_testing {

@@ -777,6 +777,7 @@ sub create_tempdir {
     my $exception;
     my $temp_dir;
     eval {
+        ###BUGALERT### config('temp_dir') is not used!!!!!!!!!!!!!!!
         unless (defined $opts{KeepTempDir}) {
             $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
 

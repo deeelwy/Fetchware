@@ -95,7 +95,8 @@ sub config {
     }
 }
 
-
+###BUGALERT### Create a config_iter() that will iterate over a ARRREF or MANY or
+#even a ONE too.
 
 =head2 config_replace()
 
