@@ -161,7 +161,7 @@ EOM
 
 
 
-=head1 COMMAND LINE OPTION SUBROUTINES
+=head1 INTERNAL SUBROUTINES IMPLEMENTING FETCHWARE COMMANDS
 
 Below are all of subroutines that implement fetchware's main command line
 options such as C<fetchware install> or C<fetchware new> and so on. These main
@@ -491,7 +491,7 @@ EOM
 
 
 
-=head1 cmd_new() API REFERENCE
+=head2 cmd_new() API REFERENCE
 
 Below are the API routines that cmd_new() uses to create the question and answer
 interface for helping to build new Fetchwarefiles and fetchware packages.
@@ -500,7 +500,7 @@ interface for helping to build new Fetchwarefiles and fetchware packages.
 
 
 
-=head2 name_program();
+=head3 name_program();
 
     my $program_name = name_program($term);
 
@@ -531,7 +531,7 @@ EOM
 }
 
 
-=head2 opening_message();
+=head3 opening_message();
 
     opending_message();
 
@@ -563,7 +563,7 @@ EOM
 }
 
 
-=head2 get_lookup_url()
+=head3 get_lookup_url()
 
     my $lookup_url = get_lookup_url($term);
 
@@ -609,7 +609,7 @@ How to determine your application's lookup_url:
 }
 
 
-=head2 download_lookup_url()
+=head3 download_lookup_url()
 
     my $filename_listing = download_lookup_url($term, $lookup_url);
 
@@ -673,7 +673,7 @@ EOD
 }
 
 
-=head2 analyze_lookup_listing()
+=head3 analyze_lookup_listing()
 
     my $filter = analyze_lookup_listing($term);
 
@@ -758,7 +758,7 @@ EOA
 }
 
 
-=head2 append_to_fetchwarefile()
+=head3 append_to_fetchwarefile()
 
     append_to_fetchwarefile(\$fetchwarefile, $config_file_option, $config_file_value, $description)
 
@@ -806,7 +806,7 @@ EOD
 }
 
 
-=head2 prompt_for_other_options()
+=head3 prompt_for_other_options()
 
     prompt_for_other_options($term);
 
@@ -1079,7 +1079,7 @@ EOP
 }
 
 
-=head2 append_options_to_fetchwarefile()
+=head3 append_options_to_fetchwarefile()
 
     append_options_to_fetchwarefile(\%options, \$fetchwarefile);
 
@@ -1218,7 +1218,7 @@ EOD
 
 ###BUGALERT### I don't think App::Fetchware's download utilities even use mirror
 #if the default lookup_url fails!!!!
-=head2 add_mirrors()
+=head3 add_mirrors()
 
     add_mirrors($term, \$fetchwarefile);
 
@@ -1288,7 +1288,7 @@ EOP
 }
 
 
-=head2 edit_manually()
+=head3 edit_manually()
 
     $fetchwarefile = edit_manually($term, \$fetchwarefile);
 
@@ -1370,7 +1370,7 @@ EOM
 }
 
 
-=head2 ask_to_install_now_to_test_fetchwarefile()
+=head3 ask_to_install_now_to_test_fetchwarefile()
 
     my $fetchware_package_path = ask_to_install_now_to_test_fetchwarefile($term, \$fetchwarefile, $program_name);
     my $fetchwarefile_filename = ask_to_install_now_to_test_fetchwarefile($term, \$fetchwarefile, $program_name);
@@ -1880,7 +1880,7 @@ HELP
 
 
 
-=head1 COMMAND LINE FETCHWARE API REFERENCE
+=head1 INTERNAL LIBRARY SUBROUTINES
 
 Below are the helper subroutines used by install(), uninstall(), new(), and so
 on.
@@ -1914,6 +1914,8 @@ EOD
         undef $/;
         $fetchwarefile = <$fh>;
     }
+
+    ###BUGALERT### Ensure $fetchwarefile has a 'use App::Fetchware...;' line!!!!
 
     eval $fetchwarefile;
     die <<EOD if $@;
@@ -2326,5 +2328,724 @@ EOD
 }
 
 
-
 1;
+
+__END__
+
+
+=head1 SYNOPSIS
+
+###BUGALERT### Make the examples explain Fetchwarefiles. Mention the manual
+#creation section in App::Fetchware, and say how to customize it more with a
+#link to that section too.
+
+=head2 Manpage synopsis.
+
+    fetchware [-v | --verbose] [-q | --quiet] [-h | -? | --help]
+              [-V | --version] <command> [<filenames | paths | Fetchwarfiles>]
+
+=head2 Create a new fetchware package.
+
+    fetchware new <name of program>
+
+    ... Read the printed explanations...
+
+    ... And answer the questions fetchware asks you appropriately and then press
+    enter.
+
+=head2 Install a new fetchware package.
+
+    fetchware install name-of-program.Fetchwarefile
+
+    # And you can use a .fpkg fetchware package instead of a Fetchwarefile if
+    # you have one.
+    fetchware install name-of-program.fpkg
+
+=head2 Upgrade a specific fetchware package.
+
+    fetchware upgrade <name of already installed program>
+
+=head2 Upgrade B<all> installed fetchware packages.
+
+    fetchware upgrade-all
+
+=head2 Uninstall an installed fetchware package.
+
+    # Requires a "uninstall" make target, or customization of its Fetchwarefile
+    # to specify what specific C<install_commands> will uninstall this package.
+    ###BUGALERT### Link to uninstall command for more info.
+    fetchware uninstall <name of program>
+
+=head2 List all installed fetchware packages.
+
+    fetchware list 
+
+    # Pipe to grep if you want to search for something specific.
+    fetchware list | grep <something specific>
+
+=head2 "Look" inside a fetchware package.
+
+    fetchware look <name-of-program.fpkg> | <name-of-program.Fetchwarefile>
+
+    ###BUGALERT### Fix the bug that prevents look from check for an installed
+    #package first, then a filename or fetchwarefile.
+
+=head2 Put this in your /etc/cron.daily to make fetchware check for updates every night
+
+    #!/bin/sh
+    # Update all already installed fetchware packages.
+    fetchware upgrade-all
+
+=cut
+
+
+=head1 MOTIVATION
+
+While sysadmining I liked to install my own compiled from source versions of
+popular programs like Apache, MySQL, or Perl without threading. However, doing
+so means that you have to manually recompile everytime a new security hole comes
+out, which is annoyingly frequent for Apache. So fetchware was created to bring
+the power of package management to source code distributions.
+
+=cut
+
+
+=head1 DESCRIPTION
+
+Fetchware is a package manager for source code distributions. It takes advantage
+of the fact that coincidentially I<most> source code distributions follow the same
+conventions. Most use FTP and HTTP mirrors. Most use AutoTools or at least just
+a few commands that you execute in sequence to configure, build, and install the
+program.
+
+Fetchware harnesses these conventions to create a powerful and flexible package
+manager for source code distributions. It includes a simple, powerful, and
+flexible configuration syntax, which are called C<Fetchwarefile>s. These
+C<Fetchwarefile>s specify just 2 mandatory options: C<program>, which simply
+names your program, and C<lookup_url>, which must be a FTP or HTTP directory
+listing.
+
+The C<lookup_url> provides all of the magic that Fetchware does for you as long
+as certain conventions are met, otherwise, you'll have to add more configuration
+options to your Fetchwarefile. See
+L<App::Fetchware/MANUALLY CREATING A App::Fetchware FETCHWAREFILE> for more
+specifics on how to manually create a Fetchwarefile. You can skip that, and try
+fetchware's L<new|linke to new command> command, which asks you questions, and
+uses your answers to create a Fetchwarefile automagically for you.
+
+Fetchware's commands are described next followed by its options. Following that
+is the section L<HOW FETCHWARE WORKS>, which describes in some detail how
+Fetchware does its magic, and documents how it all fits together.
+
+See L<App::Fetchware> for more information on fetchware's Fetchwarefile syntax:
+
+=over
+
+=item *
+
+L<App::Fetchware/"MANUALLY CREATING A App::Fetchware FETCHWAREFILE"> - Describes
+how to create a appropriate Fetchwarefile manually using a text editor. This
+can be skipped. You should try fetchware's L<new|link to where it shoudl go>
+command first.
+
+=item *
+
+L<App::Fetchware/"USING YOUR App::Fetchwarefile WITH FETCHWARE"> - Shows how to
+use your newly created fetchwarefile with fetchware.
+
+=item *
+
+L<App::Fetchware/"App::Fetcwhare'S FETCHWAREFILE CONFIGURATION OPTIONS"> - Details
+all of fetchware's configuration options that you can use to further customize
+your Fetchwarefile.
+
+=item *
+
+L<App::Fetchware/"FURTHER CUSTOMIZING YOUR FETCHWAREFILE"> - Shows you how to use
+embed Perl inside your Fetchwarefile to change fetchware's behavior as needed
+to make fetchware work with programs that use different conventions and
+assumptions that fetchware makes.
+
+=item *
+
+L<App::Fetchware/"CREATING A FETCHWARE EXTENSION"> - Details how to replace the
+module that implements fetchware's behavior, App::Fetchware, with a completely
+different module implementing completely different behavior. These fetchware
+extensions can even be shared with everyone else on CPAN. See
+L<App::Fetchware::HTMLPageSync> for an example.
+
+=back
+
+
+
+=cut
+
+
+=head1 COMMANDS
+
+Each command maps to one operation a package manager can do. C<install>,
+C<upgrade>, and C<uninstall>. There are also C<new> to create new Fetchwarefiles
+without bothering with a text editor. And fetchware's way of upgrading all
+packages with C<upgrade-all>. Fetchware can also list its installed packages
+with C<list>. And C<look> is similar to Perl's original CPAN client's look
+command that downloads and unarchives the package, so you can look at it.
+
+=head2 new
+
+    fetchware new <name of program>
+
+C<new> asks you a bunch of questions, and uses the answers your provide in
+addition to the contents of the directory listng fetchware downloads based on
+the C<lookup_url> you give fetchware, to create a Fetchwarefile for you with all
+the mandatory options filled in. It also gives you the opportunity to add any
+additional options that you may want to use. C<new> also gives you a chance to
+edit the Fetchwarefile it created for you manually in your editor. Set the
+C<EDITOR> environment variable to pick which editor to use, or leave it empty,
+and fetchware will ask you what editor you would like to use.
+
+C<new> finishes by asking if you would like fetchware to go ahead and install
+the Fetchwarefile it has just created for you. If you say yes, then fetchware
+will install it, or if you say no, fetchware will skip installing it for you,
+and print out the path to the Fetchwarefile it just created for you.
+
+You can install that Fetchwarefile later:
+
+    fetchware install path/to/your/some-program.Fetchwarefile
+
+=head2 install
+
+    fetchware install <path to program.Fetchwarefile>
+
+    fetchware install <path to program.fpkg>
+
+C<install> parses the given Fetchwarefile or uses the embeded Fetchwarefile
+inside the fetchware package you specify. Then C<install> I<install>s your
+program as you specified in your Fetchwarefile. 
+
+By default executes the commands:
+
+=over
+
+=item 1. C<./configure>
+
+=item 2. C<make>
+
+=item 3. C<make install>
+
+=back
+
+You can use the Fetchwarefile configuraton options C<build_commands> to specify
+alternate commands to build the program replacing C<./configure> and C<make>,
+and you can also specify the C<install_commands> to replace C<make install> with
+some other command or commands that install your program.
+
+    ...
+    # build_commands and install_commands Fetchwarefile example.
+    build_commands './Configure', 'make';
+
+    install_commands 'make test', 'make install';
+
+    ...
+
+See L<App::Fetchware/"App::Fetchware'S FETCHWAREFILE CONFIGURATION OPTIONS> for
+more details on these configuration options.
+
+=head2 upgrade
+
+    fetchware upgrade <already installed fetchware package>
+
+C<upgrade> only upgrades already installed fetchware packages. You cannot
+upgrade a Fetchwarefile only an already installed fetchware package. To see a
+list of already installed fetchware packages run C<fetchware list>, or pipe it
+through L<grep(1)>
+
+    fetchware list | grep <keyword>
+
+=head2 upgrade-all
+
+    fetchware upgrade-all
+
+C<upgrade-all> takes no arguments. Instead, it loops over the list of installed
+programs C<fetchware list> and runs C<upgrade> on each one to upgrade all
+currently installed programs.
+
+=head2 uninstall
+
+C<uninstall> removed all components of a currently installed program.
+Afterwards, that program won't show up in a C<fetchware list> anymore.
+
+=over
+
+=item B<WARNING>
+
+C<uninstall> is only capable of uninstalling programs that maintain a
+C<uninstall> make target. For example, C<ctags> has a C<make uninstall>, while
+Apache does not.
+
+The easiest way to be able to uninstall a program you install with fetchware
+that does not have a C<make uninstall> is to use the C<prefix> configuration
+option to use a separate prefix that everything is installed into this
+directory. Then you could specify a custom C<uninstall_commands> that would
+delete everything in that directory:
+
+    # Set prefix so apache can be easily uninstalled.
+    prefix '/usr/local/apache';
+
+    # Set uninstall_commands to delete everything in the prefix directory when
+    # apache is uninstalled.
+    uninstall_commands 'rm -r /usr/local/apache';
+
+Then when you uninstall apache, fetchware deletes its associated files, which
+may include your Web site's Web files, so back them up before hand if you need to
+keep them.
+
+The other way around this limitation is to use one of the following programs
+that use a cool C<LD_PRELOAD> trick to watch what files C<make install> or its
+equivelent copy, and where they are copied to. Then these files are put into
+some sort of vendor-specific package such as apt-get or rpm.
+
+=over
+
+=item L<checkinstall|http://www.debian-administration.org/articles/147>
+
+Run like C<checkinstall make install> will detect what files are copied where
+during installation, and will create a slackware, debian, or redhat package
+based on this information.
+
+=item L<paco|http://paco.sourceforge.net/>
+
+Provides very similar functionality to fetchware, but lacks fetchware's lookup
+and verify mechanisms. Includes its own package management functionality.
+
+=back
+
+As far a fetchware one day supporting some sort of hack like checkinstall or
+paco use, I'm against it. I'd prefer everyone just adding a C<make uninstall> to
+their Makefiles. But it is on my todo list, and I may add similar functionality
+in the future, but I'll make no promises. Until then consider using the
+C<prefix> and C<uninstall_commands> hack.
+
+=head2 list
+
+    fetchware list
+
+    fetchware list | grep <what are you looking for?>
+
+C<list> just prints out the names of all fetchware packages that have been
+installed. It takes no arguments, and currently does not support listing only
+packages that match a certain criteria. However, you can just pipe it to
+L<grep(1)> to using a regex to limit which packages you're looking for.
+
+=head2 look
+
+    fetchware look <package name>
+
+    fetchware look <program-name.Fetchwarefile> | <program-name.fpkg>
+
+C<look> looks up the specified program using your C<lookup_url>, downloads it,
+verifies it, and unarchives it. Then it prints out the location of the
+unarchived program, so you can take a look at its code, or install it manually
+if you would like to.
+
+=head2 clean
+
+    fetchware clean
+
+C<clean> deletes all fetchware temporary files and directories to clean up your
+system temporary directory.
+
+###BUGALERT### It could parse all installed Fetchwarefile's to obtain a listing
+#of all temp_dirs that are used, and clean them as well!!!!
+
+###BUGALERT### Unimplemented!!!!!!! implement it!!!!!!!!!
+
+=head2 help
+
+Prints out a breif screen full of help messages reminding you of fetchware's
+command-line syntax.
+
+=cut
+
+
+=head1 OPTIONS
+
+Fetchware's configuration file options are detailed below.
+
+Most of its options are stored in its configuration file. If none of these
+options suite what you need fetchware to do, consider using its Fetchwarefile
+to meet your needs. See
+L<App::Fetchware/"App::Fetchware'S FETCHWAREFILE CONFIGURATION OPTIONS>
+
+=head2 -v or --verbose
+
+    fetchware -v install <some-program.Fetchwarefile>
+
+Fetchware's -v or --verbose option turns on verbose logging, which prints to
+STDOUT additional information regarding what fetchware is doing and how
+fetchware does it.
+
+If you have any problems with your Fetchwarefile, then you could turn on verbose
+mode to have fetchware log additional messages to STDOUT to aid in debugging
+your Fetchwarefile.
+
+=head2 -q or --quite
+
+    fetchware -q upgrade <some-program>
+
+The -q or --quite option tells fetchware to B<not> log anything at all.
+Fetchware will even prevent any commands it runs from printing output to your
+terminal's STDOUT to avoid cluttering up your screen.
+
+Any warnings or error messages are still printed to STDERR.
+
+To determine if fetchware succeeded or failed you can test its exit status:
+
+    fetchware -q upgrade <some-program>
+
+    echo $?
+    0
+
+Fetchware exits 0 for success and non-zero for failure.
+
+=head2 -V or --version
+
+Prints out a short message and says what version of fetchware is running.
+
+=head2 -h or -? or --help
+
+Prints out a brief screen full of help messages reminding you of fetchware's
+command-line syntax.
+
+=head2 -d or --dryrun
+
+Just prints out what fetchware will do when you run fetchware. No external
+commands are run, and fetchware itself doesn't read or create any files
+including any temporary directories.
+
+###BUGALERT### dryrun functionality is not implemnted.
+# Should be easy to implement in run_prog(), and create a sub like
+# skip_all_unless_release_testing() to test for -d.
+
+=head2 -f or --force
+
+###BUGALERT### Do I want or need --force???
+
+=cut
+
+
+=head1 THE FETCHWARE PACKAGE
+
+Like other package managers, fetchware has its own package format:
+
+=over
+
+=item *
+
+It ends with a C<.fpkg> file extension.
+
+=item *
+
+The package path, the location of the unarchived downloaded program, is simply
+archived again using L<Archive::Tar>, and compressed with gzip.
+
+=item *
+
+But before the package path is archived the currently used Fetchwarefile is
+copied into the current directory, so that it is included with your fetchware
+package:
+
+    ./Fetchwarefile
+    httpd-2.2.x
+    httpd-2.2.x/README
+    httpd-2.2.x/INSTALL
+    ....
+
+=back
+
+This simple package format was chosen instead of using a native package format
+such as a MS C<.msi> package, slackware format, rpm format, C<.deb> format, and
+so on. Thanks to distros like Gentoo and Arch, there are even more formats now.
+Also, each version of BSD has its own package format, and each version of
+commerical UNIX has its own package format too. ...It was easier to create a new
+format, then deal with all of the existing ones.
+
+This custom package format is unique, bare bones, and retains all of the power
+that installing the software from source manaully gives you.
+
+=over
+
+=item *
+
+Simple, and retains backward compatibility with manual installation.
+
+=item *
+
+The package format includes the source code, so it can be recompiled if you
+move the fetchware package to an architecture different than the one it was
+compiled on.
+
+=item *
+
+You can specify whatever configure and build options you want, so you're not
+stuck with whatever your distro's package maintainer has chosen.
+
+=back
+
+These unique qualities give fetchware unique abilites that other package
+managers don't have.
+
+=head2 Deploying with Fetchware Packages
+
+Just like how you can create a repository for custom rpms or C<.deb>s, you can
+do the same with fetchware packages, which brings with it the full power of your
+software's build environment, and fetchware's Fetchwarefile's support for
+embeding Perl giving you great flexibility.
+
+###BUGALERT### Actually give a useful example of this!
+
+=head2 Cross-platform Deployment with Fetchware Packages
+
+Unlike other package formats, fetchware's is cross-platform, and supports the
+same platforms, the software's build environment does. You can take advantage of
+this to deploy your software as a fetchware package across whatever number of
+architectures your software's build system supports.
+
+Note, it will have to be built on each platform when the package is installed.
+
+###BUGALERT### Give more details about this!
+
+=head2 Deploying to Systems without a Build Environment
+
+###BUGALERT### This doesn't actually work now!!!
+
+Fetchware is flexible enough, using the C<no_rebuild> and C<no_lookup>
+configuration options, to be configured and compiled on one computer, and then
+B<only> installed on any additional servers that install that fetchware package.
+
+So, instead of needing gcc, devel versions of libraries, and make, the servers
+you deploy your fetchware package on compile using these options will only need
+make installed instead of an entire build environment (Actually, they'll need
+whatever commands your Fetchwarefile's C<install_commands> uses, which is
+C<make install> by default.
+
+###BUGALERT### Actually implemente this cool idea, and fix docs to say that to
+#actually lookup and actually build the package use the --force option, which
+#also needs to be implemented.
+
+=cut
+
+
+=head1 HOW FETCHWARE WORKS
+
+Fetchware works by having fetchware, the C<bin/fetchware> file and fetchware
+Perl package, do all of the "package manager" stuff: 
+
+=over
+
+=item *
+
+Creating fetchware packages (create_fetchware_package())
+
+=item *
+
+Copying fetchware packages to the fetchware database
+(copy_fpkg_to_fpkg_database())
+
+=item *
+
+Creating and managing the fetchware database
+(determine_fetchware_package_path(), extract_fetchwarefile(),
+and fetchware_database_path())
+
+=item *
+
+uninstalling installed packages from the fetchware database
+(uninstall_fetchware_package_from_database())
+
+=back
+
+
+Fetchware I<delegates> all of the specifics on how to install, upgrade, and
+uninstall the fetchware packages that fetchware manages to App::Fetchware or a
+App::Fetchware extension:
+
+=over
+
+=item *
+
+Lookup to see if a new version is available (lookup())
+
+=item *
+
+Downloading the archive (download())
+
+=item *
+
+Verifying that the downloaded file is the same one the author uploaded (verify())
+
+=item *
+
+Unarchiving the package(unarchive())
+
+=item *
+
+Building and installing it (build() and install())
+
+=item *
+
+Uninstalling any already installed fetchware package (uninstall())
+
+=item *
+
+Some before and after hooks (start() and end()).
+
+=back
+
+=head2 How fetchware's commands work
+
+Fetchware's commands work by using fetchware's API, described in the section
+L<INTERNAL LIBRARY SUBROUTINES>, to manage the package manager stuff. And
+fetchware I<delegates> the heavy lifting of the steps needed to install,
+upgrade, and uninstall fetchware packages to L<App::Fetchware> or a
+L<App::Fetchware extension|App::Fetchware/"CREATING A FETCHWARE EXTENSION">.
+
+=over
+
+=item new
+
+C<new> just asks the user a bunch of questions, and gives them an opportunity to
+answer questions. Then it uses your answers to generate a Fetchwarefile for you,
+so that you don't have to mess with creating one manually in a text editor.
+
+=item install
+
+Fetchware's install runs whatever fetchware API subroutines it needs to use, see
+the section L<INTERNAL LIBRARY SUBROUTINES> for more. Then, install() will parse
+a user provided Fetchwarefile or a Fetchwarefile fetchware finds in a fetchware
+package. The act of parsing the Fetchwarefile will import the App::Fetchware API
+subroutines into fetchware's namespace. This gives fetchware access to
+App::Fetchwares API or whatever extension may have been used. These the API
+subroutines are run providing whatever arguments they need and storing whatever
+their important return values may be in a variable to probably later be given to
+a later API subroutine as an argument.
+
+=item upgrade
+
+Upgrade just cleverly calls the same subroutine that implementes install. And if
+the version install determines is the lastes is the same as the version that is
+already installed, then fetchware does not bother installing it again. If you
+run upgrade with the --force option, then upgrade will install whatever version
+it finds anyway.
+
+###BUGALERT### Add a config sub for a command to run after upgrade.
+#C<after_upgrade_commands> that will allow you to restart apache or whatever
+#after you've upgraded it, so that the newest version is running after you
+#upgrade, because otherwise the currently running version won't have whatever
+#suecurity fixes that might have been in the previous release.
+
+=item uninstall
+
+Uninstall parses the Fetcwharefile of the installed pacakge you specified. Then
+it runs whatever C<uninstall_commands> you specified or the default,
+C<make uninstall> if you specified none. Then the installed package is deleted
+from the fetchware database.
+
+=item list
+
+List just globs all files in the fetchware database directory as returned by
+fetchware_database_path(), and prints them to STDOUT. It does not let you
+specify a Perl regex, or a keyword or anything yet, because I'm currently unsure
+about the security ramifications of doing so. This feature may be added in the
+future.
+
+=item look
+
+look just does the first part of install(). It parses whatever Fetchwarefile it
+gets passed to it, then it does the start(), lookup(), download(), verify(), and
+unarchive() parts of install(). Then look prints the path of this directory, and
+exits.
+
+=item clean
+
+Clean just deletes all fetchware temp files and directories in the system
+temp_dir.
+
+###BUGALERT### Use --force to parse all temp_dir's in installed packages, and
+#clean them too?? Let it receive an arg to a dir to clean of fetchware crap???
+
+=item help
+
+Just prints a simple, shirt, concise help message.
+
+=back
+
+=head2 How fetchware interfaces with App::Fetchware
+
+Fetchware interfaces with App::Fetchware using the parse_fetchwarefile() API
+subroutine. This subroutine simply eval()'s your Fetchwarefile and traps any
+errors, and then rethrows that exception adding a helpful message about what
+happened in addition to passing along the original problem from Perl.
+
+The act of eval()ing your Fetchwarefile causes Perl to parse and execute as it
+would any other Perl program. Only because its inside an eval any subroutines
+that are imported are imported in the the caller of eval()'s package. In this
+case fetchware.
+
+Fetchware takes advantage of this by requiring all Fetchwarefile's to have a
+C<use App::Fetchware...;> line. This line is what imports the default imports of
+App::Fetchware into fetchware, which include App::Fetchware's API subroutines.
+
+=head2 How fetchware intefaces with a fetchware extension
+
+As explained above parse_fetchwarefile() eval()'s your Fetchwarefile, and this
+causes Perl to parse and execute it. And any imports are imported into the
+caller's package, which is fetchware.
+
+That's how fetchware receives App::Fetchware's API subroutines, and it is also
+how fetchware receives a fetchware extensions API subroutines, the fetchware
+extension is simply use()d inside your Fetchwarefile instead of the default one
+of App::Fetchware. Instead of:
+
+    use App::Fetchware;
+
+You would write:
+
+    use App::Fetchware::HTMLPageSync;
+
+To use the fetchware extension HTMLPageSync.
+
+=cut
+
+
+=head1 ERRORS
+
+As with the rest of App::Fetchware, fetchware does not return any
+error codes; instead, all errors are die()'d if it's fetchware's
+error, or croak()'d if its the caller's fault. These exceptions are simple
+strings, and are listed in the L</DIAGNOSTICS> section below.
+###BUGALERT### Actually implement croak or more likely confess() support!!!
+
+=cut
+
+
+=head1 CAVEATS
+
+###BUGALERT### Update this section!!!!!!!!!!!!!
+Certain features of App::Fetchware::HTMLPageSync require knowledge of the Perl
+programming language in order for you to make use of them. However, this is
+limited to optional callbacks that are not needed for most uses. These features
+are the C<html_treebuilder_callback> and C<download_links_callback> callbacks.
+
+=cut
+
+
+
+##TODO##=head1 DIAGNOSTICS
+##TODO##
+##TODO##App::Fetchware throws many exceptions. These exceptions are not listed below,
+##TODO##because I have not yet added additional information explaining them. This is
+##TODO##because fetchware throws very verbose error messages that don't need extra
+##TODO##explanation. This section is reserved for when I have to actually add further
+##TODO##information regarding one of these exceptions.
+##TODO##
+##TODO##=cut
