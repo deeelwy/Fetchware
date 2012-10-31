@@ -2599,73 +2599,64 @@ It is the heart and soul of fetchware where all of fetchware's main behaviors
 are kept in its API, which consists of the subroutines start(), lookup(),
 download(), verify(), unarchive(), build(), install(), uninstall(), and end().
 
-=head2 How the API works
 
-When fetchware install or upgrades something it executes the API subroutines
-start(), lookup(), download(), verify(), unarchive(), build(), install(), and
-end() in that order. And when fetchware uninstalls and installed package it
-executes the API subroutines start(), part of build(), uninstall(), and end().
+App::Fetchware stores both details about C<fetchware>'s configuration file
+syntax, documents how to create a fetchware extension, and documents the
+internal workings of how App::Fetchware implements C<fetchware>'s package
+management behavior:
 
+=over
 
-=head2 Extending App::Fetchware
+=item *
 
-This API can be overridden inside a user created Fetchwarefile by supplying a
-C<CODEREF> to any of the API subroutines that I mentioned above. This C<CODEREF>
-simply replaces the default App::Fetchware API subroutine of that name's
-behavior. This C<CODEREF>  is expected to take the same parameters, and return
-the same thing th main API subroutine does.
+For details on App::Fetchware's configuration file syntax see the section L<CREATING A App::Fetchware FETCHWAREFILE> and the section L<MANUALLY CREATING A App::Fetchware FETCHWAREFILE> for more details, and how to create one in a text editor without C<fetchware new>'s help.
 
-For more extensive changes you can create a App::Fetchware module that
-I<"subclasses"> App::Fetchware. Now App::Fetchware is not an object-oriented
-module, so you cannot use L<parent> or L<base> to add it to your program's
-inheritance tree using C<@INC>. You can, however, import whatever subroutines
-from App::Fetchware that you want to reuse such as start() and end(), and then
-simply implement the remaining  subroutines that make up App::Fetchware's API.
-Just like the C<CODEREF> extensions mentioned above, you must take the same
-arguments and return the same values that fetchware expects or using your
-App::Fetchware extension will blow up in your face.
+=item *
 
-This is described in much more detail below in L<CHANGING FETCHWARE'S BEHAVIOR>.
+If the needs of your program how overcome the capabilities of App::Fetchware's
+configuration options, then see the section
+L<FURTHER CUSTOMIZTING YOUR FETCHWAREFILE> for details on how to overcome those
+limitations.
 
+=item * 
 
-=head2 Essential Terminology
+For instructions on how to create a fetchware extension see the section
+L<CREATING A FETCHWARE EXTENSION>.
 
-App::Fetchware manages to behave like an object oriented module would with
-regards to its extension system without actually using perl's object-oriented
-features especially using @INC for subclassing, which App::Fetchware does not
-use.
+=item *
 
-The same terminology as used in OOP is also used here in App::Fetchware, because
-the concepts are nearly the same they're simply implemented differently.
+For details on App::Fetchware's API that is useful for those customizing their
+Fetchwarefile's and to those who are implementing a fetchware extension please
+see the section L<FETCHWAREFILE API SUBROUTINES>.
 
-=head3 API subroutines
-
-These are the subroutines that App::Fetchware implements, and that fetchware
-uses to implement its desired behavior. They are start(), lookup(), download(),
-verify(), unarchive(), build(), install(), uninstall(), and end(). All must be
-implemnted in a App::Fetchware L<subclass>.
-
-=head3 override
-
-Means the same thing it does in object-oriented programming. Changing the
-definition of a method/subroutine without changing its name. In OOP this is
-simply done by subclassing something, and then defining one of the methods that
-are in the superclass in the subclass. In App::Fetchware extensions this is done
-by simply defining a subroutine with the same name as one or more of the API
-subroutines that are defined above. There is no method resolution order and
-C<@INC> is not consulted.
-
-=head3 subclass
-
-Means the same thing it does in object-oriented programming. Taking one class
-and replacing it with another class. Only since App::Fetchware is not
-object-oriented, it is implemented differently. You simply import from
-App::Fetchware the L<API subroutines> that you are B<not> going to override, and
-then actually implement the remaining subroutines, so that you App::Fetchware
-I<subclass> has the same interface that App::Fetchware does.
+=back
 
 =cut
 
+=head1 CREATING A App::Fetchware FETCHWAREFILE
+
+In order to create a new fetchware package, you need to create a new
+Fetchwarefile. You can easily do this with the C<fetchware new> command, which
+works as follows.
+
+=over
+
+=item 1. This command will ask you a few questions, and use the answers you provide to create a Fetchwarefile for you.
+
+=item 2. After it does so, it gives you a chance to edit its autogenerated Fetchwarefile manually in an editor of your choice.
+
+=item 3. Afterwards, it will ask you if you would like to go ahead and use your newly created Fetchwarefile to install your new program as a fetchware package.  If you answer yes, the default, it will install it, but if you anwer no; instead, it will simply print out the location to the Fetchwarefile that it created for you.
+
+=back
+
+You can also create your Fetchwarefile manually in a text editor if you want to.
+See the section L</MANUALLY CREATING A App::Fetchware FETCHWAREFILE> for the
+details. Some programs require greater customization of Fetchware's behavior
+than is available in its configuration options in these cases see the section
+L</FURTHER CUSTOMIZTING YOUR FETCHWAREFILE> for the specific details on how to
+make fetchware do what it needs to do to manage your source code distributions.
+
+=cut
 
 
 =head1 MANUALLY CREATING A App::Fetchware FETCHWAREFILE
@@ -2845,6 +2836,12 @@ L<App::Fetchware FETCHWAREFILE CONFIGURATION OPTIONS>.
 
 =back
 
+=over
+
+=item NOTICE: There is no configuration option to change what filename fetchware uses. You're stuck with its default of what fetchware determines your $download_url to be with the appropriate C<.asc>, C<sha1>, or C<.md5> added to it.
+
+=back
+
 Just copy and paste the example below replacing C<[new_directive]> with the name
 of the new directive you would like to add, and fill in the space between the
 single quotes C<'>.
@@ -2923,6 +2920,983 @@ but does not provide a uninstall make target. Apache for example, therefore,
 cannot be uninstalled by fetchware automatically.
 
 =back
+
+=cut
+
+
+=head1 App::Fetchware'S FETCHWAREFILE CONFIGURATTION OPTIONS
+
+App::Fetchware has many configuration options. Most were briefly described in
+the section L<MANUALLY CREATING A App::Fetchware FETCHWAREFILE>. All of them are
+detailed below.
+
+=head2 program 'Program Name';
+
+C<program> simply gives this Fetchwarefile a name. It is availabe to fetchware
+after parsing your Fetchwarefile, and is used to name your Fetchwarefile when
+using C<fetchware new>. It is not strictly necessary like C<lookup_url> and
+perhaps C<filter> are, and can be skipped, but using it is recommended.
+
+=head2 filter 'perl regex here';
+
+See L<perlretut> for details on how to use and create Perl regular expressions;
+however, actual regex know how is not really needed just paste verbatim text
+between the single quotes C<'>. For example, C<filter 'httpd-2.2';>.
+
+=head2 temp_dir '/var/tmp'; #UNIMPLEMENTED!!!
+
+C<temp_dir> tells fetchware where to store fetchware's temporary working
+directory that it uses to download, verify, unarchive, build, and install your
+software. By default it uses your system temp directory, which is whatever
+directory L<File::Temp::tempdir> decides to use.
+
+=head2 user 'nobody'; # UNIMPLEMENTED!!!
+
+Tells fetchware what user it should drop priveledges to. The default is
+C<nobody>, but you can specify a different username with this configuration
+option if you would like to.
+
+This option allows fetchware to avoid downloading files and executing
+anything inside the downloaded archive as root. Except of course the commands
+needed to install the software, which will still need root to able to write
+to system directories. This improves security, because the downloaded software
+won't have sytem priveldeges until after it is verified, prooviing that what you
+downloaded is exactly what the author uploaded.
+
+Note this only works for unix like systems, and is not used on Windows and
+other non-unix systems.
+
+=head2 lookup_url 'ftp://somedomain.com/some/path
+
+This is the only B<required> configuration option. Every other necessary option
+has a default or is not needed. This one is mandatory. This configuration option
+specifies a url of a FTP or HTTP directory listing that fetchware can download,
+and use to determine what actual file to download and perhaps also what version
+of that program to download if more than one version is available as some
+mirrors delete old versions and only keep the latest one.
+
+This url is used for:
+
+=over
+
+=item 1. To determine what the actual download url is for the latest version of this program
+
+=item 2. As the base url to also download a cryptographic signature (ends in .asc) or a SHA-1 or MD5 signature to verify the contents match what the SHA-1 or MD5 checksum is.
+
+You can use the C<mirror> configuration option to specify additional mirrors.
+However, those mirrors will only be tried if the main one in the C<lookup_url>
+dow not work properly.
+
+=head2 lookup_method 'timestamp';
+
+Fetchware has two algorithms it uses to determine what the properl download_url
+is:
+
+=over
+
+=item timestamp
+
+The timestamp algorithm simply uses the mtime (last modification time) that is
+availabe in FTP and HTTP directory listings to determine what file in the
+directory is the newest.
+
+=item versionstring
+
+Versionstring parses out the version numbers that each downloadable program has,
+and uses them to determine the downloadable archive with the highest version
+number, which should also be the newest and best version of the archive to use.
+
+=back
+
+=head2 gpg_key_url 'mastermirror.com/some/path';
+
+Specifies an alternate url to use to download the cryptographic signature that
+goes with your program. This is usually a file with the same name as the
+download url with a C<.asc> file extension added on.
+
+Because this file is cryptographically signed you can safely download it from
+any mirror.
+
+=head2 sha1_url 'mastermirror.com/some/path';
+
+Specifies an alternate url to download the SHA-1 checksum. This checksum is used
+to verify the integrity of the archive that fetchware downloads.
+
+You B<must> specify the master mirror site, which is your programs main mirror
+site, because if you download it from a mirror, its possible that both the
+archive and the checksum could have been tampered with.
+
+=head2 md5_url 'mastermirror.com/some/path';
+
+Specifies an alternate url to download the MD5 checksum. This checksum is used
+to verify the integrity of the archive that fetchware downloads.
+
+You B<must> specify the master mirror site, which is your programs main mirror
+site, because if you download it from a mirror, its possible that both the
+archive and the checksum could have been tampered with.
+
+=head2 verify_method 'gpg';
+
+Chooses a method to verify your program. The default is to try C<gpg>, then
+C<sha1>, and finally C<md5>, and if all three fail, then the default is to exit
+fetchware with an error message, because it is insecure to install archives that
+cannot be verified. The availabel options are:
+
+=over
+
+=item gpg - Uses the gpg program to cryptographically verify that the program you downloaded is exactly the same as its author uploaded it.
+
+=item sha1 - Uses the SHA-1 hash function to verify the integrity of the download. This is much less secure than gpg.
+
+=item sha1 - Uses the MD5 hash function to verify the integrity of the download. This is much less secure than gpg.
+
+=back
+
+=head2 verify_failure_ok 'True';
+
+Fetchware's default regarding failing to verify your downloaded Archive with
+gpg, sha1, or md5 is to exit with an error message, because installing software
+that cannot be cryptographically verified should never be done.
+
+However, if the author of a program you want to use fetchware to manage for you
+does not offer a gpg, sha1, or md5 file to verify its integrity, then you can
+use this option to force Fetchware to install this program anyway. However, do
+not enable this option lightly. Please scour the program's mirrors and homepage
+to see which C<gpg_key_url>, C<sha1_url>, or C<md5_url> you can use to ensure
+that your archive is verified before it is compiled and installed.
+
+=over
+
+=item NOTICE
+
+C<verify_failure_ok> is a boolean configuration option, which just means its
+values are limited to either true or false. True values are C<'True'>, C<'On'>,
+C<1>, and false values are C<'False'>, C<'Off'>, and C<0>. All other values are
+syntax errors.
+
+=back
+
+=head2 prefix '/opt/';
+
+Controls the AutoTools C<./configuration --prefix=...> option, which allows you
+to change the base directory that most software (software that uses AutoTools)
+uses as the base directory for when they install themselves.
+
+For example, most programs copy binaries to C<prefix/bin>, documentation to
+C<prefix/docs>, manpages to C<prefix/man>, and so on.
+
+=head2 configure_options '--datadir=/var/mysql';
+
+Provides options to AutoTools C<./configure> program that configures the source
+code for building. Most programs don't need this, but some like Apache and MySQL
+need lots of options to configure them properly. In order to provide multiple
+options do not separate them with spaces; instead, separate them with commas and
+keep single quotes C<'> around them like in the example below.
+
+    configure_options '--datadir=/var/mysql', '--mandir=/opt/man',
+        '--enable-module=example';
+
+This option is B<not> compatible with C<build_commands>. If you use
+C<build_commands>, than this optio will B<not> be used.
+
+=head2 make_options '-j4';
+
+This option exists mostly just to enable parallel make using the C<-j> jobs
+option. But any list of options make excepts will work here too. Separate them
+using commas and surround each one with single quotes C<'> like in the example
+above.
+
+=head2 build_commands './configure', 'make';
+
+Specifies what commands fetchware will use to build your program. Building your
+program includes configuring the source code to be compiled, and then the actual
+compiling too. It does B<not> include installing the compiled source code. Use
+C<install_commands>, which is described below, for that. Specify multiple
+options just like C<configure_options> does.
+
+The default C<build_commands> is simply to run C<./configure> followed by
+C<make>.
+
+=head2 install_commands 'make install';
+
+This single command or perhaps list of commands will be run in the order your
+specifyto install your program. You can specify multiple options just like
+C<configure_options> does.
+
+The default C<install_commands> is simply to run C<make install>.
+
+=head2 no_install
+
+This boolean, see below, configuration option determines if fetchware should
+install your software or not install your software, but instead print out the
+path of its build directory, so that you can test or review the software before
+you install it.
+
+=over
+
+=item NOTICE
+
+C<no_install> is a boolean configuration option, which just means its
+values are limited to either true or false. True values are C<'True'>, C<'On'>,
+C<1>, and false values are C<'False'>, C<'Off'>, and C<0>. All other values are
+syntax errors.
+
+=back
+
+=head2 mirror 'somemirror0.com/some/path';
+
+Allows you to specify additional mirrors to use in case the main one listed in
+your C<lookup_url> fails. This configuration option, unlike all the others, can
+be specified more than once. So, for example you could put:
+
+    mirror 'somemirror1.com';
+    mirror 'somemirror2.com';
+    mirror 'somemirror3.com';
+    mirror 'somemirror4.com';
+    mirror 'somemirror5.com';
+
+In your Fetchwarefile, and if fetchware fails to download the directory listing
+in your C<lookup_url>, then fetchware will try these other hostnames in the
+order they appear in your Fetchwarefile.
+
+However, if you specify a path in addition to just the hostname, then fetchware
+will try to get whatever it wants to download at that alternate path as well.
+
+    mirror 'somemirror6./com/alternate/path';
+
+###BUGALERT### mirror is *not* actually implemented yet.
+
+###BUGALERT### Should the =head2's below be described here or in the fetchware
+#extension section???
+
+=head2 start
+=head2 lookup
+=head2 download
+=head2 verify
+=head2 unarchive
+=head2 build
+=head2 install
+=head2 end
+=head2 uninstall
+
+=head2 config
+=head2 make_config_sub
+
+=cut
+
+
+=head1 FURTHER CUSTOMIZING YOUR FETCHWAREFILE
+
+Because fetchware's configuration files, its Fetchwarefiles, are little Perl
+programs, you have the full power of Perl at your disposal to customize
+fetchware's behavior to match what you need fetchware to do to install your
+source code distributions.
+
+Not only can you use arbitrary Perl code in your Fetchwarefile to customize
+fetchware for programs that don't follow most FOSS mirroring unwritten standards
+or use a totally different build system, you can also create a fetchware
+extension. Creating a fetchware extension even allows you to turn your extension
+into a proper CPAN distribution, and upload it to CPAN to share it with
+everybody else. See the section below,
+L<CREATING A FETCHWARE EXTENSION>, for full details.
+
+
+=head2 How Fetchware's configuration options are made
+
+Each configuration option is created with the make_config_sub() subroutine
+L<make_config_sub()|/make_config_sub()> (Did <-- work????)
+(see the section L<FETCHWAREFILE API SUBROUTINES> for its documentation). This
+subroutine is a simple code generator that generates configuration subroutines.
+These subroutines have the same names as fetchware's configuration options,
+because that is exactly what they are. Perl's L<Prototypes|perlsub/Prototypes>
+are used in the code that is generated, so that you can remove the parentheses
+typically required around each configuration subroutine. This turns what looks
+like a function call into what could believably be considered a configuration
+file syntax.
+
+These prototypes turn:
+
+    lookup_url('http://somemirror.com/some/path');
+
+Into:
+
+    lookup_url 'http://somemirror.com/some/path';
+
+Perl's prototypes are not perfect. The single quotes and semicolon are still
+required, but the lack of parens instantly makes it look much more like a
+configuration file syntax, then an actual programming language.
+
+=head2 The magic of C<use App::Fetchware;>
+
+The real magic power behind turning a Perl program into a configuration file
+sytanx comes from the C<use App::Fetchware;> line. This line is single handedly
+responsible for making this work. This one line imports all of the configuration
+subroutines that make up fetchware's configuration file syntax. And this
+mechanism is also behind fetchware's extension mechanism. (To use a
+App::Fetchware extension, you just C<use> it. Like
+C<use App::Fetchware::HTMLPageSync;>. That's all there is to it. This I<other>
+App::Fetchware is responsible for exporting subroutines of the same names as
+those that make up App::Fetchware's API. These subroutines are listed in the
+section L<FETCHWAREFILE API SUBROUTINES> as well as their helper subroutines.
+See the section below L<CREATING A FETCHWARE EXTENSION> for more information on
+how to create App::Fetchware extensions.
+
+=head2 So how do I add some custom Perl code to customize my Fetchwarefile?
+
+Well, you can just put random perl code wherever you want in your Fetchwarefile,
+but you must then connect that code back into App::Fetchware's API. To do that
+use one of the configuration option hooks, which have the same name as
+App::Fetchware's main API. These hooks are start(), lookup(), download(),
+verify(), unarchive(), build(), install(), uninstall(), and end(). So to
+completely replace App::Fetchare's lookup() subroutine, because perhaps your
+program needs a totally different way of of checking if a new version is
+available, you only need to use that hook as though it were a configuration
+option:
+
+    lookup sub {
+        # Your replacement for lookup() goes here.
+    };
+
+However, that is not quite right, because some of App::Fetchware's API
+subroutines take important arguments and return important arguments that are
+then passed to other API subroutines later on. So, your I<replacement> lookup()
+B<must> take the same arguments and B<must> return the same values that the
+other App::Fetchware subroutines may expect to be passed to them. So, let's fix
+lookup(). Just check lookup()'s documentation to see what its arguments are and
+what it returns by checking out the section L<FETCHWAREFILE API SUBROUTINES>:
+
+    lookup sub {
+        # lookup does not take any arguments.
+        
+        # Your replacement for lookup() goes here.
+        
+        # Must return the same thing that the original lookup() does, so
+        # download() and everything else works the same way.
+        return $download_url;
+    };
+
+Some App::Fetchware API subroutines take arguments, so be sure to account for
+them:
+
+    download sub {
+        # Take same args as App::Fetchware's download() does.
+        my $download_url = shift;
+        
+        # Your replacement for download() goes here.
+        
+        # Must return the same things as App::Fetchware's download()
+        return $package_path;
+    };
+
+If changing lookup()'s behavior or even one of the other App::Fetchware
+subroutines, and you only want to change part of its behavior, then consider
+using one of the C<:OVERRIDE_*> tags. These tags exist for most of the
+App::Fetchware API subroutines, and are listed below along with what helper
+subroutines they import with them. To check their documentation see the section 
+L<FETCHWAREFILE API SUBROUTINES>.
+
+=over
+
+=item B<OVERRIDE_LOOKUP> - check_lookup_config, get_directory_listing, parse_directory_listing, determine_download_url, ftp_parse_filelist, http_parse_filelist, file_parse_filelist, lookup_by_timestamp, lookup_by_versionstring, lookup_determine_downloadurl
+
+=item B<OVERRIDE_DOWNLOAD> - download_ftp_url, download_http_url, determine_package_path
+
+=item B<OVERRIDE_VERIFY> - gpg_verify, sha1_verify, md5_verify, digest_verify
+
+=item B<OVERRIDE_UNARCHIVE> - check_archive_files    
+
+=item B<OVERRIDE_BUILD> -  none.
+
+=item B<OVERRIDE_INSTALL> - none.
+
+=item B<OVERRIDE_UNINSTALL> - none.
+
+=back
+
+An example:
+
+    use App::Fetchware ':OVERRIDE_LOOKUP';
+
+    ...
+
+    lookup sub {
+
+        ...
+
+        # ...Download a directory listing....
+        ###BUGALERT### improve this example.
+
+        # Use same lookup alorithms that lookup() uses.
+        return lookup_by_versionstring($filename_listing);
+        
+        # Return what lookup() needs to return.
+        return $download_url;
+    };
+
+Feel free to specify a list of the specifc subroutines that you need to avoid
+namespace polution, or install and use L<Sub::Import> if you demand more control
+over imports.
+
+=head2 A real example
+
+    ###BUGALERT### Actually create a useful example!!!!!!
+
+###BUGALERT### Add an section of use cases. You know explaing why you'd use
+#no_install, or why'd you'd use look, or why And so on.....
+
+=cut
+
+
+=head1 CREATING A FETCHWARE EXTENSION
+
+Fetchware's main program C<fetchware> uses App::Fetchware's short and simple API
+to implement fetchware's default behavior; however, other styles of source code
+distributions exist on the internet that may not fit inside App::Fetchware's
+capabilities. In addition to its flexible configuration file sytax, that is why
+fetchware allows modules other than App::Fetchware to provide it with its
+behavior.
+
+=head2 How the API works
+
+When fetchware install or upgrades something it executes the API subroutines
+start(), lookup(), download(), verify(), unarchive(), build(), install(), and
+end() in that order. And when fetchware uninstalls and installed package it
+executes the API subroutines start(), part of build(), uninstall(), and end().
+
+
+=head2 Extending App::Fetchware
+
+This API can be overridden inside a user created Fetchwarefile by supplying a
+C<CODEREF> to any of the API subroutines that I mentioned above. This C<CODEREF>
+simply replaces the default App::Fetchware API subroutine of that name's
+behavior. This C<CODEREF>  is expected to take the same parameters, and return
+the same thing th main API subroutine does.
+
+For more extensive changes you can create a App::Fetchware module that
+I<"subclasses"> App::Fetchware. Now App::Fetchware is not an object-oriented
+module, so you cannot use L<parent> or L<base> to add it to your program's
+inheritance tree using C<@INC>. You can, however, import whatever subroutines
+from App::Fetchware that you want to reuse such as start() and end(), and then
+simply implement the remaining  subroutines that make up App::Fetchware's API.
+Just like the C<CODEREF> extensions mentioned above, you must take the same
+arguments and return the same values that fetchware expects or using your
+App::Fetchware extension will blow up in your face.
+
+This is described in much more detail below in L<CHANGING FETCHWARE'S BEHAVIOR>.
+
+
+=head2 Essential Terminology
+
+App::Fetchware manages to behave like an object oriented module would with
+regards to its extension system without actually using perl's object-oriented
+features especially using @INC for subclassing, which App::Fetchware does not
+use.
+
+The same terminology as used in OOP is also used here in App::Fetchware, because
+the concepts are nearly the same they're simply implemented differently.
+
+=head3 API subroutines
+
+These are the subroutines that App::Fetchware implements, and that fetchware
+uses to implement its desired behavior. They are start(), lookup(), download(),
+verify(), unarchive(), build(), install(), uninstall(), and end(). All must be
+implemnted in a App::Fetchware L<subclass>.
+
+=head3 override
+
+Means the same thing it does in object-oriented programming. Changing the
+definition of a method/subroutine without changing its name. In OOP this is
+simply done by subclassing something, and then defining one of the methods that
+are in the superclass in the subclass. In App::Fetchware extensions this is done
+by simply defining a subroutine with the same name as one or more of the API
+subroutines that are defined above. There is no method resolution order and
+C<@INC> is not consulted.
+
+=head3 subclass
+
+Means the same thing it does in object-oriented programming. Taking one class
+and replacing it with another class. Only since App::Fetchware is not
+object-oriented, it is implemented differently. You simply import from
+App::Fetchware the L<API subroutines> that you are B<not> going to override, and
+then actually implement the remaining subroutines, so that you App::Fetchware
+I<subclass> has the same interface that App::Fetchware does.
+
+To create a fetchware extension you must understand how they work:
+
+=over
+
+=item 1. First a Fetchwarefile is created, and what module implements App:Fetchware's API is declared with with a C<use App::Fetchware...;> line. This line is C<use App::Fetchware> for default Fetchwarefiles that use App::Fetchware to provide C<fetchware> with the API it needs to work properly.
+
+=item 2. To use a fetchware extension, you simply specify the fetchware
+extension you want to use with a C<use App::Fetchware...;> instead of specifying
+C<use App::Fetchware> line in your Fetchwarefile. You B<must> replace the
+App::Fetchware import with the extension's. Both cannot be present. Fetchware
+will exit with an error if you use more than one App::Fetchware line without
+specifying specific subroutines in all but one of them.
+
+###BUGALERT### Write code to actualy check the use App::Fetchware crap in
+#parse_fetchwarefile().
+
+=item 3. Then when C<fetchware> parses this Fetchwarefile when you use it to install, upgrade, or uninstall something, This C<use App::Fetchware...;> line is what imports App::Fetchware's API subroutines into C<fetchware>'s namespace.
+
+=back
+
+That's all there is to it. That simple C<use App::Fetchware...;> imports from
+App::Fetchware or a App::Fetchware extension such as
+App::Fetchware::HTMLPageSync the API subroutines C<fetchware> needs to use to
+install, upgarde, or uninstall whatever program your Fetchwarefile specifies.
+
+After understanding how they work, simply follow the instructons and consider
+the recommendations below. Obviously, knowing Perl is required. A great place to
+start is chromatic's
+L<Modern Perl|http://www.onyxneon.com/books/modern_perl/index.html>.
+
+=head2 Develop your idea keeping in mind fetchware's package manager metaphor
+
+Fetchware is a package manager like apt-get, yum, or slackpkg. It I<installs>,
+I<upgrades>, or I<uninstalls> programs. Fetchware is not a Plack for command
+line programs. It has a rather specific API meant to fit its package manager
+metaphor. So, keep this in mind when developing your idea for a fetchware
+extension.
+
+=head2 Map your extension's behavior to App::Fetchware's API
+
+App::Fetchware has a specific behavior consisting of just a few subroutines with
+specific names that take specific arguments, and return specific values. This
+API is how you connect your extension to fetchware.
+
+Just consider the description's of App::Fetchware's API below, and perhaps
+consult their full documentation in L<FETCHWAREFILE API SUBROUTINES>.
+
+=over
+
+=item B<my $temp_dir = start(KeepTempDir => 0 | 1)> - Gives your extension a chance to do anything needed before the rest of the API subroutines get called. App::Fetchware's C<start()> manages App::Fetchware's temporary directory creation. If you would like to also use a temporary directory, you can just import App::Fetchware's start() instead of implementing it yourself.
+
+=item B<my $download_url = lookup()> - Determines and returns a download url that C<download()> receives and uses to download the archive for the program.o
+
+=item B<my $package_path = download($tempd_dir, $download_url)> - Downloads its provided $download_url argument.
+
+=item B<verify($download_url, $package_path)> - Verifies the integrity of your downloaded archive using gpg, sha1, or md5.
+
+=item B<my $build_path = unarchive($package_path)> - Unpacks the downloaded archive.
+
+=item B<build($build_path)> - Configures and compiles the downloaded archive.
+
+=item B<install()> - Installs the compiled archive.
+
+=item B<end()> - Cleans up the temporary directory that start() created. Can be overridden to do any other clean up tasks that your archive needs.
+
+=item B<uninstall($build_path)> - Uninstalls an already installed program installed with the same App::Fetchware extension.
+
+=back
+
+Also, keep in mind the order in which these subroutines are called, what
+arguments they receive, and what their expected return value is.
+
+=over
+
+=item B<install> - start(), lookup(), download(), verify(), unarchive(), build(), install(), and end().
+
+=item B<upgrade> - Exactly the same as install.
+
+=item B<uninstall> - You might think its just uninstall(), but its not.  uninstall() calls start(), download() (to copy the already installed fetchware package from the fetchware package database to the temporary directory), unarchive(), uninstall(), and end().
+
+###BUGALERT### Is uninstall() calling API subs a bug??? Should it just use the
+#lower level library functions of these tools. Have it do this after I subify
+#the rest of the API subs like I've done to lookup and download.
+
+=back
+
+Use the above overview of App::Fetchware's API to design what each API
+subroutine keeping in mind its arguments and what its supposed to return.
+
+###BUGALERT### Add strict argument checking to App::Fetchware's API subroutines
+#to check for not being called correctly to aid extension debugging.
+
+=head2 Determine your fetchware extension's Fetchwarefile configuration options.
+
+App::Fetchware has various configuration options such as C<temp_dir>, C<prefix>,
+and so on. Chances are your fetchware extension will also need such
+configuration options. These are easily created with App::Fetchware's API
+subroutine make_config_sub(), which manufactures these to order for your
+convenience. There are four different types of configuration options:
+
+=over
+
+=item ONE - Takes only one argument, and can only be used once.
+
+=item ONEARRREF - Undocumented, and pehaps will be replaced by simply ONE. This just documents this massive stupid bug.
+###BUGALERT### Fix the ONEARRREF crap.
+
+=item MANY - Takes only one argument, but can be called more than once. The only example is mirror.
+
+=item BOOLEAN - Takes only one arguement, and can only be called once just like
+ONE. The difference is that BOOLEANs are limited to only I<boolean> true or
+false values such as C<'On'> or C<'Off'>, C<'True'> or C<'False'>, or C<1> or
+C<0>. App::Fetchware examples include C<no_install> and C<vefify_failure_ok>.
+
+=back
+
+Using the documentation above and perhaps also the documentation for
+C<make_config_sub> in the L<FETCHWAREFILE API SUBROUTINES> section, determine
+the names of your configuration options, and what type of configuraton options
+they will be.
+
+=head2 Implement your fetchware extension.
+
+Since you've designed your new fetchware extension, now it's time to code it up.
+The easiest way to do so, is to just take an existing extension, and just copy
+and paste it, and then delete its specifics to create a simple extension
+skeleton. Then just follow the steps below to fill in this skeleton with the
+specifics needed for you fetchware extension.
+
+###BUGALERT### Create a fetchware command to do this for users perhaps even
+#plugin it into Module::Starter???? If possible.
+####BUGALERT## Even have so that you can specify which API subs you want to
+#override or avoid overriding, and then it will create the skelton with stubs
+#for those API sub already having some empty POD crap and the correct
+#prototypes.
+
+=over
+
+=item 1. Code any App::Fetchware API subroutines that you won't be reusing from App::Fetchware.
+
+Use their API documentation from the section L<FETCHWAREFILE API SUBROUTINES> to
+ensure that you use the correct subroutine names, prototypes, arguments and
+return the correct value as well.
+
+###BUGALERT### Add the prototypes to the API docs.
+
+An example for overriding lookup() is below.
+
+    =head2 lookup()
+
+        my $download_url = lookup();
+
+    # New lookup docs go here....
+
+    =cut
+
+    sub lookup (;$) {
+
+        # New code for new lookup() goes here....
+
+        # Return the required $download_url.
+        return $download_url;
+    }
+
+=item 2. Set up proper exports and imports.
+
+You B<must> import from App::Fetchware any App::Fetchware API subroutines you
+intend to reuse from App::Fetchware such as start() and end(), or perhaps all of
+them but lookup(). So use something like:
+
+    # Import reused API subroutines from App::Fetchware.
+    use App::Fetchware qw(start end);
+
+or
+
+    # Import reused API subroutines from App::Fetchware.
+    use App::Fetchware qw(start download verify unarchive build install end
+        uninstall);
+
+To include whatever subroutines you want to reuse from App::Fetchware.
+
+And you B<must> also setup proper exports to export App::Fetchware's standard
+API subroutines that you either imported from App::Fetchware or implemented
+yourself and also whatever configuration subroutines that your fetchware
+extension created with make_config_sub(). Just customize something like:
+
+    # Setup proper exports of App::Fetchware API subroutines and any
+    # configuration subroutines this fetchware extension uses.
+    our @EXPORT = qw(
+        start
+        lookup
+        download
+        verify
+        unarchive
+        build
+        install
+        end
+        uninstall
+
+        # Any configuration subroutines go here.
+
+        # If you're reussing App::Fetchware's start() and end() perhaps you also
+        # want to import from App::Fetchware temp_dir, and also export here so
+        # users of your Fetchwarefile can change the temporary directory too.
+        temp_dir
+        ...
+
+    );
+
+=back
+
+Then your fetchware extension has exported the App::Fetchware API subroutines
+and any configuraton options that you want users of your fetchware extension to
+be able to use to customize their Fetchwarefile.
+
+
+=head2 Write your fetchware extension's documentation
+
+Fill in all of the skeleton's missing POD to ensure that fetchware extension has
+enough documentation to make it easy for user's to use your fetchware extension.
+Be sure to document:
+
+=over
+
+=item * All of Perl's standard POD sections such as SYNOPSIS, DESCRIPTION, AUTHOR, and all of the others. See L<perlpodstyle> for more details.
+
+=item * Give each subroutine its own chunk of POD before it explaining its arguments, any App::Fetchware configuration options it uses, and what its return value is.
+
+=item * Be sure to document both its external interface, its Fetchwarefile, and its internal interface, what subroutines it has and uses.
+
+=back
+
+=head2 Write tests for your fetchware extension
+
+Use perls veneralbe Test::More, and whatever other Perl TAP testing modules you
+need to be sure your fetchware extension works as expected.
+
+L<Test::Fetchware/> has a few testing subroutines that fetchware itself uses
+in its test suite that you may find helpful. These include:
+
+=over
+
+=item B<eval_ok()> - A poor man's Test::Exception. Captures any exceptions that are thrown, and compares them to the provided exception text or regex.
+
+=item B<print_ok()> - A poor man's Test::Output. Captures STDOUT, and compares it to the provided text.
+
+=item B<skip_all_unless_release_testing()> - Fetchware is a package manager, but
+who wants software installed on their computer just to test it? This subroutine
+marks test files or subtests that should be skipped unless fetchware's extensive
+FETCHWARE_RELEASE_TESTING environement variables are set. This funtionality is
+described next.
+
+=item B<make_clean()> - Just runs C<make clean> in the current directory.
+
+=item B<make_test_dist()> - Creates a temporary distribution that is used for
+testing. This temporary distribution contains a C<./configure> and a C<Makefile>
+that create no files, but can still be executed in the standard AutoTools way.
+
+###BUGALERT### Add an API hook for customizing make_test_dist().
+
+=item B<md5sum_file()> - Just md5sum's a file so verify() can be tested.
+
+=item B<expected_filename_listing()> - Returns a string of crazy Test::Deep
+subroutines to test filename listings. Not quite as useful as the rest, but may
+come in handy if you're only changing the front part of lookup().
+
+=back
+
+Your tests should make use of fetchware's own C<FETHWARE_RELEASE_TESTING>
+environment variable that controls with the help of
+skip_all_unless_release_testing() if and where software is actually installed.
+This is done, because everyone who installs fetchware is really gonna freak out
+if its test suite installs apache or ctags just to test its package manager
+functionality. To use it:
+
+=over
+
+=item 1. Set up an automated way of enabling FETCHWARE_RELEASE_TESTING.
+
+Just paste the frt() bash shell function below. Translating this to your favorit
+shell should be pretty straight forward. Do not just copy and paste it. You'll
+need to customize the specific C<FETCHWARE_*> environment variables to whatever
+mirrors you want to use or whatever actual programs you want to test with. And
+you'll have to point the local (file://) urls to directories that actually exist
+ono your computer.
+
+    frt() {
+        if [ -z "$FETCHWARE_RELEASE_TESTING" ]
+        then
+            echo -n 'Setting fetchware_release_testing environment variables...';
+            export FETCHWARE_RELEASE_TESTING='***setting this will install software on your computer!!!!!!!***'
+            export FETCHWARE_FTP_LOOKUP_URL='ftp://carroll.cac.psu.edu/pub/apache/httpd'
+            export FETCHWARE_HTTP_LOOKUP_URL='http://mirror.cc.columbia.edu/pub/software/apache//httpd/'
+            export FETCHWARE_FTP_DOWNLOAD_URL='ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.22.tar.bz2'
+            export FETCHWARE_HTTP_DOWNLOAD_URL='http://newverhost.com/pub//httpd/httpd-2.2.22.tar.bz2'
+            export FETCHWARE_LOCAL_URL='file:///home/user/software/httpd-2.2.22.tar.bz2'
+            export FETCHWARE_LOCAL_BUILD_URL='/home/user/software/ctags-5.8.tar.gz'
+            export FETCHWARE_LOCAL_UPGRADE_URL='file:///home/user/software/fetchware-upgrade'
+            echo 'done.'
+        else
+            echo -n 'Deleting fetchware_release_testing environment variables...';
+            unset FETCHWARE_RELEASE_TESTING
+            unset FETCHWARE_FTP_LOOKUP_URL
+            unset FETCHWARE_HTTP_LOOKUP_URL
+            unset FETCHWARE_FTP_DOWNLOAD_URL
+            unset FETCHWARE_HTTP_DOWNLOAD_URL
+            unset FETCHWARE_LOCAL_URL
+            unset FETCHWARE_LOCAL_BUILD_URL
+            unset FETCHWARE_LOCAL_UPGRADE_URL
+            echo 'done.'
+        fi
+    }
+
+Just run C<frt> with no args to turn FETCHWARE_RELEASE_TESTING on, and run it
+once more to turn it off. Don't forget to reload your shells configuration with:
+
+    $ . ~/.bashrc # Or whatever file you added it to is named.
+
+Then inside your test suite just import skip_all_unless_release_testing() from
+Test::Fetchware:
+
+    use Test::Fetchware ':TESTING';
+
+=item 2. Call skip_all_unless_release_testing() as needed
+
+In each subtest where you I<actually> install anything other than a test
+distribution made with make_test_dist(), begin that subtest with a call to
+skip_all_unless_release_testing(), which will skip the whole subtest if
+FETCHWARE_RELEASE_TESTING is not setup properly.
+
+    subtest 'test install() for real' => sub {
+        # Only test if during release testing.
+        skip_all_unless_release_testing();
+        
+        # Tests that actually install non-trivial distributions such as ones
+        # made by make_test_dist() go here.
+
+        ....
+    };
+
+If you dislike subtests, or otherwise don't want to use them, then use a
+separative file for these subtests.
+
+=back
+
+###BUGALERT### Fix this inflexibiltiy in skip_all_unless_release_testing().
+###BUGALERT### skip_all_unless_release_testing() may be compatible if used in a
+#SKIP: {...} block, so that's perhaps how it could be used outside of a subtest.
+
+=head2 Share it on CPAN
+
+Fetchware has no Web site or any other place to share fetchware extensions. But
+fetchware is written in Perl, so fetchware can just use Perl's CPAN. To learn
+how to create modules and upload them to CPAN please see Perl's own
+documentation. L<perlnewmod> shows how to create new Perl modules, and howt to
+upload them to CPAN. See L<Module::Starter> for a simple way to create a
+skeleton for a new Perl module, and L<dzil|http://dzil.org/index.html> is beyond
+amazing, but has insane dependencies.
+
+=cut
+
+
+=head1 FAQ
+
+=head2 Why doesn't fetchware and App::Fetchware use OO or Moose?
+
+One of my goals for fetchware was that its guts be pragmatic. I wanted it to
+consist of a bunch of subroutines that simply get executed in a specific order.
+And these subroutines should be small and do one an only one thing to make
+understanding them easier and to make testing them a breeze.
+
+OO is awesome for massive systems that need to take advandtage of inheritance or
+perhaps composition. But fetchware is small and simple, and I wanted its
+implementation to also be small and simple. It is mostly just two three
+thousand line programs with some smaller utility files. If it were OO there
+would be half or even a whole dozen number of smaller files, and they would have
+complicated relationships with each other. I did not want to bother with
+needless abstration that would just make fetchware more complicated. It is a
+simple command line program, so it should be written as one.
+
+Moose was out, because I don't need any of its amazing features. I could use
+those amazing features, but fetchware's simple nature does not demand them.
+Also, unless Moose and its large chunk of dependencies are in your OS's file
+system cache,  Moose based command line apps take a few seconds to start,
+because perl has to do a bunch of IO on slow disks to read in Moose and its
+dependencies. I don't want to waste those few seconds. Plus fetchware is a
+program not intended for use by experienced Perl developers like dzil is, which
+does use Moose, and has a few second start up overhead, which is acceptable to
+its author and maintainer. I also use it, and I'm ok with it, but those few
+seconds might be off putting to users who have no Perl or Moose knowledge.
+
+=head2 What's up with the insane fetchware extension mechanism?
+
+Extension systems are always insane. dzil, for example, uses a configuration
+file where you list names of dzil plugins, and for each name dzil loads that
+plugin, and figures out what dzil roles it does, then when dzil executes any
+commands you give it, dzil executes all of those roles that the plugins
+registered inside you configuration file.
+
+I wanted a configuration file free of declaring what plugins you're using. I
+wanted it to be easy to use. dzil is for Perl programmers, so it requiring some
+knowledge of Perl and Moose is ok. But fetchware is for end users or perhaps
+system administrators not Perl programmers, so something easier is needed.
+
+The extension mechanism was design for ease of use for people who use you
+fetchware extension. And it is. Just "use" whatever fetchware extension you want
+in your Fetchwarefile, and then supplying whatever configuration options you
+need.
+
+This extension mechanism is also very easy to Perl programmers, because you're
+basically I<subclassing> App::Fetchware, only you have to do it manually:
+
+=over
+
+=item 1. Instead of C<use parent 'App::Fetchware';>, you use
+C<use App::Fetchware qw(the subroutines you want to "inherit");>
+
+=item 2. Just like in a real subclass, whatever subroutines you want to "override", you implement in your subclass.
+
+=item 3. Most importantly, Perl does not do any "subroutine resolution." Therefore, you B<must> do this manually by exporting App::Fetchware's API subroutines and whatever configuration options your subclass needs.
+
+=back
+
+###BUGALERT### Move above explanation to where it is explained above.
+
+=head2 How do I fix the verification failed error.
+
+###BUGALERT### Fill this section in!!!!!!!!!
+
+=head2 How do I make fetchware log to a file instead of STDOUT?
+
+You can't fetchware does not have any log file support. However, you can simply
+redirect STDOUT to a file to make your shell redirect STDOUT to a file for you.
+
+    fetchware install <some-program.Fetchwarefile> > fetchware.log
+
+This would not prevent any error messages from STDERR being printed to your
+screen for that:
+
+    fetchware install <some-program.Fetchwarefile> 2>&1 fetchware.log
+
+And to throw away all messages use:
+
+    fetchware -q install <some-progra.Fetchwarefile>
+
+or use the shell
+
+    fetchware install <some-program.Fetchwarefile 2>&1 /dev/null
+
+=head2 Anything else I think of....
+
+=cut
+
+
+=head1 SECURITY
+
+App::Fetchware is inherently insecure, because its Fetchwarefile's are
+executable Perl code that actually is executed by Perl. These Fetchwarefiles are
+capable of doing everything someone can program Perl can do. This is why
+App::Fetchware will refuse to execute any Fetchwarefile's that are writable by
+anyone other than the owner who is executing them. It will also exit with a
+fatal error if you try to use a Fetchwarefile that is not the same user as the
+one who is running fetchware. These saftey measures help prevent fetchware being
+abused to get unauthorized code executed on your computer.
+
+###BUGALERT### user does nothing and the drop priv code isn't written! Write
+#it!!!!!! and test it!!!!!!!!!
+
+App::Fetchware also features the C<user> configuration option that tells
+fetchware what user you want fetchware to drop priveledges to when it does
+everything but install (install()) and clean up (end()). The configuration
+option does B<not> tell fetchware to turn on the drop privelege code; that code
+is B<always> on, but just uses the fairly ubuiquitous C<nobody> user by default.
+This feature requires the OS to be some version of Unix, because Windows and
+other OSes do not support the same fork()ing method of limiting what processes
+can do.
 
 =cut
 
