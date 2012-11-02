@@ -1824,6 +1824,30 @@ sub cmd_list {
 }
 
 
+sub cmd_clean {
+
+    #1. Loop over each tempdir (system tempdir as returned by File::Spec and any
+    #temp_dir's specified in installed package's Fetchwarefile's.
+        #2. obtain a list of fetchware-\d+?-\d+ dirs and files.
+        #3. Skip any dirs and files whose running pid is still running and is a
+        #perl process.
+            #* Proc::ProcessTable is buggy unmaintained garbage, so just use
+            #each Unix's ps command. Just create a dispatch table based on $^O
+            #output, and run that systems ps command. I should be able to find
+            #ps manpage's for all Unixes still in use: {Free,Net,Open}BSD, HPUX,
+            #AIX, Solaris, Linux, and MacOSX. Now that I list them out, it seems
+            #even easier to do so! Perhaps even add Win32::Process::List for
+            #Win32 support!!!, but do it conditionally only if installing on
+            #Windows. A CPAN module perhaps??? Proc::List perhaps???
+            #* This is done so that a files and directories that could still be
+            #in use if you happen to run fetchware clean while someone else is
+            #running fetchware to install something.
+        #4. Delete a files and directories that are still in the list.
+        #5. Go to next temp_dir file listing.
+
+}
+
+
 =head2 cmd_help()
 
     cmd_help();
