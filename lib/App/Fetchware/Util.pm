@@ -12,7 +12,6 @@ use Net::FTP;
 use HTTP::Tiny;
 use Perl::OSType 'is_os_type';
 use Cwd;
-use App::Fetchware::Util ':UTIL';
 use App::Fetchware::Config ':CONFIG';
 use File::Copy 'cp';
 use File::Temp 'tempdir';
@@ -777,16 +776,32 @@ sub create_tempdir {
     my $exception;
     my $temp_dir;
     eval {
-        ###BUGALERT### config('temp_dir') is not used!!!!!!!!!!!!!!!
         unless (defined $opts{KeepTempDir}) {
-            $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+            # Mind user's temp_dir preference if present.
+            unless (config('temp_dir')) {
+                $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
+                    TMPDIR => 1,
+                    CLEANUP => 1);
+            } else {
+                $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
+                    DIR => config('temp_dir'),
+                    TMPDIR => 1,
+                    CLEANUP => 1);
+            }
 
             vmsg "Created temp dir [$temp_dir] that will be deleted on exit";
         } else {
-            $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1);
+            # Mind user's temp_dir preference if present.
+            unless (config('temp_dir')) {
+                $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
+                    TMPDIR => 1);
+            } else {
+                $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
+                    DIR => config('temp_dir'),
+                    TMPDIR => 1);
+            }
 
             vmsg "Created temp dir [$temp_dir] that will be kept on exit";
-
         }
 
         # Must chown 700 so gpg's localized keyfiles are good.

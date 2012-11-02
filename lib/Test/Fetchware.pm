@@ -271,13 +271,12 @@ sub make_test_dist {
     # because original_cwd() is undef until create_tempdir() sets it.
     my $temp_dir = create_tempdir();
 
-    my $destination_directory;
-    if ($destination_directory = shift) {
-        $destination_directory = catfile(original_cwd(), $destination_directory);
-
-    } else {
-        $destination_directory = original_cwd();
-    }
+    # Set optional 3 argument to be the destination directory.
+    my $destination_directory = shift;
+    # If that option was not provided set the destination directory to be the
+    # orignal_cwd().
+    $destination_directory = original_cwd()
+        unless defined $destination_directory;
 
     # Append $ver_num to $file_name to complete the dist's name.
     my $dist_name = "$file_name-$ver_num";
