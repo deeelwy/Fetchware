@@ -79,7 +79,7 @@ subtest 'test make_test_dist()' => sub {
     ok(unlink @retvals, 'checked make_test_dist() 2 calls cleanup');
 
     # Test make_test_dist()'s second destination directory argument.
-    my $name = 'test-dist-1.00';
+    my $name = 'test-dist';
     my $return_val = make_test_dist($name, $ver_num, tmpdir());
     is($return_val, catfile(tmpdir(), "$name-$ver_num.fpkg"),
         'check make_test_dist() destination directory success.');
@@ -110,6 +110,8 @@ subtest 'test md5sum_file()' => sub {
     # formatting in tar and gzip.
     like($got_md5sum, qr/[0-9a-f]{32}  test-dist-1.00.fpkg/,
         'checked md5sum_file() success');
+
+    ok(unlink($test_dist, $test_dist_md5), 'checked md5sum_file() cleanup.');
 };
 
 
