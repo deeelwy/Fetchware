@@ -266,27 +266,24 @@ sub make_test_dist {
     my $file_name = shift;
     my $ver_num = shift;
 
-    # Create a temp dir to create or test-dist-1.$ver_num directory in.
-    # Must be done before original_cwd() is used to set $destination_directory,
-    # because original_cwd() is undef until create_tempdir() sets it.
-    my $temp_dir = create_tempdir();
 
     # Set optional 3 argument to be the destination directory.
-    my $destination_directory = shift;
     # If that option was not provided set the destination directory to be the
     # orignal_cwd().
-    $destination_directory = original_cwd()
-        unless defined $destination_directory;
+    my $destination_directory = shift || cwd();
 
     # Append $ver_num to $file_name to complete the dist's name.
     my $dist_name = "$file_name-$ver_num";
-
 diag("dist_name[$dist_name]");
-    mkdir($dist_name) or die <<EOD;
-fetchware: Run-time error. Fetchware failed to create the directory
-[$dist_name] in the current directory of [$temp_dir]. The OS error was
-[$!].
-EOD
+
+    my $test_dist_filename = catfile($destination_directory, "$dist_name.fpkg");
+diag("test_dist_filename[$test_dist_filename]");
+
+    ###DELMEAFTERTEST### Try to fix bug by absolutizing filename?
+    $test_dist_filename = rel2abs($test_dist_filename);
+diag("test_dist_filename[$test_dist_filename]");
+
+
     my $configure_path = catfile($dist_name, 'configure');
     my %test_dist_files = (
         './Fetchwarefile' => <<EOF
@@ -345,6 +342,17 @@ EOF
         ,
     );
 
+    # Create a temp dir to create or test-dist-1.$ver_num directory in.
+    # Must be done before original_cwd() is used to set $destination_directory,
+    # because original_cwd() is undef until create_tempdir() sets it.
+    my $temp_dir = create_tempdir();
+
+    mkdir($dist_name) or die <<EOD;
+fetchware: Run-time error. Fetchware failed to create the directory
+[$dist_name] in the current directory of [$temp_dir]. The OS error was
+[$!].
+EOD
+
     for my $file_to_create (keys %test_dist_files) {
         open(my $fh, '>', $file_to_create) or die <<EOD;
 fetchware: Run-time error. Fetchware failed to open
@@ -361,11 +369,8 @@ fetchware: run-time error. fetchware failed to chmod [$configure_path] to add
 execute permissions, which ./configure needs. Os error [$!].
 EOC
 
-    my $test_dist_filename = catfile($destination_directory, "$dist_name.fpkg");
-diag("test_dist_filename[$test_dist_filename]");
-
     # Create a tar archive of all of the files needed for test-dist.
-    Archive::Tar->create_archive($test_dist_filename, COMPRESS_GZIP,
+    Archive::Tar->create_archive("$test_dist_filename", COMPRESS_GZIP,
         keys %test_dist_files) or die <<EOD;
 fetchware: Run-time error. Fetchware failed to create the test-dist archive for
 testing [$test_dist_filename] The error was [@{[Archive::Tar->error()]}].

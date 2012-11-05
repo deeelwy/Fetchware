@@ -80,11 +80,21 @@ subtest 'test make_test_dist()' => sub {
 
     # Test make_test_dist()'s second destination directory argument.
     my $name = 'test-dist';
-    my $return_val = make_test_dist($name, $ver_num, tmpdir());
-    is($return_val, catfile(tmpdir(), "$name-$ver_num.fpkg"),
+    my $return_val = make_test_dist($name, $ver_num, 't');
+    is($return_val, rel2abs(catfile('t', "$name-$ver_num.fpkg")),
         'check make_test_dist() destination directory success.');
 
     ok(unlink $return_val, 'checked make_test_dist() cleanup');
+
+
+    # Test make_test_dist()'s second destination directory argument in a
+    # temp_dir.
+    my $name2 = 'test-dist';
+    my $rv = make_test_dist($name2, $ver_num, tmpdir());
+    is($rv, catfile(tmpdir(), "$name2-$ver_num.fpkg"),
+        'check make_test_dist() temp_dir destination directory success.');
+
+    ok(unlink $rv, 'checked make_test_dist() cleanup');
 };
 
 
