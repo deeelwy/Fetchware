@@ -483,10 +483,6 @@ subtest 'test create_tempdir()' => sub {
 note "TEMPDIR[$temp_dir]";
 
     # Cleanup $temp_dir, because this one won't automatically be cleaned up.
-    ###BUGALERT### This rmdir causes a warning from File::Temp, because this
-    #directory "vanishes" without File::Temp doing the vanishing. But if the
-    #rmdir() below is commented out the warning goes away, but the directory
-    #still remains in tmpdir()? 
     chdir original_cwd() or fail("Failed to chdir back to original_cwd()!");
     rmdir $temp_dir or fail("Failed to delete temp_dir[$temp_dir]! [$!]");
 
@@ -500,10 +496,6 @@ note "TEMPDIR[$temp_dir]";
 note "TEMPDIR[$temp_dir]";
 
     # Cleanup $temp_dir, because this one won't automatically be cleaned up.
-    ###BUGALERT### This rmdir causes a warning from File::Temp, because this
-    #directory "vanishes" without File::Temp doing the vanishing. But if the
-    #rmdir() below is commented out the warning goes away, but the directory
-    #still remains in tmpdir()? 
     chdir original_cwd() or fail("Failed to chdir back to original_cwd()!");
     rmdir $temp_dir or fail("Failed to delete temp_dir[$temp_dir]! [$!]");
 
