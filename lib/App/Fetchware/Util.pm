@@ -875,13 +875,7 @@ EOD
     ###BUGALERT### Below doesn't seem to work!!
     vmsg 'Cleaning up temporary directory.';
     File::Temp::cleanup();
-    ###BUGALERT### Should end() clear %CONFIG for next invocation of App::Fetchware
-    # Clear %CONFIG for next run of App::Fetchware.
-    # Is this a design defect? It's a pretty lame hack! Does my() do this for
-    # me?
-    ###BUGALERT###YYYYYYEEEEEEEEEESSSSSSSSSSSS!!!! It probbly should. It would
-    #remove many calls to __clear_CONFIG() from the test suite.
-###BUGALERT### Just take %CONFIG OO!!! App::Fetchware::Config!!! Problem solved.
+
     vmsg 'Clearing internal %CONFIG variable that hold your parsed Fetchwarefile.';
     __clear_CONFIG();
 
