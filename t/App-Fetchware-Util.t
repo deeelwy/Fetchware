@@ -7,12 +7,13 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '15'; #Update if this changes.
+use Test::More 0.98 tests => '16'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir);
 use URI::Split 'uri_split';
 use Cwd 'cwd';
 use Test::Fetchware ':TESTING';
+use App::Fetchware::Config qw(config config_replace);
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -466,6 +467,47 @@ subtest 'test run_prog()' => sub {
 
     # Set bin/fetchware's $quiet to false.
     $fetchware::quiet = 0;
+};
+
+
+subtest 'test create_tempdir()' => sub {
+    # Test create_tempdir() successes.
+    my $temp_dir = create_tempdir();
+    ok(-e $temp_dir, 'checked create_tempdir() success.');
+
+    $temp_dir = create_tempdir(KeepTempDir => 1);
+    ok(-e $temp_dir, 'checked create_tempdir() KeepTempDir success.');
+
+    # Cleanup $temp_dir, because this one won't automatically be cleaned up.
+    ###BUGALERT### This rmdir causes a warning from File::Temp, because this
+    #directory "vanishes" without File::Temp doing the vanishing. But if the
+    #rmdir() below is commented out the warning goes away, but the directory
+    #still remains in tmpdir()? 
+    rmdir $temp_dir or fail("Failed to delete temp_dir[$temp_dir]! [$!]");
+
+    # Test create_tempdir() successes with a custom temp_dir set.
+    config(temp_dir => tmpdir());
+    $temp_dir = create_tempdir();
+    ok(-e $temp_dir, 'checked create_tempdir() success.');
+
+    $temp_dir = create_tempdir(KeepTempDir => 1);
+    ok(-e $temp_dir, 'checked create_tempdir() KeepTempDir success.');
+
+    # Cleanup $temp_dir, because this one won't automatically be cleaned up.
+    ###BUGALERT### This rmdir causes a warning from File::Temp, because this
+    #directory "vanishes" without File::Temp doing the vanishing. But if the
+    #rmdir() below is commented out the warning goes away, but the directory
+    #still remains in tmpdir()? 
+    rmdir $temp_dir or fail("Failed to delete temp_dir[$temp_dir]! [$!]");
+
+    # Test create_tempdir() failure
+    config_replace(temp_dir => ( 'doesnotexist' . int(rand(238378290)) ));
+    eval_ok( sub {create_tempdir()},
+        <<EOE, 'tested create_tempdir() temp_dir does not exist failure.');
+App-Fetchware: run-time error. Fetchware tried to use File::Temp's tempdir()
+subroutine to create a temporary file, but tempdir() threw an exception. That
+exception was []. See perldoc App::Fetchware.
+EOE
 };
 
 
