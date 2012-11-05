@@ -872,7 +872,6 @@ EOD
 
     # Call File::Temp's cleanup subrouttine to delete fetchware's temp
     # directory.
-    ###BUGALERT### Below doesn't seem to work!!
     vmsg 'Cleaning up temporary directory.';
     File::Temp::cleanup();
 
