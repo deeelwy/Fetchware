@@ -471,18 +471,23 @@ subtest 'test run_prog()' => sub {
 
 
 subtest 'test create_tempdir()' => sub {
+    # Create my own original_cwd(), because it gets tainted, because I chdir
+    # more than just once.
+    my $original_cwd = cwd();
     # Test create_tempdir() successes.
     my $temp_dir = create_tempdir();
     ok(-e $temp_dir, 'checked create_tempdir() success.');
 
     $temp_dir = create_tempdir(KeepTempDir => 1);
     ok(-e $temp_dir, 'checked create_tempdir() KeepTempDir success.');
+note "TEMPDIR[$temp_dir]";
 
     # Cleanup $temp_dir, because this one won't automatically be cleaned up.
     ###BUGALERT### This rmdir causes a warning from File::Temp, because this
     #directory "vanishes" without File::Temp doing the vanishing. But if the
     #rmdir() below is commented out the warning goes away, but the directory
     #still remains in tmpdir()? 
+    chdir original_cwd() or fail("Failed to chdir back to original_cwd()!");
     rmdir $temp_dir or fail("Failed to delete temp_dir[$temp_dir]! [$!]");
 
     # Test create_tempdir() successes with a custom temp_dir set.
@@ -492,12 +497,14 @@ subtest 'test create_tempdir()' => sub {
 
     $temp_dir = create_tempdir(KeepTempDir => 1);
     ok(-e $temp_dir, 'checked create_tempdir() KeepTempDir success.');
+note "TEMPDIR[$temp_dir]";
 
     # Cleanup $temp_dir, because this one won't automatically be cleaned up.
     ###BUGALERT### This rmdir causes a warning from File::Temp, because this
     #directory "vanishes" without File::Temp doing the vanishing. But if the
     #rmdir() below is commented out the warning goes away, but the directory
     #still remains in tmpdir()? 
+    chdir original_cwd() or fail("Failed to chdir back to original_cwd()!");
     rmdir $temp_dir or fail("Failed to delete temp_dir[$temp_dir]! [$!]");
 
     # Test create_tempdir() failure
@@ -508,6 +515,11 @@ App-Fetchware: run-time error. Fetchware tried to use File::Temp's tempdir()
 subroutine to create a temporary file, but tempdir() threw an exception. That
 exception was []. See perldoc App::Fetchware.
 EOE
+
+    #chdir back to $original_cwd, so that File::Temp's END block can delete
+    #this last temp_dir. Otherwise, a warning is printed from File::Temp about
+    #this.
+    chdir $original_cwd or fail("Failed to chdir back to [$original_cwd]!");
 };
 
 
