@@ -187,18 +187,10 @@ uses the safer shell avoiding syntax on systems with L<fork>, and systems
 without L<fork>, Windows,  the older less safe syntax is used. Backticks are
 avoided, because they always use the shell.
 
-=over
-=item This subroutine makes use of prototypes, so that you can avoid using parentheses around its args to make it stand out more in code.
-
-###BUGALERT### Replace the parens in my code with spaces to actually use this
-#functionality or remove this sub's prototype.
-
-=back
-
 =cut
 
 ###BUGALERT### Add support for dry-run functionality!!!!
-sub run_prog ($;@) {
+sub run_prog {
     my ($program, @args) = @_;
 
     # If fetchware is run without -q.
