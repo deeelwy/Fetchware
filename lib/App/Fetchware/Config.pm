@@ -9,6 +9,9 @@ use warnings;
 # Enable Perl 6 knockoffs.
 use 5.010;
 
+use Carp 'carp';
+use Data::Dumper;
+
 
 # Set up Exporter to bring App::Fetchware's API to everyone who use's it
 # including fetchware's ability to let you rip into its guts, and customize it
@@ -24,6 +27,7 @@ use Exporter qw( import );
 our %EXPORT_TAGS = (
     CONFIG => [qw(
         config
+        config_iter
         config_replace
         config_delete
         __clear_CONFIG
@@ -62,8 +66,6 @@ element of %CONFIG to be promoted to being an C<ARRAY> ref.
 sub config {
     my ($config_sub_name, $config_sub_value) = @_;
 
-    ###BUGALERT### Does *not* support ONEARRREFs!!!!!! Which are actually
-    #needed.
     # Only one argument just lookup and return it.
     if (@_ == 1) {
         ref $CONFIG{$config_sub_name} eq 'ARRAY'
@@ -77,7 +79,7 @@ sub config {
             # arg ($config_sub_value) and the third to $#_ args are also
             # added to %CONFIG.
             if (@_ > 2) {
-                push @{$CONFIG{$config_sub_name}}, $config_sub_value, @_[2..$#_]
+                push @{$CONFIG{$config_sub_name}}, $config_sub_value, @_[2..$#_];
             } else {
                 push @{$CONFIG{$config_sub_name}}, $config_sub_value;
             }
@@ -85,18 +87,90 @@ sub config {
             # If there is already a value in that %CONFIG entry then turn it
             # into an ARRAY ref.
             if (defined($CONFIG{$config_sub_name})) {
-                $CONFIG{$config_sub_name}
-                    =
-                    [$CONFIG{$config_sub_name}, $config_sub_value];
+                if (@_ > 2) {
+                    $CONFIG{$config_sub_name}
+                        =
+                        [ $CONFIG{$config_sub_name}, @_[1..$#_] ];
+                } else {
+                    $CONFIG{$config_sub_name}
+                        =
+                        [$CONFIG{$config_sub_name}, $config_sub_value];
+                }
             } else {
-                $CONFIG{$config_sub_name} = $config_sub_value;
+                if (@_ > 2) {
+                    $CONFIG{$config_sub_name} = [ @_[1..$#_] ];
+                } else {
+                    $CONFIG{$config_sub_name} = $config_sub_value;
+                }
             }
         }
     }
 }
 
-###BUGALERT### Create a config_iter() that will iterate over a ARRREF or MANY or
-#even a ONE too.
+
+=head2 config_iter()
+
+    # Create a config "iterator."
+    my $mirror_iter = config_iter('mirror');
+
+    # Use the iterator to return a new value of 'mirror' each time it is kicked,
+    # called.
+    my $mirror
+    while (defined($mirror = $mirror_iter->())) {
+        # Do something with this version of $mirror
+        # Next iteration will "kick" the iterator again
+    }
+
+config_iter() returns an iterator. An iterator is simply subroutine reference
+that when called (ex: C<$mirror_iter-E<gt>()>) will return the next value. And
+the coolest part is that the iterator will keep track of where it is in the list
+of values that configuration option has itself, so you don't have to yourself.
+
+Iterators returned from config_iter() will return one or more elements that that
+configuration option that you specify has stored. After you exceed the length of
+the internal array reference the iterator will return false (undef).
+
+=cut
+
+sub config_iter {
+    my $config_sub_name = shift;
+
+    my $iterator = 0;
+
+    # Return the "iterator." Read MJD's kick ass HOP for more info about
+    # iterators: http://hop.perl.plover.com/book/pdf/04Iterators.pdf
+    return sub {
+
+        if (ref $CONFIG{$config_sub_name} eq 'ARRAY') {
+            # Return undef if $iterator is greater than the last element index
+            # of the array ref.
+            return if $iterator == $#{$CONFIG{$config_sub_name}};
+
+            # Simply access whatever number the iterator is at now.
+            my $retval = $CONFIG{$config_sub_name}->[$iterator];
+
+            # Now increment $iterator so next call will access the next element
+            # of the arrayref.
+            $iterator++;
+
+            # Return the $retval. This is done after $iterator is incremented,
+            # so we access the current element instead of the next one.
+            return $retval;
+
+        # If $config_sub_name is not an ARRREF, then just return whatever its
+        # one value is on the first call ($iterator == 0), and return undef for
+        # every other call.
+        } else {
+            if ($iterator == 0) {
+                $iterator++;
+                return config($config_sub_name);
+            } else {
+                return;
+            }
+        }
+    }
+}
+
 
 =head2 config_replace()
 
@@ -110,7 +184,7 @@ replace $name with $value, and @_[2..$#_].
 sub config_replace {
     my ($config_sub_name, $config_sub_value) = @_;
 
-    if (@_ == 1) {
+    if (@_ < 2) {
         die <<EOD;
 App::Fetchware: run-time error. config_replace() was called with only one
 argument, but it requres two arguments. Please add the other option. Please see
@@ -122,7 +196,6 @@ EOD
         $CONFIG{$config_sub_name} = [$config_sub_value, @_[2..$#_]];
     }
 }
-
 
 
 =head2 config_delete()
