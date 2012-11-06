@@ -129,21 +129,9 @@ diag("ctags_upgrade[$ctags_upgrade]");
     diag explain \@upgraded_package_paths;
 
 
-# Test after both packages have been upgraded.
-    my $error;
-    my $stdout;
-    {
-        local *STDOUT;
-        open STDOUT, '>', \$stdout
-            or $error = 'Can\'t open STDOUT to test cmd_upgrade using cmd_list';
-
-        cmd_list();
-
-        close STDOUT
-            or $error = 'WTF! closing STDOUT actually failed! Huh?';
-    }
-    fail($error) if defined $error;
-    ok(grep({$_ =~ /httpd-2\.2\.22|ctags-5\.8/} (split "\n", $stdout)),
+    # Test after both packages have been upgraded.
+    print_ok(sub {cmd_list()),
+        sub {grep({$_ =~ /httpd-2\.2\.22|ctags-5\.8/} (split "\n", $stdout)},
         'check cmd_upgrade() success.');
 
 
@@ -235,20 +223,8 @@ diag("UPGRADED_PACKAGES[@upgraded_packages]");
             'checked cmd_upgrade_all() success.');
     }
 
-    my $error;
-    my $stdout;
-    {
-        local *STDOUT;
-        open STDOUT, '>', \$stdout
-            or $error = 'Can\'t open STDOUT to test cmd_upgrade using cmd_list';
-
-        cmd_list();
-
-        close STDOUT
-            or $error = 'WTF! closing STDOUT actually failed! Huh?';
-    }
-    fail($error) if defined $error;
-    ok(grep({$_ =~ /(test|another)-dist-1\.01/} (split "\n", $stdout)),
+    print_ok(sub {cmd_list()},
+        sub {grep({$_ =~ /(test|another)-dist-1\.01/} (split "\n", $stdout)},
         'check cmd_upgrade_all() success.');
 
 

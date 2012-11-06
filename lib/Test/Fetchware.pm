@@ -108,7 +108,7 @@ L<ref()> function.
 
 =item * If $expected is a CODEREF according to ref()
 =over
-=item * Then execute the coderef and use the result of that expression to determine if the test passed or failed .
+=item * Then execute the coderef with a copy of the $printer's STDOUT and use the result of that expression to determine if the test passed or failed .
 
 =back
 
@@ -129,9 +129,6 @@ probably would not survive a fork() and an exec() though either.
 
 =cut
 
-###BUGALERT### Some code like in t/bin-fetchware-upgrade(-all)?.t uses copy and
-#pasted code that this function is based on. Replace that crap with print_ok().
-####BUGALERT## Add tests for it!!!!!!!!!!!!!!!!
 sub print_ok {
     my ($printer, $expected, $test_name) = @_;
 
@@ -164,7 +161,8 @@ sub print_ok {
         like($stdout, $expected,
             $test_name);
     } elsif (ref($expected) eq 'CODEREF') {
-        ok($expected->(),
+        # Call the provided callback with what $printer->() printed.
+        ok($expected->($stdout),
             $test_name);
     }
 }

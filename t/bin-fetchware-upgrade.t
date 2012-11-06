@@ -95,20 +95,8 @@ diag("httpd_upgrade_asc[$httpd_upgrade_asc]");
     # arguments.
     my $uninstalled_package_path = cmd_upgrade('httpd');
 
-    my $error;
-    my $stdout;
-    {
-        local *STDOUT;
-        open STDOUT, '>', \$stdout
-            or $error = 'Can\'t open STDOUT to test cmd_upgrade using cmd_list';
-
-        cmd_list();
-
-        close STDOUT
-            or $error = 'WTF! closing STDOUT actually failed! Huh?';
-    }
-    fail($error) if defined $error;
-    ok(grep({$_ =~ /httpd-2\.2\.22/} (split "\n", $stdout)),
+    print_ok(sub {cmd_list()},
+        sub {grep({$_ =~ /httpd-2\.2\.22/} (split "\n", $stdout)},
         'check cmd_upgrade() success.');
 
 
@@ -195,21 +183,10 @@ diag("INSTALLPATH[$old_test_dist_path]");
     like(cmd_upgrade('test-dist'), qr/test-dist-1\.01/,
         'checked cmd_upgrade() success');
 
-    my $error;
-    my $stdout;
-    {
-        local *STDOUT;
-        open STDOUT, '>', \$stdout
-            or $error = 'Can\'t open STDOUT to test cmd_upgrade using cmd_list';
-
-        cmd_list();
-
-        close STDOUT
-            or $error = 'WTF! closing STDOUT actually failed! Huh?';
-    }
-    fail($error) if defined $error;
-    ok(grep({$_ =~ /test-dist-1\.01/} (split "\n", $stdout)),
+    print_ok(sub {cmd_list()},
+        sub {grep({$_ =~ /test-dist-1\.01/} (split "\n", $stdout)},
         'check cmd_upgrade() success.');
+
 
 
     # Test for when cmd_upgrade() determines that the latest version is

@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '4'; #Update if this changes.
+use Test::More 0.98 tests => '5'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir);
 use URI::Split 'uri_split';
@@ -50,6 +50,26 @@ subtest 'TESTING export what they should' => sub {
         }
     }
     pass('checked for correct TESTING @EXPORT_TAG');
+};
+
+
+subtest 'test print_ok()' => sub {
+    # Can't easily test the exceptions print_ok() throws, because they're if
+    # open()ing a scalar ref fails, and if calling close() actually failes,
+    # which can't easily be forced to fail.
+
+    # Test print_ok() string message.
+    my $test_message = 'A test message';
+    print_ok(sub {print $test_message},
+        $test_message, 'checked print_ok() simple message success');
+
+    # Test print_ok() regex.
+    print_ok(sub {print $test_message},
+        qr/$test_message/, 'checked print_ok() simple message success');
+
+    print_ok(sub {print $test_message},
+        sub {return 1 if $_[0] eq $test_message; return;}
+        , 'checked print_ok() simple message success');
 };
 
 
