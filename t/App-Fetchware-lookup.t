@@ -32,9 +32,6 @@ BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_LOOKUP)); }
 diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 
-###BUGALERT### Redo tests to use Test::Deep so I don't need to update the test
-#when new versions of Apache come out!!!
-
 subtest 'OVERRIDE_LOOKUP exports what it should' => sub {
     my @expected_overide_lookup_exports = qw(
         check_lookup_config
