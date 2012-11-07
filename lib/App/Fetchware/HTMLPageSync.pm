@@ -65,6 +65,7 @@ BEGIN {
         [ page_name => 'ONE' ],
         [ html_page_url => 'ONE' ],
         [ destination_directory => 'ONE' ],
+        [ keep_destination_directory => 'BOOLEAN' ],
         [ user_agent => 'ONE' ],
         # return true for tags you want to sort through.
         [ html_treebuilder_callback => 'ONE' ],
@@ -268,8 +269,7 @@ EOM
         }
     }
 
-    ###BUGALERT### Should I use a special var to print a \n between each array
-    #elelemnt for pretty printing???
+    local $" = "\n"; # print each @download_file_paths on its own line.
     vmsg <<EOM;
 Downloaded specified urls to the following paths:
 [
@@ -304,9 +304,6 @@ EOM
 }
 
 
-###BUGALERT### Decide if overridden subs should use original names or if they
-#should change them. I think they should change them!
-
 =head2 unarchive()
 
     unarchive($package_path);
@@ -332,7 +329,7 @@ Copying [$file_path] -> [@{[config('destination_directory')]}].
 EOM
         ###BUGALERT### Should this die and all the rest be croaks instead???
         cp($file_path, config('destination_directory')) or die <<EOD;
-fetchware: run-time error. Fetchware failed to copy the file [$file_path] to the
+App-Fetchware-HTMLPageSync: run-time error. Fetchware failed to copy the file [$file_path] to the
 destination directory [@{[config('destination_directory')]}].
 The OS error was [$!].
 EOD
@@ -417,7 +414,10 @@ directory somewhere else.
 sub uninstall ($) {
     my $build_path = shift;
 
-    msg <<EOM;
+    # Only delete destination_directory if keep_destination_directory is false.
+    unless (config('keep_destination_directory')) {
+
+        msg <<EOM;
 Uninstalling this HTMLPageSync package by deleting your destination directory.'
 EOM
 
@@ -427,26 +427,33 @@ EOM
     #basicaly copying and pasting the code like I do below. Also
     #chdir_to_build_path() can be put in :OVERRIDE_UNINSTALL!!! Which I can use
     #here.
-    chdir $build_path or die <<EOD;
-fetchware: Failed to uninstall the specified package and specifically to change
+        chdir $build_path or die <<EOD;
+App-Fetchware-HTMLPageSync: Failed to uninstall the specified package and specifically to change
 working directory to [$build_path] before running make uninstall or the
 uninstall_commands provided in the package's Fetchwarefile. Os error [$!].
 EOD
 
-    if ( defined config('destination_directory')) {
-        # Use File::Path's remove_tree() to delete the destination_directory
-        # thereby "uninstalling" this package. Will throw an exception that I'll
-        # let the main eval in bin/fetchware catch, print, and exit 1.
-        vmsg <<EOM;
+        if ( defined config('destination_directory')) {
+            # Use File::Path's remove_tree() to delete the destination_directory
+            # thereby "uninstalling" this package. Will throw an exception that I'll
+            # let the main eval in bin/fetchware catch, print, and exit 1.
+            vmsg <<EOM;
 Deleting entire destination directory [@{[config('destination_directory')]}].
 EOM
-        remove_tree(config('destination_directory'));
-    } else {
-        die <<EOD;
-fetchware: Failed to uninstall the specified App::Fetchware::HTMLPageSync
+            remove_tree(config('destination_directory'));
+        } else {
+            die <<EOD;
+App-Fetchware-HTMLPageSync: Failed to uninstall the specified App::Fetchware::HTMLPageSync
 package, because no destination_directory is specified in its Fetchwarefile.
 This configuration option is required and must be specified.
 EOD
+        }
+    # keep_destination_directory was set, so don't delete destination directory.
+    } else {
+        msg <<EOM;
+Uninstalling this HTMLPageSync package but keeping your destination directory.'
+EOM
+
     }
 
     return 'True for success.';
@@ -623,6 +630,16 @@ After pasting it should look like.
 
     destination_directory '~/wallpapers';
 
+Furthermore, if you want to keep your C<destination_directory> after you
+uninstall your HTMLPageSync fetchware package, just set the
+C<keep_destination_directory> configuration option to true:
+
+    keep_destination_directory 'True';
+
+If this is set in your HTMLPageSync Fetchwarefile, HTMLPageSync will not delete
+your C<destination_directory> when your HTMLPageSync fetchware package is
+uninstalled.
+
 =item B<4. Specifiy other options>
 
 That's all there is to it unless you need to further customize HTMLPageSync's
@@ -756,8 +773,11 @@ from its database as well as recursively deleting everything inside your
 C<destination_directory> as well as that directory itself. So when you uninstall
 a HTMLPageSync fetchware package ensure that you really want to, because it will
 delete whatever files it downloaded for you in the first place.
-###BUGALERT### Create a new boolean config option to turn this off if the
-#user wants to.
+
+However, if you would like fetchware to preserve your C<destination_directory>,
+you can set the boolean C<keep_destination_directory> configuration option to
+true, like C<keep_destination_directory 'True';>, to keep HTMLPageSync from
+deleting your destination directory.
 
 =back
 

@@ -57,13 +57,18 @@ subtest 'test HTMLPageSync start()' => sub {
 
 };
 
-
+my $tempdir; # So uninstall()'s test can access it.
 subtest 'test HTMLPageSync lookup()' => sub {
     skip_all_unless_release_testing();
 
     # Test the page that is the only reason I wrote this!
     html_page_url $ENV{FETCHWARE_HTTP_LOOKUP_URL};
-    destination_directory 't';
+
+    $tempdir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+    ok(-e $tempdir,
+        'checked lookup() temporary destination directory creation');
+
+    destination_directory $tempdir;
     user_agent
         'Mozilla/5.0 (X11; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1';
 
@@ -163,7 +168,7 @@ subtest 'test HTMLPageSync unarchive()' => sub {
 
     # unarchive() needs an array reference.
     eval_ok(sub { unarchive([ "file-that-doesn-t-exist-$$" ])},
-        qr/fetchware: run-time error. Fetchware failed to copy the file \[/,
+        qr/App-Fetchware-HTMLPageSync: run-time error. Fetchware failed to copy the file \[/,
         'checked unarchive exception');
 
 };
@@ -182,13 +187,17 @@ subtest 'test HTMLPageSync install()' => sub {
 subtest 'test HTMLPageSync uninstall()' => sub {
     skip_all_unless_release_testing();
 
-    ###BUGALERT### How do I test this without actually deleting my t testing
-    #directory that I'm using as my destination_directory???
-#    ok(uninstall(cwd()),
-#        'checked uninstall() success');
+    # Will delete destination_directory, but the destination_directory is a
+    # tempdir(), so it will be delete anyway.
+    # Just ignore the warning File::Temp prints, because I deleted its tempdir()
+    # instead of it doing it itself.
+    ok(uninstall(cwd()),
+        'checked uninstall() success');
+    ok(! -e $tempdir,
+        'checked uninstall() tempdir removal');
 
     eval_ok(sub {uninstall("$$-@{[int(rand(383889))]}")},
-        qr/fetchware: Failed to uninstall the specified package and specifically/,
+        qr/App-Fetchware-HTMLPageSync: Failed to uninstall the specified package and specifically/,
         'checked uninstall() $build_path exception');
 
     # Delete the destination_directory configuration option to test for the
@@ -197,7 +206,7 @@ subtest 'test HTMLPageSync uninstall()' => sub {
 
     eval_ok(sub {uninstall(cwd())},
         <<EOE, 'checked uninstall() destination_directory exception');
-fetchware: Failed to uninstall the specified App::Fetchware::HTMLPageSync
+App-Fetchware-HTMLPageSync: Failed to uninstall the specified App::Fetchware::HTMLPageSync
 package, because no destination_directory is specified in its Fetchwarefile.
 This configuration option is required and must be specified.
 EOE
