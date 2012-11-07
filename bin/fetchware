@@ -191,16 +191,9 @@ sub cmd_install {
 
     msg "Starting fetchware install to install [$filename]";
 
-    # If no Fetchwarefile or *.fpkg was specified, then pretend the user ran
-    # new() instead of install().
-    ###BUGALERT### The above comment isn't actually done anymore. Add it or
-    #ditch it???
     if (defined($filename) and -e $filename) {
         # Run the :FETCHWARE subroutines to do everything to install the
         # program.
-        ###BUGALERT### Needs support for override(), which I'll add later.
-        ###BUGALERT### Add printing messages about what fetchware is doing, and
-        #support -q and -v and -D.
 
         # Absolutize $filename so it can survive start() chdir()ing into a temp
         # dir.
@@ -1030,9 +1023,7 @@ EOP
     my @remove;
     for (my $i = 0; $i <= $#options; $i++) {
         # Remove unnecessary ones and ones asked about in other places.
-        ###BUGALERT### fetchware no longer exists, and override may not. Update
-        #this after I design and implement fetchware's new override system.
-        for (qw(fetchware override lookup_url filter mirror)) {
+        for (qw(lookup_url filter mirror)) {
             push @remove, $i if $options[$i] eq $_;
         }
     }
@@ -1136,8 +1127,6 @@ EOA
 make_options specifes what options fetchware should pass to make when make is
 run to build and install your software.
 EOA
-        ###BUGALERT### *_commands options, which are ONEARRREF, are not properly
-        #implemented and supported!!!
         build_commands => <<EOA,
 build_commands specifies what commands fetchware should execute to build your
 software.
@@ -1359,7 +1348,6 @@ condition or weird bug. See perldoc fetchware.
 EOD
             $$fetchwarefile = do { local $/; <$fh> }; # slurp fetchwarefile
         } else {
-            ###BUGALERT### Replace say below with msg() after implementing it.
             msg <<EOM;
 You canceled any custom editing of your fetchwarefile by writing an empty file
 to disk.
@@ -1473,11 +1461,6 @@ EOD
     }
 }
 
-###BUGALERT### The POD is screwed up here. It thinks the cmd_*() subs below are
-#part of cmd_new()'s API REFERENCE, and they're not. Should I use PodWeaver's:
-#[Collect / COMMAND LINE OPTION SUBROUTINES]
-#command = cmd_line_opt
-# And then use =cmd_line_opt to fix this????
 
 
 =head2 cmd_upgrade()
@@ -1615,7 +1598,6 @@ EOM
         # Return the path of the created and installed fetchware package.
         return $installed_fetchware_package_path;
     } else {
-        ###BUGALERT### Replace this print() with msg() after you implement it.
         msg <<EOM;
 The latest version [$download_url_basename] is the same as the currently
 installed version [$upgrade_name_basename]. So no upgrade is needed. 
@@ -1735,11 +1717,6 @@ sub cmd_look {
     ###BUGALERT### Fails to support looking up installed packages in fetchware
     #database. This test will prevent them from running.
     if (defined($filename) and -e $filename) {
-        # Run the :FETCHWARE subroutines to do everything to install the
-        # program.
-        ###BUGALERT### Needs support for override(), which I'll add later.
-        ###BUGALERT### Add printing messages about what fetchware is doing, and
-        #support -q and -v and -D.
 
         # Absolutize $filename so it can survive start() chdir()ing into a temp
         # dir.
@@ -2117,6 +2094,10 @@ sub fetchware_database_path {
             =
             File::HomeDir->my_dist_data('fetchware', { create => 1 });
     }
+    vmsg <<EOM;
+Determined fetchware database path to be: [$fetchware_database_path]
+EOM
+
     return $fetchware_database_path;
 }
 

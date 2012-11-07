@@ -13,7 +13,6 @@ use Data::Dumper;
 use File::Copy 'cp';
 use HTML::TreeBuilder;
 use Scalar::Util 'blessed';
-###BUGALERT### Replace IPC::System::Simple with App::Cmd, because App::Cmd is one of
 # Archive::Extract's dependencies, so I may as well use one of my dependencies'
 # dependencies so App::Fetchware users have one fewer dependency to install.
 use Digest::SHA;
@@ -136,7 +135,6 @@ our %EXPORT_TAGS = (
 our @EXPORT_OK = @{$EXPORT_TAGS{OVERRIDE_ALL}};
 
 
-###BUGALERT### Delete the =head1 below? Is it redundant now?
 
 =head1 FETCHWAREFILE API SUBROUTINES
 
@@ -302,7 +300,6 @@ make_config_sub() except for fetchware() and override().
         [ temp_dir => 'ONE' ],
         [ user => 'ONE' ],
         [ prefix => 'ONE' ],
-        ###BUGALERT### ONEARREF isn't documented, and may not be needed.
         [ configure_options=> 'ONEARRREF' ],
         [ make_options => 'ONEARRREF' ],
         [ build_commands => 'ONEARRREF' ],
@@ -354,8 +351,6 @@ EOD
 
     given($one_or_many_values) {
         when('ONE') {
-            ###BUGALERT### the ($) sub prototype needed for ditching parens must
-            #be seen at compile time. Is "eval time" considered compile time?
             my $eval = <<'EOE'; 
 package $package;
 
@@ -388,8 +383,6 @@ EOE
 1App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [$@]. See perldoc App::Fetchware.
 EOD
-###BUGALERT### Then update build, install, and uninstall to use them properly when accessing
-# *_commands config options.
         } when('ONEARRREF') {
             my $eval = <<'EOE'; 
 package $package;
@@ -660,9 +653,6 @@ lookup.
 
 App::Fetchware is B<not> object-oriented; therefore, you B<can not> subclass
 App::Fetchware to extend it! 
-
-###BUGALERT### App::Fetchware *not* subclassable; how will I impl the web app
-#support and wall paper support?!!?
 
 =cut
 
@@ -1154,11 +1144,6 @@ EOD
 }
 
 
-###BUGALERT### download() seems to be in the wrong place. Should I make it a
-#=head1 to fix it? Or just use PodWeaver:
-#[Collect / download() API REFERENCE]
-#command = download_api
-# I dunno. Try both, and see which is better.
 
 =head2 download()
 
@@ -1242,9 +1227,6 @@ paste anything from download.
 
 App::Fetchware is B<not> object-oriented; therefore, you B<can not> subclass
 App::Fetchware to extend it! 
-
-###BUGALERT### App::Fetchware *not* subclassable; how will I impl the web app
-#support and wall paper support?!!?
 
 =cut
 
@@ -1458,9 +1440,6 @@ paste anything from verify().
 
 App::Fetchware is B<not> object-oriented; therefore, you B<can not> subclass
 App::Fetchware to extend it! 
-
-###BUGALERT### App::Fetchware *not* subclassable; how will I impl the web app
-#support and wall paper support?!!?
 
 =cut
 
@@ -1925,9 +1904,6 @@ paste anything from unarchive().
 
 App::Fetchware is B<not> object-oriented; therefore, you B<can not> subclass
 App::Fetchware to extend it! 
-
-###BUGALERT### App::Fetchware *not* subclassable; how will I impl the web app
-#support and wall paper support?!!?
 
 =cut
 
@@ -2478,8 +2454,6 @@ calls C<File::Temp>'s internalish File::Temp::cleanup() subroutine.
 It also calls the very internal only __clear_CONFIG() subroutine that clears
 App::Fetchware's internal %CONFIG variable used to hold your parsed
 Fetchwarefile. 
-
-###BUGALERT### Just take %CONFIG OO!!! App::Fetchware::Config!!! Problem solved.
 
 =cut
 
@@ -3526,8 +3500,7 @@ convenience. There are four different types of configuration options:
 
 =item ONE - Takes only one argument, and can only be used once.
 
-=item ONEARRREF - Undocumented, and pehaps will be replaced by simply ONE. This just documents this massive stupid bug.
-###BUGALERT### Fix the ONEARRREF crap.
+=item ONEARRREF - Can only be called once, but can take multiple agruments at once.
 
 =item MANY - Takes only one argument, but can be called more than once. The only example is mirror.
 
