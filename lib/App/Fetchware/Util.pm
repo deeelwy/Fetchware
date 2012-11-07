@@ -583,9 +583,10 @@ sub download_http_url {
     my $response = $http->get($http_url);
 
     die <<EOD unless $response->{success};
-App-Fetchware: run-time error. HTTP::Tiny failed to download a directory listing
-of your provided lookup_url. HTTP status code [$response->{status} $response->{reason}]
-HTTP headers [@{[Data::Dumper::Dumper($response->{headers})]}].
+App-Fetchware: run-time error. HTTP::Tiny failed to download a file or directory
+listingfrom your provided url [$http_url]. HTTP status code
+[$response->{status} $response->{reason}] HTTP headers
+[@{[Data::Dumper::Dumper($response->{headers})]}].
 See man App::Fetchware.
 EOD
 
@@ -601,8 +602,8 @@ EOD
     # In this case the content is binary, so it will mess up your terminal.
     #diag($response->{content}) if length $response->{content};
     die <<EOD unless length $response->{content};
-App-Fetchware: run-time error. The lookup_url you provided downloaded nothing.
-HTTP status code [$response->{status} $response->{reason}]
+App-Fetchware: run-time error. The url [$http_url] you provided downloaded
+nothing.  HTTP status code [$response->{status} $response->{reason}]
 HTTP headers [@{[Data::Dumper::Dumper($response)]}].
 See man App::Fetchware.
 EOD
