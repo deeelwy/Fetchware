@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '5'; #Update if this changes.
+use Test::More 0.98 tests => '6'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir);
 use URI::Split 'uri_split';
@@ -39,6 +39,7 @@ subtest 'TESTING export what they should' => sub {
         make_test_dist
         md5sum_file
         expected_filename_listing
+        verbose_on
     );
     # sort them to make the testing their equality very easy.
     @expected_testing_exports = sort @expected_testing_exports;
@@ -142,6 +143,16 @@ subtest 'test md5sum_file()' => sub {
         'checked md5sum_file() success');
 
     ok(unlink($test_dist, $test_dist_md5), 'checked md5sum_file() cleanup.');
+};
+
+
+subtest 'test verbose_on()' => sub {
+    # turn on verbose.
+    verbose_on();
+
+    # Test if $fetchware::verbose has been set to true.
+    ok($fetchware::verbose,
+        'checked verbose_on() success.');
 };
 
 

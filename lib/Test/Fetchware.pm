@@ -39,6 +39,7 @@ our %EXPORT_TAGS = (
         make_test_dist
         md5sum_file
         expected_filename_listing
+        verbose_on
     )],
 );
 # *All* entries in @EXPORT_TAGS must also be in @EXPORT_OK.
@@ -443,7 +444,6 @@ EOD
 }
 
 
-
 =head2 expected_filename_listing()
 
     my $expected_filename_listing = expected_filename_listing()
@@ -492,6 +492,24 @@ sub expected_filename_listing {
 EOC
 
     return $expected_filename_listing;
+}
+
+
+=head2 verbose_on()
+
+    verbose_on();
+
+Just turns C<$fetchware::vebose> on, by setting it to 1. It does no do anything
+else. There is no corresponding verbose_off(). Just an vebose_on().
+
+Meant to be used in test suites, so that you can see any vmsg()s that print
+during testing.
+
+=cut
+
+sub verbose_on {
+    # Turn on verbose functionality.
+    $fetchware::verbose = 1;
 }
 
 
