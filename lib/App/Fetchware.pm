@@ -388,17 +388,9 @@ EOE
 1App-Fetchware: internal operational error: make_config_sub()'s internal eval()
 call failed with the exception [$@]. See perldoc App::Fetchware.
 EOD
-###BUGALERT### *_commands actually need 'ONEARRREF' to support having multiple
-#build commands on one line such as:
-# build_commands './configure', 'make';
-# The eval created below doesn't actually create them properly.
-# Also, add config_* subs to access them easily such as config_push, config_pop,
-# config_iter, or whatever makes sense.
-# Then update build, install, and uninstall to use them properly when accessing
+###BUGALERT### Then update build, install, and uninstall to use them properly when accessing
 # *_commands config options.
         } when('ONEARRREF') {
-            ###BUGALERT### the (@) sub prototype needed for ditching parens must
-            #be seen at compile time. Is "eval time" considered compile time?
             my $eval = <<'EOE'; 
 package $package;
 
@@ -2100,18 +2092,19 @@ EOD
     if (defined config('build_commands')) {
         vmsg 'Building your package using user specified build_commands.';
         # Support multiple options like build_command './configure', 'make';
-        ###BUGALERT### May not actually work due to ONEARRREF not being
-        #implemented.
+        # config('build_commands') returns a list of *all* build_commands.
         for my $build_command (config('build_commands')) {
-            # Dequote build_commands they just get in the way.
-            my $dequoted_commands = $build_command;
-            $dequoted_commands =~ s/'|"//g;
-            # split build_commands on ,\s+ and execute them.
-            my @build_commands = split /,\s+/, $dequoted_commands;
-            ###BUGALERT### Add vmsg()s after ONEARRREF is implemented.
-            #vmsg '
-
-            for my $build_command (@build_commands) {
+            # If a /,\s+/ is present in a $build_command
+            # To support: build_commands './configure, make';
+            if ($build_command =~ /,\s*/) {
+                # split on it, and run each resulting command.
+                my @build_commands = split /,\s*/, $build_command;
+                for my $split_build_command (@build_commands) {
+                    my ($cmd, @options) = split ' ', $split_build_command;
+                    run_prog($cmd, @options);
+                }
+            # Or just run the one command.
+            } else {
                 my ($cmd, @options) = split ' ', $build_command;
                 run_prog($cmd, @options);
             }
@@ -2129,14 +2122,8 @@ EOD
 
         # Next, make.
         if (defined config('make_options')) {
-            my @make_options;
-            # Support multiple options like make_options '-j', '4';
-            ###BUGALERT### Not actually implemented correctly!!!
-            for my $make_option (config('make_options')) {
-                push @make_options, $make_option;
-            }
             vmsg 'Executing make to build your package';
-            run_prog('make', @make_options)
+            run_prog('make', config('make_options'))
         } else {
             vmsg 'Executing make to build your package';
             run_prog('make');
@@ -2153,8 +2140,22 @@ EOD
     return 'build succeeded';
 }
 
+###BUGALERT### Add a *() API REFERENCE section for each fetchware API
+#subroutine, and subify the API subs that aren't yet.
 
-=head2 run_configure()
+=head2 build() API REFERENCE
+
+Below are the subroutines that build() exports with its C<BUILD_OVERRIDE> export
+tag. run_configure() runs C<./configure>, and is needed, because AutoTools uses
+full paths in its configuration files, so if you move it to a different location
+or a different machine, the paths won't match up, which will cause build and
+install errors. Rerunning C<./configure> with the same options as before will
+recreate the paths to get rid of the errors.  
+
+=cut
+
+
+=head3 run_configure()
 
     run_configure();
 
@@ -2168,11 +2169,11 @@ needs to run C<./configure> too. The only reason uninstall() must do this is
 because Autotools uses full paths in the Makefile it creates. Examples from
 Apache are pasted below.
 
-top_srcdir   = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
-top_builddir = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
-srcdir       = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
-builddir     = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
-VPATH        = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
+    top_srcdir   = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
+    top_builddir = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
+    srcdir       = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
+    builddir     = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
+    VPATH        = /tmp/fetchware-5506-8ROnNQObhd/httpd-2.2.22
 
 Why arn't relative paths good enough for Autotools?
 
@@ -2284,17 +2285,18 @@ EOM
     if (defined config('install_commands')) {
         vmsg 'Installing your package using user specified commands.';
         # Support multiple options like install_commands 'make', 'install';
-        ###BUGALERT### Support ONEARRREF's!!!
         for my $install_command (config('install_commands')) {
-            # Dequote install_commands they just get in the way.
-            my $dequoted_commands = $install_command;
-            $dequoted_commands =~ s/'|"//g;
-            # split install_commands on /,\s+/ and execute them.
-            my @install_commands = split /,\s+/, $dequoted_commands;
-
-            for my $install_command (@install_commands) {
-                ###BUGALERT### Add a vmsg() after ONEARRREF works.
-                #vmsg '
+            # If a /,\s+/ is present in a $install_command
+            # To support: build_commands './configure, make';
+            if ($install_command =~ /,\s*/) {
+                # split on it, and run each resulting command.
+                my @install_commands = split /,\s*/, $install_command;
+                for my $split_install_command (@install_commands) {
+                    my ($cmd, @options) = split ' ', $split_install_command;
+                    run_prog($cmd, @options);
+                }
+            # Or just run the one command.
+            } else {
                 my ($cmd, @options) = split ' ', $install_command;
                 run_prog($cmd, @options);
             }
@@ -2304,7 +2306,6 @@ EOM
             vmsg <<EOM;
 Installing package using default command [make] with user specified make options.
 EOM
-            ###BUGALERT### Will with work with ONEARRREF????
             run_prog('make', config('make_options'), 'install', );
         } else {
             vmsg <<EOM;
@@ -2405,17 +2406,18 @@ EOD
     if (defined config('uninstall_commands')) {
         vmsg 'Uninstalling using user specified uninstall commands.';
         # Support multiple options like install_commands 'make', 'install';
-        ###BUGALERT### Doesn't actually work yet!!!!! Implement ONEARRREF!!!
         for my $uninstall_command (config('uninstall_commands')) {
-            # Dequote uninstall_commands they just get in the way.
-            my $dequoted_commands = $uninstall_command;
-            $dequoted_commands =~ s/'|"//g;
-            # split uninstall_commands on /,\s+/ and execute them.
-            my @uninstall_commands = split /,\s+/, $dequoted_commands;
-            ###BUGALERT### Add proper vmsg() crap after you implement the
-            #ONEARRREF support.
-
-            for my $uninstall_command (@uninstall_commands) {
+            # If a /,\s+/ is present in a $uninstall_command
+            # To support: build_commands './configure, make';
+            if ($uninstall_command =~ /,\s*/) {
+                # split on it, and run each resulting command.
+                my @uninstall_commands = split /,\s*/, $uninstall_command;
+                for my $split_uninstall_command (@uninstall_commands) {
+                    my ($cmd, @options) = split ' ', $split_uninstall_command;
+                    run_prog($cmd, @options);
+                }
+            # Or just run the one command.
+            } else {
                 my ($cmd, @options) = split ' ', $uninstall_command;
                 run_prog($cmd, @options);
             }
@@ -2429,11 +2431,10 @@ EOD
         vmsg q{Running AutoTool's default ./configure};
         run_configure();
         if (defined config('make_options')) {
-            ###BUGALERT### make_options should go befoer e install!!!
             vmsg <<EOM;
 Running AutoTool's default make uninstall with user specified make options.
 EOM
-            run_prog('make', 'uninstall', config('make_options'));
+            run_prog('make', config('make_options'), 'uninstall');
         } else {
             vmsg <<EOM;
 Running AutoTool's default make uninstall.

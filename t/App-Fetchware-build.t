@@ -69,8 +69,6 @@ make_clean();
 subtest 'test build() build_commands' => sub {
     skip_all_unless_release_testing();
 
-    ###BUGALERT### Implement ONEARRREF support so that build_commands can be:
-    #build_commands './configure', 'make';
     build_commands './configure, make';
     ok(build($build_path), 'checked build() build_command success.');
 

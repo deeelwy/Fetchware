@@ -195,9 +195,9 @@ sub run_prog {
 
     # If fetchware is run without -q.
     unless ($fetchware::quiet > 0) {
-        local $" '][';
+        local $" = '][';
         vmsg <<EOM;
-Running command [$program] with options [@options].
+Running command [$program] with options [@args].
 EOM
         system($program, @args) == 0 or die <<EOD;
 fetchware: run-time error. Fetchware failed to execute the specified program
