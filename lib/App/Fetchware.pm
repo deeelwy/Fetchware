@@ -528,7 +528,7 @@ the directory they should use for storing file operations.
         if (caller ne 'fetchware') {
             $callback = shift;
             die <<EOD if ref $callback ne 'CODE';
-fetchware: start() was called from a package other than 'fetchware', and with an
+App-Fetchware: start() was called from a package other than 'fetchware', and with an
 argument that was not a code reference. Outside of package 'fetchware' this
 subroutine can only be called with a code reference as its one and only
 argument.
@@ -601,7 +601,7 @@ sub lookup (;$) {
     if (caller ne 'fetchware') {
         $callback = shift;
         die <<EOD if ref $callback ne 'CODE';
-fetchware: start() was called from a package other than 'fetchware', and with an
+App-Fetchware: start() was called from a package other than 'fetchware', and with an
 argument that was not a code reference. Outside of package 'fetchware' this
 subroutine can only be called with a code reference as its one and only
 argument.
@@ -1201,7 +1201,7 @@ sub download ($;$) {
     if (caller ne 'fetchware') {
         $callback = shift;
         die <<EOD if ref $callback ne 'CODE';
-fetchware: download() was called from a package other than 'fetchware', and with an
+App-Fetchware: download() was called from a package other than 'fetchware', and with an
 argument that was not a code reference. Outside of package 'fetchware' this
 subroutine can only be called with a code reference as its one and only
 argument.
@@ -1317,7 +1317,7 @@ sub verify ($;$) {
     if (caller ne 'fetchware') {
         $callback = shift;
         die <<EOD if ref $callback ne 'CODE';
-fetchware: start() was called from a package other than 'fetchware', and with an
+App-Fetchware: start() was called from a package other than 'fetchware', and with an
 argument that was not a code reference. Outside of package 'fetchware' this
 subroutine can only be called with a code reference as its one and only
 argument.
@@ -1842,7 +1842,7 @@ sub unarchive ($) {
     if (caller ne 'fetchware') {
         $callback = shift;
         die <<EOD if ref $callback ne 'CODE';
-fetchware: start() was called from a package other than 'fetchware', and with an
+App-Fetchware: start() was called from a package other than 'fetchware', and with an
 argument that was not a code reference. Outside of package 'fetchware' this
 subroutine can only be called with a code reference as its one and only
 argument.
@@ -2057,7 +2057,7 @@ sub build ($) {
     if (caller ne 'fetchware') {
         $callback = shift;
         die <<EOD if ref $callback ne 'CODE';
-fetchware: start() was called from a package other than 'fetchware', and with an
+App-Fetchware: start() was called from a package other than 'fetchware', and with an
 argument that was not a code reference. Outside of package 'fetchware' this
 subroutine can only be called with a code reference as its one and only
 argument.
@@ -2255,7 +2255,7 @@ sub install (;$) {
     if (caller ne 'fetchware') {
         $callback = shift;
         die <<EOD if ref $callback ne 'CODE';
-fetchware: start() was called from a package other than 'fetchware', and with an
+App-Fetchware: start() was called from a package other than 'fetchware', and with an
 argument that was not a code reference. Outside of package 'fetchware' this
 subroutine can only be called with a code reference as its one and only
 argument.
@@ -2370,7 +2370,7 @@ sub uninstall ($) {
         $callback = shift;
         diag("callback[$callback]");
         die <<EOD if ref $callback ne 'CODE';
-fetchware: start() was called from a package other than 'fetchware', and with an
+App-Fetchware: start() was called from a package other than 'fetchware', and with an
 argument that was not a code reference. Outside of package 'fetchware' this
 subroutine can only be called with a code reference as its one and only
 argument.
@@ -2395,7 +2395,7 @@ EOD
     ###BUGALERT### Refactor our chdir to its own subroutine that cmd_install and
     #uninstall can share.
     chdir $build_path or die <<EOD;
-fetchware: Failed to uninstall the specified package and specifically to change
+App-Fetchware: Failed to uninstall the specified package and specifically to change
 working directory to [$build_path] before running make uninstall or the
 uninstall_commands provided in this package's Fetchwarefile. Os error [$!].
 EOD
@@ -2491,7 +2491,7 @@ sub end (;$) {
         $callback = shift;
         diag("callback[$callback]");
         die <<EOD if ref $callback ne 'CODE';
-fetchware: end() was called from a package other than 'fetchware', and with an
+App-Fetchware: end() was called from a package other than 'fetchware', and with an
 argument that was not a code reference. Outside of package 'fetchware' this
 subroutine can only be called with a code reference as its one and only
 argument.
