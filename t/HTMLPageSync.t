@@ -16,7 +16,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '10'; #Update if this changes.
+use Test::More 0.98 tests => '12'; #Update if this changes.
 use App::Fetchware '!:DEFAULT';
 use Test::Fetchware ':TESTING';
 use App::Fetchware::Config ':CONFIG';
@@ -26,7 +26,8 @@ use File::Spec::Functions 'updir';
 use File::Temp 'tempdir';
 use Cwd 'cwd';
 
-
+# Turn on printing of vmsg()s.
+verbose_on();
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -44,31 +45,47 @@ BEGIN { use_ok('App::Fetchware::HTMLPageSync', ':DEFAULT'); }
 diag("App::Fetchware's default imports [@App::Fetchware::HTMLPageSync::EXPORT]");
 
 
+subtest 'test uninstall() exception' => sub {
+    # Delete the destination_directory configuration option to test for the
+    # exception of it not existing.
+    config_delete('destination_directory');
 
+    eval_ok(sub {uninstall(cwd())},
+        <<EOE, 'checked uninstall() destination_directory exception');
+App-Fetchware-HTMLPageSync: Failed to uninstall the specified App::Fetchware::HTMLPageSync
+package, because no destination_directory is specified in its Fetchwarefile.
+This configuration option is required and must be specified.
+EOE
+};
+
+###BUGALERT### Add extension support to make_test_dist(), so that HTMLPageSync
+#and any other extensions can use that same mechanism to proved runnable tests
+#without FETCHWARE_RELEASE_TESTING set, so HTMLPageSync can actually be tested
+#on user's computers.
+
+
+my $temp_dir; # So uninstall()'s test can access it.
 subtest 'test HTMLPageSync start()' => sub {
     skip_all_unless_release_testing();
 
-    my $temp_dir = start();
+    $temp_dir = start();
 
     ok(-e $temp_dir, 'check start() success');
-    
-    # chdir() so File::Temp can delete the tempdir.
-    chdir();
-
 };
 
-my $tempdir; # So uninstall()'s test can access it.
+
+my $dest_dir;
 subtest 'test HTMLPageSync lookup()' => sub {
     skip_all_unless_release_testing();
 
     # Test the page that is the only reason I wrote this!
     html_page_url $ENV{FETCHWARE_HTTP_LOOKUP_URL};
 
-    $tempdir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
-    ok(-e $tempdir,
+    $dest_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+    ok(-e $temp_dir,
         'checked lookup() temporary destination directory creation');
 
-    destination_directory $tempdir;
+    destination_directory "$dest_dir";
     user_agent
         'Mozilla/5.0 (X11; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1';
 
@@ -86,14 +103,14 @@ subtest 'test HTMLPageSync lookup()' => sub {
 
     #parse out archive name.
     my $link = $h->as_text();
-    if ($link =~ /\.(tar\.(gz|bz2|xz)|(tgz|tbz2|txz))$/) {
-        # If its an archive return true indicating we should keep this
-        # HTML::Element.
-        return 'True';
-    } else {
-        return undef; # return false indicating do not keep this one.
-    }
-};
+        if ($link =~ /\.(tar\.(gz|bz2|xz)|(tgz|tbz2|txz))$/) {
+            # If its an archive return true indicating we should keep this
+            # HTML::Element.
+            return 'True';
+        } else {
+            return undef; # return false indicating do not keep this one.
+        }
+    };
 
     my $html_urls = lookup();
 
@@ -113,8 +130,9 @@ subtest 'test HTMLPageSync lookup()' => sub {
             # Strip off HTML::Element crap.
             $link = $link->attr('href');
             # Keep links that are absolute.
-            if ($link =~ m!^(ftp|http|file)://!) {
-                push @filtered_urls, $link;
+            # And make change relative links to absolute.
+            if ($link !~ m!^(ftp|http|file)://!) {
+                push @filtered_urls, config('html_page_url') . '/' . $link;
             }
         }
 
@@ -142,16 +160,20 @@ subtest 'test HTMLPageSync download()' => sub {
     # FETCHWARE_HTTP_DOWNLOAD_URL is manually updated will break whenever a new
     # version of Apache 2.2 comes out.
     # download() wants an array ref.
-    $download_file_paths = download('t', [ $ENV{FETCHWARE_HTTP_DOWNLOAD_URL} ]);
-    diag("DFP");
-    diag explain $download_file_paths;
+    $download_file_paths = download($temp_dir,
+        [ $ENV{FETCHWARE_HTTP_DOWNLOAD_URL} ]);
+    note("DFP");
+    note explain $download_file_paths;
+
+    ok(@$download_file_paths == 1,
+        'checked download() correct number of files');
 
     is($download_file_paths->[0],
         file($ENV{FETCHWARE_HTTP_DOWNLOAD_URL})->basename(),
         'checked download() success.');
 
-    #NOTE: Downloaded file is savied to the cwd(), but that value is later
-    #copied to the destination_directory 't';
+    ok(-e $download_file_paths->[0],
+        'checked download()ed file existence');
 };
 
 
@@ -170,7 +192,6 @@ subtest 'test HTMLPageSync unarchive()' => sub {
     eval_ok(sub { unarchive([ "file-that-doesn-t-exist-$$" ])},
         qr/App-Fetchware-HTMLPageSync: run-time error. Fetchware failed to copy the file \[/,
         'checked unarchive exception');
-
 };
 
 
@@ -193,38 +214,109 @@ subtest 'test HTMLPageSync uninstall()' => sub {
     # instead of it doing it itself.
     ok(uninstall(cwd()),
         'checked uninstall() success');
-    ok(! -e $tempdir,
+    ok(! -e $dest_dir,
         'checked uninstall() tempdir removal');
 
+
+    # Test uninstall()s exceptions.
     eval_ok(sub {uninstall("$$-@{[int(rand(383889))]}")},
         qr/App-Fetchware-HTMLPageSync: Failed to uninstall the specified package and specifically/,
         'checked uninstall() $build_path exception');
+};
 
-    # Delete the destination_directory configuration option to test for the
-    # exception of it not existing.
-    config_delete('destination_directory');
 
-    eval_ok(sub {uninstall(cwd())},
-        <<EOE, 'checked uninstall() destination_directory exception');
-App-Fetchware-HTMLPageSync: Failed to uninstall the specified App::Fetchware::HTMLPageSync
-package, because no destination_directory is specified in its Fetchwarefile.
-This configuration option is required and must be specified.
-EOE
+subtest 'test uninstall() keep_destination_directory' => sub {
+    skip_all_unless_release_testing();
+
+    # Create another tempdir, because the previous uninstall() deleted it.
+    my $tempdir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+    ok(-e $tempdir,
+        'checked lookup() temporary destination directory creation');
+    # Use new destination_directory.
+    config_replace(destination_directory => $tempdir);
+
+    # Install HTMLPageSync again to test keep_destination_directory.
+    my $wallpaper_urls = lookup();
+note explain $wallpaper_urls;
+debug_CONFIG();
+    cmp_deeply(
+        $wallpaper_urls,
+        array_each(any(
+            re(qr/Announcement2.\d.(html|txt)/),
+            re(qr/CHANGES_2\.\d(\.\d+)?/),
+            re(qr/CURRENT(-|_)IS(-|_)\d\.\d+?\.\d+/),
+            re(qr/
+                HEADER.html
+                |
+                KEYS
+                |
+                README.html
+                |
+                binaries
+                |
+                docs
+                |
+                flood
+            /x),
+            re(qr/httpd-2\.\d\.\d+?-win32-src\.zip(\.asc)?/),
+            re(qr/httpd-2\.\d\.\d+?\.tar\.(bz2|gz)(\.asc)?/),
+            re(qr/httpd-2\.\d\.\d+?-deps\.tar\.(bz2|gz)(\.asc)?/),
+            re(qr/
+                libapreq
+                |
+                mod_fcgid
+                |
+                mod_ftp
+                |
+                patches
+            /x),
+            re(qr/\d{12}/)
+            ) # end any
+        ),
+        'checked lookup()s return value for acceptable values.'
+    );
+
+    $download_file_paths = download($tempdir, $wallpaper_urls);
+    # Transform the gotten url basenames with the expected url basenames to
+    # determine if everything was downloaded properly.
+note "HERE";
+note explain $download_file_paths;
+    my $download_file_path_basenames
+        =
+        map {$_ = file($_)->basename()} @$download_file_paths;
+note explain $download_file_path_basenames;
+    my $wallpaper_url_basenames
+        =
+        map {$_ = file($_)->basename()} @$wallpaper_urls;
+    cmp_deeply(
+        $download_file_path_basenames,
+        $wallpaper_url_basenames,
+        'checked download()s return value for acceptable values.'
+    );
+
+    ok(unarchive($download_file_paths),
+        'checked unarchive() success');
+
+    # Test uninstall's keep_destination_directory option.
+    keep_destination_directory 'True';
+    ok(uninstall(cwd()),
+        'checked uninstall() success');
+    # $tempdir should still exist. Don't clean it up, because the uninstall()
+    # subtest below will do that for me.
+    ok( -e $tempdir,
+        'checked uninstall() tempdir removal');
 
 };
+
+
 
 
 subtest 'test HTMLPageSync end()' => sub {
     skip_all_unless_release_testing();
 
-    my $tempdir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
-    diag("td[$tempdir]");
-
-    ok(-e $tempdir, 'checked end() tempdir creationg');
-
     end();
 
-    ok( (not -e $tempdir) , 'checked end() success');
+    ok( (not -e $temp_dir) , 'checked end() success');
 };
 
 

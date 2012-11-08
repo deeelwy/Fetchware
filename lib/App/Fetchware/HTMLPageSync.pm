@@ -38,6 +38,7 @@ our @EXPORT = qw(
     page_name
     html_page_url
     destination_directory
+    keep_destination_directory
     user_agent
     html_treebuilder_callback
     download_links_callback
@@ -222,6 +223,16 @@ Determined download urls to be:
 ]
 EOM
 
+    # The download_urls may be relative links instead of absolute links.
+    # Relative ones could just be filenames without any knowledge of what the
+    # actual server or path or even scheme is. Fix this by prepending
+    # html_page_url to each link if there is no scheme.
+    for my $download_url (@download_urls) {
+        if ($download_url !~ m!^(ftp|http|file)://!) {
+            $download_url = config('html_page_url') . '/' . $download_url;
+        }
+    }
+
     # Return a ref to the array of download urls, because lookup()'s API only
     # allows it to return a single value, but that single value does not have to
     # a scalar. It can be a array ref, which is used here. This works, because
@@ -280,7 +291,6 @@ EOM
     # AKA $package_path.
     return \@download_file_paths;
 }
-
 
 
 =head2 verify()
@@ -418,7 +428,7 @@ sub uninstall ($) {
     unless (config('keep_destination_directory')) {
 
         msg <<EOM;
-Uninstalling this HTMLPageSync package by deleting your destination directory.'
+Uninstalling this HTMLPageSync package by deleting your destination directory.
 EOM
 
     ###BUGALERT### Before release go though all of Fetchware's API, and subifiy
@@ -451,7 +461,7 @@ EOD
     # keep_destination_directory was set, so don't delete destination directory.
     } else {
         msg <<EOM;
-Uninstalling this HTMLPageSync package but keeping your destination directory.'
+Uninstalling this HTMLPageSync package but keeping your destination directory.
 EOM
 
     }
