@@ -13,14 +13,13 @@ use Data::Dumper;
 use File::Copy 'cp';
 use HTML::TreeBuilder;
 use Scalar::Util 'blessed';
-# Archive::Extract's dependencies, so I may as well use one of my dependencies'
-# dependencies so App::Fetchware users have one fewer dependency to install.
 use Digest::SHA;
 use Digest::MD5;
 #use Crypt::OpenPGP::KeyRing;
 #use Crypt::OpenPGP;
 use Archive::Extract;
 use Archive::Tar;
+use Archive::Zip qw(:ERROR_CODES :CONSTANTS);
 use Cwd;
 
 use App::Fetchware::Util ':UTIL';
@@ -1906,6 +1905,125 @@ App::Fetchware is B<not> object-oriented; therefore, you B<can not> subclass
 App::Fetchware to extend it! 
 
 =cut
+
+
+
+=head3 list_files_tar()
+
+    my $tar_file_listing = list_files_tar($path_to_tar_archive);
+
+=cut
+
+sub list_files_tar {
+    my $path_to_tar_archive = shift;
+
+    # Use list_files() method to return a list of files.
+    # Pass in the weird special case of the $name inside an array ref to tell
+    # list_files() to return just a list of file names instead of a list of
+    # hasherefs.
+    return Archive::Tar->list_files([$path_to_tar_archive]);
+}
+
+
+=head3 list_files_zip()
+
+    my $zip_file_listing = list_files_zip($path_to_zip_archive);
+
+=cut
+
+
+{ # Begin %zip_error_codes hash.
+my %zip_error_codes = (
+    AZ_OK => 'Everything is fine.',
+    AZ_STREAM_END => 
+        'The read stream (or central directory) ended normally.',
+    AZ_ERROR => 'There was some generic kind of error.',
+    AZ_FORMAT_ERROR => 'There is a format error in a ZIP file being read.',
+    AZ_IO_ERROR => 'There was an IO error'
+);
+
+sub list_files_zip {
+    my $path_to_zip_archive = shift;
+
+    my $zip = Archive::Zip->new();
+
+    my $zip_error;
+    if(($zip_error = $zip->new($path_to_zip_archive)) ne AZ_OK) {
+        die <<EOD;
+App-Fetchware: Fetchware failed to read in the zip file [$path_to_zip_archive].
+The zip error message was [$zip_error_codes{$zip_error}].
+EOD
+    }
+
+    # List the zip files "members," which are annoying classes not just a list
+    # of file names. I could use the memberNames() method, but that method
+    # returns their "internal" names, but I want their external names, what
+    # their names will be on your file system.
+    my @members = $zip->members();
+
+    my @external_filenames;
+    for my $member (@members) {
+        push @external_filenames, $member->externalFileName();
+    }
+
+    # Return list of "external" filenames.
+    return @external_filenames;
+}
+
+
+=head3 unarchive_tar()
+
+    unarchive_tar($path_to_tar_archive);
+
+=cut
+
+sub unarchive_tar {
+    my $path_to_tar_archive = shift;
+
+    my @extracted_files = Archive::Tar->extract_archive($path_to_tar_archive);
+    # extract_archive() returns false if the extraction failed, which will
+    # create an array with one false element, so I have test if tha one element
+    # is false not something like if (@extracted_files), because if
+    # extract_archive() returns undef on failure not empty list.
+    unless ($extracted_files[0]) {
+        die <<EOD;
+App-Fetchware: Fetchware failed to extract your archive [$path_to_tar_archive].
+The error message from Archive::Tar was [@{[Archive::Tar->error()]}].
+EOD
+    }
+}
+
+
+=head3 unarchive_zip()
+
+    unarchive_zip($path_to_zip_archive);
+
+=cut
+
+sub unarchive_zip {
+    my $path_to_zip_archive = shift;
+
+    my $zip = Archive::Zip->new();
+
+    my $zip_error;
+    if(($zip_error = $zip->new($path_to_zip_archive)) ne AZ_OK) {
+        die <<EOD;
+App-Fetchware: Fetchware failed to read in the zip file [$path_to_zip_archive].
+The zip error message was [$zip_error_codes{$zip_error}].
+EOD
+    }
+
+    if (($zip_error = $zip->extractTree()) ne AZ_OK) {
+        die <<EOD;
+App-Fetchware: Fetchware failed to extract the zip file [$path_to_zip_archive].
+The zip error message was [$zip_error_codes{$zip_error}].
+EOD
+    }
+}
+
+} # End %zip_error_codes
+
+
 
 =head3 check_archive_files()
 
@@ -3843,6 +3961,38 @@ And to throw away all messages use:
 or use the shell
 
     fetchware install <some-program.Fetchwarefile 2>&1 /dev/null
+
+=head2 Why don't you use Crypt::OpenPGP instead of the gpg command line program?
+
+I tried to use Crypt::OpenPGP, but I couldn't get it to work. And getting gpg to
+work was a breeze after digging through its manpage to find the right command
+line options that did what I need it to.
+
+Also, unfortunately Crypt::OpenPGP is buggy, out-of-date, and seems to have
+lost another maintainer. If it ever gets another maintainer, who fixes the newer
+bugs, perhaps I'll add support for Crypt::OpenPGP again. Because of how
+fetchware works it needs to use supported but not popular options of
+Crypt::OpenPGP, which may be where the bugs preventing it from working reside.
+
+Supporting Crypt::OpenPGP is still on my TODO list. It's just not very high on
+that list. Patches are welcome to add support for it, and the old code is still
+there commented out, but it needs updating if anyone is interested.
+
+In the meantime if you're on Windows without simple access to a gpg command line
+program, try installing gpg from the L<gpg4win project|http://gpg4win.org/>,
+which packages up gpg and a bunch of other tools for easier use on Windows.
+
+=head2 Does fetchware support Windows?
+
+Yes and no. I intend to support Windows, but right now I'm running Linux, and my
+Windows virtual machine is broken, so I can't easily test it on Windows. The
+codebase makes heavy use of File::Spec and Path::Class, so all of its file
+operations should work on Windows.
+
+I currently have not tested fetchware on Windows. There are probably some test
+failures on Windows, but Windows support should be just a few patches away.
+
+So the real answer is no, but I intend to support Windows in a future release.
 
 =head2 Anything else I think of....
 
