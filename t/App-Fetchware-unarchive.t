@@ -10,7 +10,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '5'; #Update if this changes.
+use Test::More 0.98 tests => '9'; #Update if this changes.
 use File::Spec::Functions 'devnull';
 
 use Test::Fetchware ':TESTING';
@@ -32,12 +32,16 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 # Call start() to create & cd to a tempdir, so end() called later can delete all
 # of the files that will be downloaded.
-start();
+my $temp_dir = start();
 
 
 subtest 'OVERRIDE_UNARCHIVE exports what it should' => sub {
     my @expected_overide_unarchive_exports = qw(
         check_archive_files
+        list_files_tar
+        list_files_zip
+        unarchive_tar
+        unarchive_zip
     );
     # sort them to make the testing their equality very easy.
     @expected_overide_unarchive_exports = sort @expected_overide_unarchive_exports;
@@ -46,6 +50,76 @@ subtest 'OVERRIDE_UNARCHIVE exports what it should' => sub {
     ok(@expected_overide_unarchive_exports ~~ @sorted_unarchive_tag, 
         'checked for correct OVERRIDE_UNARCHIVE @EXPORT_TAG');
 };
+
+
+my $tar_package_path;
+subtest 'test list_files_tar()' => sub {
+    skip_all_unless_release_testing();
+
+    # download() an example tar file to list its files.
+    $tar_package_path = download($temp_dir, $ENV{FETCHWARE_LOCAL_URL});
+    ok(-e $tar_package_path,
+        'checked list_files_tar() download tar file successful.');
+
+    my @file_list = list_files_tar($tar_package_path);
+    for my $expected (qw(
+        README
+        LAYOUT
+        configure
+    )) {
+        ok(qr/$expected$/ ~~ @file_list,
+            "checked list_files_tar() success [$expected]");
+    }
+
+};
+
+
+my $zip_package_path;
+subtest 'test list_files_zip()' => sub {
+    skip_all_unless_release_testing();
+
+
+    # download() an example tar file to list its files.
+    $zip_package_path = download($temp_dir, $ENV{FETCHWARE_LOCAL_ZIP_URL});
+    ok(-e $zip_package_path,
+        'checked list_files_zip() download zip file successful.');
+
+    my @file_list = list_files_zip($zip_package_path);
+    for my $expected (qw(
+        README
+        NEWS
+        MAINTAINERS
+        COPYING
+        EXTENDING.html
+    )) {
+        ok(qr/$expected$/ ~~ @file_list,
+            "checked list_files_tar() success [$expected]");
+    }
+
+};
+
+
+
+subtest 'test unarchive_tar()' => sub {
+    skip_all_unless_release_testing();
+
+    my @extracted_files = unarchive_tar($tar_package_path);
+
+    ok(@extracted_files,
+        'checked unarchive_tar() successfully extracted file');
+
+    ok(-e $_, "checked unarchive_tar() extracted file exists [$_]")
+        for @extracted_files;
+};
+
+
+subtest 'test unarchive_zip()' => sub {
+    skip_all_unless_release_testing();
+
+    ok(unarchive_zip($zip_package_path),
+        'checked unarchive_zip() success');
+};
+
 
 
 subtest 'test check_archive_files' => sub {
@@ -68,9 +142,6 @@ dangerous, because the files could potentially overwrite files anywhere in the
 filesystem including important system files. That is why this is a fatal error
 that cannot be ignored. See perldoc App::Fetchware.
 Absolute path [/absolute/path/].
-NOTE: Due to limitations in Archive::Extract any absolute paths have *already*
-been extracted! Bug they are listed below in case you would like to see which
-ones they are.
 [
 samedir/blah/file/who.cares
 samedir/not/a/rea/file/but/who.cares
@@ -108,20 +179,6 @@ subtest 'test unarchive()' => sub {
     $package_path =~ s!^file://!!;
 
     ok(unarchive($package_path), 'checked unarchive() success');
-
-    # note this error message is from Archive::Extract, which carps on
-    # errors.
-    {
-        local $SIG{__WARN__} = sub {
-        unarchive(devnull());
-        like($_[0], q{Cannot determine file type for '/dev/null'},
-            'checked unarchive failure');
-        }
-    }
-
-###HOWTOTEST### I'm not sure how to test unarchive() failing to list and and
-#failing to unarchive files. Maybe I could create archives that can get past the
-#error above.
 };
 
 

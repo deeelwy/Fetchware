@@ -17,7 +17,6 @@ use Digest::SHA;
 use Digest::MD5;
 #use Crypt::OpenPGP::KeyRing;
 #use Crypt::OpenPGP;
-use Archive::Extract;
 use Archive::Tar;
 use Archive::Zip qw(:ERROR_CODES :CONSTANTS);
 use Cwd;
@@ -120,10 +119,14 @@ our %EXPORT_TAGS = (
         md5_verify
         digest_verify
     )],
-###BUGALERT### Break these subs up into their component parts like the others.
     OVERRIDE_UNARCHIVE => [qw(
         check_archive_files    
+        list_files_tar
+        list_files_zip
+        unarchive_tar
+        unarchive_zip
     )],
+###BUGALERT### Break these subs up into their component parts like the others.
     OVERRIDE_BUILD => [qw()],
     OVERRIDE_INSTALL => [qw()],
     OVERRIDE_UNINSTALL => [qw()],
@@ -1841,55 +1844,52 @@ EOD
 
     msg "Unarchiving the downloaded package [$package_path]";
 
-    ###BUGALERT### fetchware needs Archive::Zip, which is *not* one of
-    #Archive::Extract's dependencies.
     diag("PP[$package_path]");
-    vmsg 'Creating Archive::Extract object.';
-    my $ae;
-    unless ($package_path =~ m!.fpkg$!) {
-        $ae = Archive::Extract->new(archive => "$package_path") or die <<EOD;
-App-Fetchware: internal error. Archive::Extract->new() as called by unarchive()
-failed to create a new Archive::Extract object. This is a fatal error. The
-archive in question was [$package_path].
+
+    # List files based on archive format.
+    my @files;
+    my $format;
+    given ($package_path) {
+        when(/\.(t(gz|bz|xz|Z))|(tar\.(gz|bz2|xz|Z))|.fpkg$/) {
+            $format = 'tar';
+            vmsg <<EOM;
+Listing files in your tar format archive [$package_path].
+EOM
+            @files = list_files_tar($package_path); 
+        } when (/\.zip$/) {
+            $format = 'zip';
+            vmsg <<EOM;
+Listing files in your zip format archive [$package_path].
+EOM
+            @files = list_files_zip($package_path); 
+        } default {
+            die <<EOD;
+App-Fetchware: Fetchware failed to determine what type of archive your
+downloaded package is [$package_path]. Fetchware only supports zip and tar
+format archives.
 EOD
-    ###BUGALERT### Include a workaround for Archive::Extract's caveat that uses
-    #the file's extension to determine how to unarchive it by manually telling
-    #it that fpkg's are actually .tar.gz's.
-    } else {
-        $ae = Archive::Extract->new(archive => "$package_path",
-            type => 'tgz') or die <<EOD;
-App-Fetchware: internal error. Archive::Extract->new() as called by unarchive()
-failed to create a new Archive::Extract object. This is a fatal error. The
-archive in question was [$package_path].
-EOD
+        }
     }
+    
+    { # Encloseing block for $"
+    local $" = "\n";
+    vmsg <<EOM;
+Files are: 
+[
+@files
+]
+EOM
+    } # Enclosing block for $"
 
-###BUGALERT### Files are listed *after* they're extracted, because
-#Archive::Extract *only* extracts files and then lets you see what files were
-#*already* extracted! This is a huge limitation that prevents me from checking
-#if an archive has an absolute path in it.
-    vmsg 'Using Archive::Extract to extract files.';
-    $ae->extract() or die <<EOD;
-App-Fetchware: run-time error. Fetchware failed to extract the archive it
-downloaded [$package_path]. The error message is [@{[$ae->error()]}].
-See perldoc App::Fetchware.
-EOD
+    # Ensure no files starting with an absolute path get extracted
+    # And determine $build_path.
+    my $build_path = check_archive_files(\@files);
 
-    # list files.
-    vmsg 'Unarchived the files:';
-    my $files = $ae->files();
-    die <<EOD if not defined $files;
-App-Fetchware: run-time error. Fetchware failed to list the files in  the
-archive it downloaded [$package_path]. The error message is
-[@{[$ae->error()]}].  See perldoc App::Fetchware.
-EOD
-    vmsg Dumper($files);
-
-    # Return the $build_path
-    vmsg 'Checking that the files extracted from the archive are acceptable.';
-    my $build_path =  check_archive_files($files);
-
-    msg "Determined build path to [$build_path]";
+    vmsg "Unarchiving $format archive [$package_path].";
+    unarchive_tar($package_path) if $format eq 'tar';
+    unarchive_zip($package_path) if $format eq 'zip';
+    
+    msg "Determined build path to be [$build_path]";
     return $build_path;
 }
 
@@ -1912,24 +1912,27 @@ App::Fetchware to extend it!
 
     my $tar_file_listing = list_files_tar($path_to_tar_archive);
 
+Returns a list of file names that are found in the given, $path_to_tar_archive,
+tar file. Throws an exception if there is an error.
+
 =cut
 
 sub list_files_tar {
     my $path_to_tar_archive = shift;
 
+    my $tar = Archive::Tar->new($path_to_tar_archive);
+    die <<EOD unless $tar->isa('Archive::Tar');
+App-Fetchware: fetchware failed to create a new Archive::Tar object, and read
+the contents of your archive [$path_to_tar_archive] into memory. The
+Archive::Tar error message was [@{[Archive::Tar->error()]}].
+EOD
+
     # Use list_files() method to return a list of files.
-    # Pass in the weird special case of the $name inside an array ref to tell
+    # Pass in the weird special case of the 'name' inside an array ref to tell
     # list_files() to return just a list of file names instead of a list of
-    # hasherefs.
-    return Archive::Tar->list_files([$path_to_tar_archive]);
+    # hashrefs.
+    return $tar->list_files(['name']);
 }
-
-
-=head3 list_files_zip()
-
-    my $zip_file_listing = list_files_zip($path_to_zip_archive);
-
-=cut
 
 
 { # Begin %zip_error_codes hash.
@@ -1942,13 +1945,23 @@ my %zip_error_codes = (
     AZ_IO_ERROR => 'There was an IO error'
 );
 
+
+=head3 list_files_zip()
+
+    my $zip_file_listing = list_files_zip($path_to_zip_archive);
+
+Returns a list of file names that are found in the given, $path_to_zip_archive,
+zip file. Throws an exception if there is an error.
+
+=cut
+
 sub list_files_zip {
     my $path_to_zip_archive = shift;
 
     my $zip = Archive::Zip->new();
 
     my $zip_error;
-    if(($zip_error = $zip->new($path_to_zip_archive)) ne AZ_OK) {
+    if(($zip_error = $zip->read($path_to_zip_archive)) ne AZ_OK) {
         die <<EOD;
 App-Fetchware: Fetchware failed to read in the zip file [$path_to_zip_archive].
 The zip error message was [$zip_error_codes{$zip_error}].
@@ -1963,7 +1976,7 @@ EOD
 
     my @external_filenames;
     for my $member (@members) {
-        push @external_filenames, $member->externalFileName();
+        push @external_filenames, $member->fileName();
     }
 
     # Return list of "external" filenames.
@@ -1973,7 +1986,11 @@ EOD
 
 =head3 unarchive_tar()
 
-    unarchive_tar($path_to_tar_archive);
+    my @extracted_files = unarchive_tar($path_to_tar_archive);
+
+Extracts the given $path_to_tar_archive. It must be a tar archive. Use
+unarchive_zip() for zip archives. It returns a list of files that it
+extracted.
 
 =cut
 
@@ -1990,13 +2007,20 @@ sub unarchive_tar {
 App-Fetchware: Fetchware failed to extract your archive [$path_to_tar_archive].
 The error message from Archive::Tar was [@{[Archive::Tar->error()]}].
 EOD
+    } else {
+        return @extracted_files;
     }
 }
 
 
 =head3 unarchive_zip()
 
-    unarchive_zip($path_to_zip_archive);
+    'Extraced files successfully.' = unarchive_zip($path_to_zip_archive);
+
+Extraces the give $path_to_zip_archive. It must be a zip archive. Use
+unarchive_tar() for tar archives. It I<only> returns true for success. It
+I<does not> return a list of extracted files like unarchive_tar() does, because
+Archive::Zip's extractTree() method does not.
 
 =cut
 
@@ -2006,7 +2030,7 @@ sub unarchive_zip {
     my $zip = Archive::Zip->new();
 
     my $zip_error;
-    if(($zip_error = $zip->new($path_to_zip_archive)) ne AZ_OK) {
+    if(($zip_error = $zip->read($path_to_zip_archive)) ne AZ_OK) {
         die <<EOD;
 App-Fetchware: Fetchware failed to read in the zip file [$path_to_zip_archive].
 The zip error message was [$zip_error_codes{$zip_error}].
@@ -2018,6 +2042,8 @@ EOD
 App-Fetchware: Fetchware failed to extract the zip file [$path_to_zip_archive].
 The zip error message was [$zip_error_codes{$zip_error}].
 EOD
+    } else {
+        return 'Extraced files successfully.';
     }
 }
 
@@ -2039,32 +2065,29 @@ files messing up your computer.
 
 sub check_archive_files {
     my $files = shift;
+
+
     # Determine if *all* files are in the same directory.
     my %dir;
     for my $path (@$files) {
 ##TEST##diag("path[$path]");
         # Skip Fetchwarefiles.
         next if $path eq './Fetchwarefile';
-
-###BUGALERT### Archive::Extract *only* extracts files! $ae->files() is an
-#accessor method to an arrayref of files that it has *already* extracted! This
-#extreme limitation may be circumvented in the future by using Archive::Tar and
-#Archive::Zip to list files, but I'm not fixing it now.
-        my $error = <<EOE;
+        if (file_name_is_absolute($path)) {
+            my $error = <<EOE;
 App-Fetchware: run-time error. The archive you asked fetchware to download has
 one or more files with an absolute path. Absolute paths in archives is
 dangerous, because the files could potentially overwrite files anywhere in the
 filesystem including important system files. That is why this is a fatal error
 that cannot be ignored. See perldoc App::Fetchware.
 Absolute path [$path].
-NOTE: Due to limitations in Archive::Extract any absolute paths have *already*
-been extracted! Bug they are listed below in case you would like to see which
-ones they are.
 EOE
-        $error .= "[\n";
-        $error .= join("\n", @$files);
-        $error .= "\n]\n";
-        die $error if file_name_is_absolute($path);
+            $error .= "[\n";
+            $error .= join("\n", @$files);
+            $error .= "\n]\n";
+            
+            die $error;
+        }
 
         my ($volume,$directories,$file) = splitpath($path); 
 ##TEST##diag("vol[$volume]dirs[$directories]file[$file]");
