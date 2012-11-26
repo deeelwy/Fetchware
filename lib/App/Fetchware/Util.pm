@@ -6,7 +6,8 @@ package App::Fetchware::Util;
 use strict;
 use warnings;
 
-use File::Spec::Functions qw(catfile catdir splitpath file_name_is_absolute);
+use File::Spec::Functions qw(catfile catdir splitpath splitdir rel2abs
+    file_name_is_absolute rootdir);
 use Path::Class;
 use Net::FTP;
 use HTTP::Tiny;
@@ -15,6 +16,8 @@ use Cwd;
 use App::Fetchware::Config ':CONFIG';
 use File::Copy 'cp';
 use File::Temp 'tempdir';
+use File::stat;
+use Fcntl 'S_ISDIR';
 
 # Enable Perl 6 knockoffs.
 use 5.010;
@@ -37,6 +40,7 @@ our %EXPORT_TAGS = (
         download_file_url
         just_filename
         do_nothing
+        safe_open
         create_tempdir
         original_cwd
         cleanup_tempdir
@@ -675,6 +679,187 @@ EOD
 
 
 
+=head1 SECURITY SUBROUTINES
+
+This section describes Utilty subroutines that can be used for checking security
+of files on the file system to see if fetchware should open and use them.
+
+=cut
+
+=head2 safe_open()
+
+    my $fh = should_trust($file_to_check);
+
+safe_open() takes $file_to_check and does a bunch of file checks on that
+file to determine if it's safe to open and use the contents of that file in
+your program. Instead of returning true or false, it returns a file handle of
+the file you want to check that has already been open for you. This is done to
+prevent race conditions between the time safe_open() checks the file's safety
+and the time the caller actually opens the file.
+
+In fetchware, this subroutine is used to check if every file fetchware
+opens is safe to do so. It is based on is_safe() and is_very_safe() from the
+Perl Cookbook.
+
+What this subroutine checks:
+
+=over
+
+=item *
+
+=back
+
+If you actually are some sort of security expert, please feel free to
+double-check if the list of stuff to check for is complete, and perhaps even the
+Perl implementation to see if the subroutien really does check if
+safe_open($file_to_check) is actually safe.
+
+
+=over
+
+=item WARNING
+
+According to L<perlport>'s chmod() documentation, on Win32 perl's Unixish file
+permissions arn't supported only "owner" is:
+
+"Only good for changing "owner" read-write access, "group", and "other" bits are
+meaningless. (Win32)"
+
+I'm not completely sure this means that under Win32 only owner perms mean
+something, or if just chmod()ing group or ther bits don't do anything, but
+testing if group and other are rwx does work. This needs testing.
+
+And remember this only applies to Win32, and fetchware has not yet been properly
+ported or tested under Win32 yet.
+
+=back
+
+=cut
+
+###BUGALERT### safe_open() does not check extended file perms such as ext*'s
+#crazy attributes, linux's (And other Unixs' too) MAC stuff or Windows NT's
+#crazy file permissions.
+
+sub safe_open {
+    my $file_to_check = shift;
+note("FTC[$file_to_check]");
+
+    my $fh;
+
+
+    # Open the file first. Die with a simple error that callers should catch
+    # and redie.
+    open $fh, '<', $file_to_check or die <<EOD;
+Failed to open file [$file_to_check]. OS error [$!].
+EOD
+
+    # Test the file handle first.
+
+    my $info = stat($fh);# or goto STAT_ERROR;
+    note('INFO');
+    note explain \$info;
+
+    # Owner must be either me (whoever runs fetchware) or superuser. No one else
+    # can be trusted.
+    if(($info->uid() != 0) && ($info->uid() != $<)) {
+        die <<EOD;
+App-Fetchware-Util: The file fetchware attempted to open is not owned by root or
+the person who ran fetchware. This means the file could have been dangerously
+altered, or it's a simple permissions problem. Do not simly change the
+ownership, and rerun fetchware. Please check that the file [$file_to_check] has
+not been tampered with, correct the ownership problems and try again.
+EOD
+    }
+
+    # Check if group and other can write $fh.
+    # Use 066 to detect read or write perms.
+    ###BUGALERT### What does this actually test?????
+    if ($info->mode() & 022) { # Someone else can write this $fh.
+        die <<EOD
+App-Fetchware-Util: The file fetchware attempted to open is writable by someone
+other than just the owner. Fetchwarefiles and fetchware packages must only be
+writable by the owner. Do not only change permissions to fix this error. This
+error may have allowed someone to alter the contents of your Fetchwarefile or
+fetchware packages. Ensure the file was not altered, then change permissions to
+644.
+EOD
+    }
+    
+    # Then check the directories its contained in.
+
+    # Make the file an absolute path if its not already.
+    $file_to_check = rel2abs($file_to_check);
+
+    # Create array of current directory and all parent directories and even root
+    # directory to check all of their permissions below.
+    my $dir = dir($file_to_check);
+    my @directories = do {
+        my @dirs;
+        until ($dir eq rootdir()) {
+            # Add this dir to the array of dirs to keep.
+            push @dirs, $dir;
+
+            # This loops version of $i++ the itcremeter.
+            $dir = $dir->parent();
+        }
+        push @dirs, $dir->parent(); # $dir->parent() should be the root dir.
+
+        # Return, by being the last statement, the list of parent dirs for
+        # $file_to_check.
+        @dirs;
+    };
+    # Who cares if _PC_CHOWN_RESTRICTED is set, check all parent dirs anyway,
+    # because if say /home was 777, then anyone (other) can change any child
+    # file in any directory above /home now anyway even if _PC_CHOWN_RESTRICTED
+    # is set.
+    for my $dir (@directories) {
+note("CDIR[$dir]");
+
+        my $info = stat($dir);# or goto STAT_ERROR;
+
+        # Owner must be either me (whoever runs fetchware) or superuser. No one
+        # else can be trusted.
+        if(($info->uid() != 0) && ($info->uid() != $<)) {
+            die <<EOD;
+App-Fetchware-Util: The file fetchware attempted to open is not owned by root or
+the person who ran fetchware. This means the file could have been dangerously
+altered, or it's a simple permissions problem. Do not simly change the
+ownership, and rerun fetchware. Please check that the file [$file_to_check] has
+not been tampered with, correct the ownership problems and try again.
+EOD
+        }
+
+        # Check if group and other can write $fh.
+        # Use 066 to detect read or write perms.
+        ###BUGALERT### What does this actually test?????
+        if ($info->mode() & 022) { # Someone else can write this $fh...
+            # ...except if this file has the sticky bit set and its a directory.
+            die <<EOD unless $info->mode & 01000 and S_ISDIR($info->mode);
+App-Fetchware-Util: The file fetchware attempted to open is writable by someone
+other than just the owner. Fetchwarefiles and fetchware packages must only be
+writable by the owner. Do not only change permissions to fix this error. This
+error may have allowed someone to alter the contents of your Fetchwarefile or
+fetchware packages. Ensure the file was not altered, then change permissions to
+644.
+EOD
+        }
+
+    }
+    # Return the proven above "safe" file handle.
+    return $fh;
+
+    # Use cool C style goto error handling. It beats copy and paste, and the
+    # horrible contortions needed for "structured programming."
+    STAT_ERROR: {
+    die <<EOD;
+App-Fetchware-Util: stat($fh) filename [$file_to_check] failed! This just
+shouldn't happen unless of course the file you specified does not exist. Please
+ensure files you specify when you run fetchware actually exist.
+EOD
+    }
+}
+
+
 =head1 MISCELANEOUS UTILTY SUBROUTINES
 
 This is just a catchall category for everythig else in App::Fetchware::Utility.
@@ -806,6 +991,7 @@ sub create_tempdir {
 
         use Test::More;
         diag("tempdir[$temp_dir]");
+note("FTEXCEPTION[$@]");
         $exception = $@;
         1; # return true unless an exception is thrown.
     } or die <<EOD;
@@ -840,7 +1026,9 @@ EOD
     my $original_cwd = original_cwd();
 
 original_cwd() simply returns the value of fetchware's $original_cwd that is
-saved inside each start() call. A new call to start() will reset this value.
+saved inside each create_tempdir() call. A new call to create_tempdir() will
+reset this value. Note: App::Fetchware's start() also calls create_tempdir(), so
+another call to start() will also reset original_cwd().
 
 =cut
 

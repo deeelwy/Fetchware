@@ -7,13 +7,16 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '16'; #Update if this changes.
+use Test::More 0.98 tests => '18'; #Update if this changes.
 
-use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir);
+use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir rootdir);
 use URI::Split 'uri_split';
 use Cwd 'cwd';
 use Test::Fetchware ':TESTING';
-use App::Fetchware::Config qw(config config_replace);
+use App::Fetchware::Config qw(config config_replace config_delete);
+use File::Temp 'tempfile';
+use Path::Class;
+use Perl::OSType 'is_os_type';
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -47,6 +50,7 @@ subtest 'UTIL export what they should' => sub {
         download_file_url
         just_filename
         do_nothing
+        safe_open
         create_tempdir
         original_cwd
         cleanup_tempdir
@@ -508,16 +512,193 @@ subroutine to create a temporary file, but tempdir() threw an exception. That
 exception was []. See perldoc App::Fetchware.
 EOE
 
+    # Clean up after test that forces tempdir() to fail.
+    config_delete('temp_dir');
+
     #chdir back to $original_cwd, so that File::Temp's END block can delete
     #this last temp_dir. Otherwise, a warning is printed from File::Temp about
     #this.
-    chdir $original_cwd or fail("Failed to chdir back to [$original_cwd]!");
+    chdir original_cwd() or fail("Failed to chdir back to [@{[original_cwd]}]!");
+};
+
+# Share these variables with the next subtest.
+my $tempdir;
+my ($fh, $filename);
+subtest 'test safe_open()' => sub {
+    # create tempdir
+    $tempdir = create_tempdir();
+
+    # Test open a file in tempdir check it with safe permu
+    # DIR is cwd(), because create_tempdir() creates a tempdir and
+    #chdir()s to it.
+    ($fh, $filename) = tempfile("fetchware-test-$$-XXXXXXXXXXXXXXX", DIR => cwd());
+note("FILENAME[$filename]");
+    close($fh);
+    my $safe_fh = safe_open($filename);
+    is_fh($safe_fh, 'checked safe_open() success');
+    close ($safe_fh);
+
+    chmod 0640, $filename; 
+    is_fh(safe_open($filename), 'checked safe_open() group readable success');
+    chmod 0604, $filename; 
+    is_fh(safe_open($filename), 'checked safe_open() other readable success');
+    chmod 0644, $filename; 
+    is_fh(safe_open($filename),
+        'checked safe_open() group and other readable success');
+    
+    # Change perms to bad perms and check both group and owner
+    chmod 0660, $filename;
+    eval_ok(sub {safe_open($filename)},
+        <<EOE, 'checked safe_open() file group perms unsafe');
+App-Fetchware-Util: The file fetchware attempted to open is writable by someone
+other than just the owner. Fetchwarefiles and fetchware packages must only be
+writable by the owner. Do not only change permissions to fix this error. This
+error may have allowed someone to alter the contents of your Fetchwarefile or
+fetchware packages. Ensure the file was not altered, then change permissions to
+644.
+EOE
+
+    # Make a directory inside the tempdir.
+    mkdir ('testdir') or fail ('Failed to make testing directory [testdir]');
+
+    # create a file inside the tempdir.
+    my ($sdfh, $subdirfilename)
+        = tempfile("fetchware-test-$$-XXXXXXXXXXXXXXX", DIR => cwd());
+note("FILENAME[$subdirfilename]");
+
+    # Check for success on the file.
+    close($sdfh);
+    my $sfh = safe_open($subdirfilename);
+    is_fh($sfh, 'checked safe_open() success');
+    close ($sfh);
+
+    # Change perms for group and owner and recheck.
+    chmod 0640, $subdirfilename; 
+    is_fh(safe_open($subdirfilename), 'checked safe_open() group readable success');
+    chmod 0604, $subdirfilename; 
+    is_fh(safe_open($subdirfilename), 'checked safe_open() other readable success');
+    chmod 0644, $subdirfilename; 
+    is_fh(safe_open($subdirfilename),
+        'checked safe_open() group and other readable success');
+
+    # change perms for group and owner of the containing directory you made, and
+    # recheck.
+    chmod 0660, $subdirfilename;
+    eval_ok(sub {safe_open($subdirfilename)},
+        <<EOE, 'checked safe_open() file group perms unsafe');
+App-Fetchware-Util: The file fetchware attempted to open is writable by someone
+other than just the owner. Fetchwarefiles and fetchware packages must only be
+writable by the owner. Do not only change permissions to fix this error. This
+error may have allowed someone to alter the contents of your Fetchwarefile or
+fetchware packages. Ensure the file was not altered, then change permissions to
+644.
+EOE
+
+    # chdir back to original_cwd() so File::Temp can delete temp files.
+    chdir original_cwd();
 };
 
 
 
+SKIP: {
+    skip 'Test suite not being run as root.', 1 unless do {
+        if (is_os_type('Unix')) {
+            if ($< == 0 or $> == 0) {
+            # Return true
+            note('ISUNIXANDROOT');
+            1
+            } else {
+            # Return false
+            note('ISUNIXNOTROOT!!!');
+            0
+            }
+        } else {
+            # Return false
+            note('ISNOTUNIX');
+            0
+        }
+    };
 
 
+    subtest 'test safe_open() needs root' => sub {
+        skip_all_unless_release_testing();
+
+
+        if ($< == 0 or $> == 0) {
+            # Use dir from above. #$tempdir and $filename.
+            # Change group and owner perms on nobody owned dir.
+            my $parent_dir = dir($filename)->parent();
+            chmod 0640, $parent_dir; 
+            is_fh(safe_open($parent_dir),
+                'checked safe_open() group directory readable success');
+            chmod 0604, $parent_dir; 
+            is_fh(safe_open($parent_dir),
+                'checked safe_open() other directory readable success');
+            chmod 0644, $parent_dir; 
+            is_fh(safe_open($parent_dir),
+                'checked safe_open() group and other directory readable success');
+            # Repeat for file too.
+            chmod 0640, $filename; 
+            is_fh(safe_open($filename),
+                'checked safe_open() group file readable success');
+            chmod 0604, $filename; 
+            is_fh(safe_open($filename),
+                'checked safe_open() other file readable success');
+            chmod 0644, $filename; 
+            is_fh(safe_open($filename),
+                'checked safe_open() group and other file readable success');
+
+            # chown the tempdir to nobody, and check for diff owner.
+            # This call must happen after other checks, because it will make all
+            # checks for $filename fail with the expected exception below, and
+            # that change should just be isolated to this one test; therefore it
+            # is last.
+            chown(scalar getpwnam('nobody'), -1, $filename)
+                or fail("Failed to chown [$filename]!");
+            
+            # Test it for failure.
+            my $error_string = <<EOE;
+App-Fetchware-Util: The file fetchware attempted to open is not owned by root or
+the person who ran fetchware. This means the file could have been dangerously
+altered, or it's a simple permissions problem. Do not simly change the
+ownership, and rerun fetchware. Please check that the file.*
+EOE
+            eval_ok(sub {safe_open($filename)},
+                qr/$error_string/,
+                'checked safe_open() wrong owner failure');
+
+            # Make a custom tempdir in / the root directory.
+            my ($fh, $root_filename) =
+                tempfile("fetchware-root-test-$$-XXXXXXXXXXXXXXX",
+                    DIR => rootdir(),
+                    UNLINK => 1
+                );
+            # Test it on a root dir that won't recurse into subdirs, because they're
+            # arn't any.
+            chmod 0640, $root_filename; 
+            is_fh(safe_open($root_filename),
+                'checked safe_open() group file readable success');
+            chmod 0604, $root_filename; 
+            is_fh(safe_open($root_filename),
+                'checked safe_open() other file readable success');
+            chmod 0644, $root_filename; 
+            is_fh(safe_open($root_filename),
+                'checked safe_open() group and other file readable success');
+        } else {
+            note("Should be skipped, because you're not root! [$<] [$>]");
+        }
+    };
+}
+
+
+
+
+sub is_fh {
+    my $fh = shift;
+    my $test_name = shift;
+
+    ok(ref($fh) eq 'GLOB', $test_name);
+}
 
 
 
