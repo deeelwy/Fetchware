@@ -482,6 +482,9 @@ subtest 'test create_tempdir()' => sub {
     my $temp_dir = create_tempdir();
     ok(-e $temp_dir, 'checked create_tempdir() success.');
 
+    # chdir back to original_cwd(), so that this tempdir can be deleted.
+    chdir original_cwd() or fail("Failed to chdir back to original_cwd()!");
+
     $temp_dir = create_tempdir(KeepTempDir => 1);
     ok(-e $temp_dir, 'checked create_tempdir() KeepTempDir success.');
 note "TEMPDIR[$temp_dir]";
