@@ -3077,11 +3077,20 @@ strings, and are listed in the L</DIAGNOSTICS> section below.
 
 =head1 CAVEATS
 
-###BUGALERT### Update this section!!!!!!!!!!!!!
-Certain features of App::Fetchware::HTMLPageSync require knowledge of the Perl
-programming language in order for you to make use of them. However, this is
-limited to optional callbacks that are not needed for most uses. These features
-are the C<html_treebuilder_callback> and C<download_links_callback> callbacks.
+=over
+
+=item WINDOWS COMPATIBILITY
+
+Fetchware was written on Linux and tested by its author B<only> on Linux.
+However, it should work on popular Unixes without any changes. But it has B<not>
+been ported or tested on Windows yet, so it may work, or parts of it may work,
+but some might not. However, I have used File::Spec and Path::Class to support
+path and file manipulation accross all Perl-supported platorms.so that code
+should work on Windows. I intend to add Windows support, and add tests for Windows
+in the future, but for now it is unsupported, but may work. This is likely to
+improve in the future.
+
+=back
 
 =cut
 
