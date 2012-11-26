@@ -3022,6 +3022,51 @@ To use the fetchware extension HTMLPageSync.
 =cut
 
 
+
+=head1 FAQ
+
+=head2 How does fetchware's database work?
+
+The design of fetchware's database was copied after Slackware's package database
+design. In Slackware each package is a file in C</var/log/packages>, an
+example: C</var/log/packages/coreutils-8.14-x86_64_slack13.37>. And inside that
+file is a list of files, whoose names are the locations of all of the files that
+this Slackware package installed. This format is really simple and flexible.
+
+Fetchware's database is simply the directory C</var/log/fetchware> (on Unix when
+run as root), or whatever File::HomeDir recommends. When packages are installed
+the final version of that package that ends with C<.fpkg> is copied to your
+fetchware database path. So after you install apache your fetchware database
+will look like:
+
+    ls /var/log/fetchware
+    httpd-2.4.3.fpkg
+
+It's not a real database or anything cool like that. It is simply a directory
+containting a list of fetchware packages that have been installed. However, this
+directory is managed by fetchware, and should not be messed with unless you are
+sure of what you are doing.
+
+=head2 What exactly is a fetchware package?
+
+A fetchware package is a gziped tar archive with its file extension changed to
+C<.fpkg>. This archive consists of the package that was downloaded in addition
+to your Fetchwarefile. For example.
+
+    tar tvf httpd-2.4.3.fpkg
+    ./Fetchwarefile
+    httpd-2.4.3/README
+    httpd-2.4.3/...
+    ...
+
+See the section L<THE FETCHWARE PACKAGE> to see all of the cool things you can
+do with them.
+
+=head2 Anything else I think of....
+
+=cut
+
+
 =head1 ERRORS
 
 As with the rest of App::Fetchware, fetchware does not return any
