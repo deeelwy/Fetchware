@@ -541,6 +541,13 @@ note("FILENAME[$filename]");
     is_fh($safe_fh, 'checked safe_open() success');
     close ($safe_fh);
 
+    # Test opening the file for writing.
+    # The undef is a placeholder for the second arg. The error mesage is not a
+    # named argument like WRITE is, because despite being optional, it's always
+    # going to be used in fetchware for more helpful error messages.
+    is_fh(safe_open($filename, undef,WRITE => 1),
+        'checked safe_open write success');
+
     chmod 0640, $filename; 
     is_fh(safe_open($filename), 'checked safe_open() group readable success');
     chmod 0604, $filename; 

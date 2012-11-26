@@ -688,7 +688,16 @@ of files on the file system to see if fetchware should open and use them.
 
 =head2 safe_open()
 
-    my $fh = should_trust($file_to_check);
+    my $fh = safe_open($file_to_check, <<EOE);
+    App-Fetchware-Extension???: Failed to open file [$file_to_check]! Because of
+    OS error [$!].
+    EOE
+
+    # To open for writing instead of reading 
+    my $fh = safe_open($file_to_check, <<EOE, WRITE => 1);
+    App-Fetchware-Extension???: Failed to open file [$file_to_check]! Because of
+    OS error [$!].
+    EOE
 
 safe_open() takes $file_to_check and does a bunch of file checks on that
 file to determine if it's safe to open and use the contents of that file in
@@ -697,15 +706,48 @@ the file you want to check that has already been open for you. This is done to
 prevent race conditions between the time safe_open() checks the file's safety
 and the time the caller actually opens the file.
 
+safe_open() also takes an optional second argument that specifies a caller
+specific error message that replaces the generic default one.
+
+Fetchware occasionally needs to write files especially in fetchware's new()
+command; therefore safe_open() also takes the fake hash argument
+C<WRITE =E<gt> 1>, which opens the file for writing instead of reading.
+
 In fetchware, this subroutine is used to check if every file fetchware
 opens is safe to do so. It is based on is_safe() and is_very_safe() from the
-Perl Cookbook.
+Perl Cookbook by Tom Christiansen and Nathan Torkington.
 
 What this subroutine checks:
 
 =over
 
 =item *
+
+It opens the file you give to it as an argument, and all subsequent operations
+are done on the opened filehandle to prevent race conditions.
+
+=item *
+
+Then it checks that the owner of the specified file must be either the superuser
+or the user who ran fetchware.
+
+=item *
+
+It checks that the mode, as returned by File::stat's overridden stat, is not
+writable by group or other. Fancy MAC permissions such as Linux's extfs's
+extensions and fancy Windows permissions are B<not> currently checked.
+
+=item *
+
+Then safe_open() stat's each and every parent directory that is in this file's
+full path, and runs the same checks that are run above on each parent directory.
+
+=item *
+
+_PC_CHOWN_RESTRICTED is not tested; instead what is_very_safe() does is simply
+always done. Because even with A _PC_CHOWN_RESTRICTED test, /home, for example,
+could be 777. This is Unix after all, and root can do anything including screw
+up permissions on system directories.
 
 =back
 
@@ -738,22 +780,27 @@ ported or tested under Win32 yet.
 
 ###BUGALERT### safe_open() does not check extended file perms such as ext*'s
 #crazy attributes, linux's (And other Unixs' too) MAC stuff or Windows NT's
-#crazy file permissions.
+#crazy file permissions. Could use Win32::Perms for just Windows, but its not
+#on CPAN. And what about the other OSes.
 
 sub safe_open {
     my $file_to_check = shift;
 note("FTC[$file_to_check]");
+    my $open_fail_message = shift // <<EOE;
+Failed to open file [$file_to_check]. OS error [$!].
+EOE
+
+    my %opts = @_;
 
     my $fh;
 
 
-    # Open the file first. Die with a simple error that callers should catch
-    # and redie.
-    open $fh, '<', $file_to_check or die <<EOD;
-Failed to open file [$file_to_check]. OS error [$!].
-EOD
-
-    # Test the file handle first.
+    # Open the file first.
+    unless ($opts{WRITE}) {
+        open $fh, '<', $file_to_check or die $open_fail_message;
+    } else {
+        open $fh, '>', $file_to_check or die $open_fail_message;
+    }
 
     my $info = stat($fh);# or goto STAT_ERROR;
     note('INFO');

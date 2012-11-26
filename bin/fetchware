@@ -26,7 +26,7 @@ use Getopt::Long qw(:config bundling pass_through);
 #already created the temp directory!!!!!!
 use App::Fetchware qw(start get_directory_listing parse_directory_listing);
 use App::Fetchware::Config qw(config __clear_CONFIG config_replace);
-use App::Fetchware::Util qw(msg vmsg run_prog);
+use App::Fetchware::Util qw(msg vmsg run_prog safe_open);
 use Archive::Tar;
 use File::Copy qw(mv cp);
 use File::Spec::Functions qw(curdir catdir catfile catpath tmpdir splitpath
@@ -1341,7 +1341,7 @@ EOP
 
         # If the edited Fetchwarefile does not have a file size of zero.
         if (not -z $fetchwarefile_filename) {
-            open my $fh, '<', $fetchwarefile_filename or die <<EOD;
+            my $fh = safe_open($fetchwarefile_filename, <<EOD);
 fetchware: run-time error. fetchware can't open the fetchwarefile you edited
 with your editor after you edited it. This just shouldn't happen. Possible race
 condition or weird bug. See perldoc fetchware.
@@ -1447,7 +1447,7 @@ EOM
 
     ###BUGALERT### Replace >, create or delete whole file and replace it with
     #what I write now, with >> for append to file if it already exists????
-        open my $fh, '>', $fetchwarefile_filename or die <<EOD;
+        my $fh = safe_open($fetchwarefile_filename, <<EOD, WRITE => 1);
 fetchware: failed to open your new fetchwarefile because of os error
 [$!]. This really shouldn't happen in this case. Probably a bug, or a weird race
 condition.
@@ -1902,8 +1902,7 @@ Returns true on success and dies with an error message if it fails.
 sub parse_fetchwarefile {
     my $fetchwarefile_path = shift;
 
-    ###BUGALERT### Need security checking code!!!!!!!!!!
-    open my $fh, '<', $fetchwarefile_path or die <<EOD;
+    my $fh = safe_open($fetchwarefile_path, <<EOD);
 fetchware: run-time error. fetchware failed to open the Fetchwarefile you
 specified on the command line [$fetchwarefile_path]. Please check permissions
 and try again. See perldoc App::Fetchware. The system error was [$!].
@@ -2054,8 +2053,6 @@ system and if super user or not.
 
 =cut
 
-###BUGALERT### In verbose mode, when its added, have this subroutine print what
-#it determines the fetchware database path to be everytime its called.
 sub fetchware_database_path {
     my $fetchware_database_path;
     if (is_os_type('Unix', $^O)) {
@@ -2319,7 +2316,7 @@ sub create_test_fetchwarefile {
     my ($fh, $fetchwarefile_path) = tempfile('fetchware-XXXXXXXXXXX', TMPDIR => 1,);
 
     # Create a fake Fetchwarefile for our fake fetchware package.
-    open my $write_fh, '>', $fetchwarefile_path or die <<EOD;
+    my $write_fh = safe_open($fetchwarefile_path, <<EOD, WRITE => 1);
 fetchware: run-time error. Failed to open the file [$fetchwarefile_path] for
 writing. Os error [$!]. Please see perldoc fetchware.
 EOD

@@ -1706,8 +1706,7 @@ EOD
 ###subify calc_sum()
     # Open the downloaded software archive for reading.
     diag("PACKAGEPATH[$package_path");
-    open(my $package_fh, '<', $package_path)
-        or die <<EOD;
+    my $package_fh = safe_open($package_path, <<EOD);
 App-Fetchware: run-time error. Fetchware failed to open the file it downloaded
 while trying to read it in order to check its MD5 sum. The file was
 [$package_path]. See perldoc App::Fetchware.
@@ -1751,8 +1750,7 @@ EOD
 ###subify compare_sums();
     # Open the downloaded software archive for reading.
     diag("DIGESTFILE[$digest_file]");
-    open(my $digest_fh, '<', $digest_file)
-        or die <<EOD;
+    my $digest_fh = safe_open($digest_file, <<EOD);
 App-Fetchware: run-time error. Fetchware failed to open the $digest_type file it
 downloaded while trying to read it in order to check its $digest_type sum. The file was
 [$digest_file]. See perldoc App::Fetchware.
