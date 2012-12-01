@@ -18,6 +18,8 @@ use File::Copy 'cp';
 use File::Temp 'tempdir';
 use File::stat;
 use Fcntl 'S_ISDIR';
+# Privileges::Drop only works on Unix, so only load it on Unix.
+use if is_os_type('Unix'), 'Privileges::Drop';
 
 # Enable Perl 6 knockoffs.
 use 5.010;
@@ -30,10 +32,12 @@ our %EXPORT_TAGS = (
         msg
         vmsg
         run_prog
+        no_mirror_download_dirlist
         download_dirlist
         ftp_download_dirlist
         http_download_dirlist
         file_download_dirlist
+        no_mirror_download_file
         download_file
         download_ftp_url
         download_http_url
@@ -41,6 +45,7 @@ our %EXPORT_TAGS = (
         just_filename
         do_nothing
         safe_open
+        drop_privs
         create_tempdir
         original_cwd
         cleanup_tempdir
@@ -270,9 +275,79 @@ your fetchware extension.
 =cut
 
 
+
 =head2 download_dirlist()
 
     my $dir_list = download_dirlist($ftp_or_http_url)
+
+Calls no_mirror_download_dirlist() once for the url given returning the downloaded
+file's directory listing. If the download fails for any reason (an exception is
+die()d), then download_file() will loop over any configured mirrors, and will
+try each one in order until it runs out, and will only fail after all mirrors
+have been tried.
+
+Note: There is no limit to the number of mirrors. If some one wants to input all
+200 some odd mirrors for CPAN or some other project that is mirrored, they are
+free to do so.
+
+=cut
+
+sub download_dirlist {
+    my $url = shift;
+
+    my $dirlist;
+
+    eval {
+
+    # Try the url directly without trying any mirrors.
+    $dirlist = no_mirror_download_dirlist($url);
+
+    };
+
+    my $mirror;
+    my $mirror_iter = config_iter('mirror');
+
+    # While the above no_mirror_download_file() call has failed, and while the
+    # calls in this loop continue to fail.
+    while ($@) {
+
+use Test::More;
+diag explain \config('mirror');
+        if (defined($mirror = $mirror_iter->())) {
+note("MIRROR[$mirror]");
+            ###BUGALERT### Must process $mirror!!!
+            #if it has no path replace its hostname with the hostname in $url.
+            #the scheme *can* change!
+            #if the mirror has a path keep the path.
+            #NOTE: in the download_file() mirror one, you'll have to add in
+            #$url's filename into the new mirror.
+            msg <<EOM;
+Directory download attempt failed! Retrying with mirror:
+[$mirror]
+EOM
+
+            eval {
+
+                # Try the url directly without trying any mirrors.
+                $dirlist = no_mirror_download_dirlist($mirror);
+
+            };
+        } else {
+            msg <<EOM;
+Directory download attempt failed!
+EOM
+            # Forward trapped exception back to caller.
+            die $@;
+        }
+    }
+
+    return $dirlist;
+}
+
+
+=head2 no_mirror_download_dirlist()
+
+    my $dir_list = no_mirror_download_dirlist($ftp_or_http_url)
 
 Downloads a ftp or http url and assumes that it will be downloading a directory
 listing instead of an actual file. To download an actual file use
@@ -283,7 +358,7 @@ provided by the http server.
 
 =cut
 
-sub download_dirlist {
+sub no_mirror_download_dirlist {
     my $url = shift;
 
     my $dirlist;
@@ -450,13 +525,86 @@ diag "end lfd file_listing";
 
     my $filename = download_file($url)
 
-Downloads a $url and assumes it is a file that will be downloaded instead of a
-file listing that will be returned. download_file() returns the file name of the
-file it downloads.
+Calls no_mirror_download_file() once for the url given returning the downloaded
+file's filename. If the download fails for any reason (an exception is die()d),
+then download_file() will loop over any configured mirrors, and will try each
+one in order until it runs out, and will only fail after all mirrors have been
+tried.
+
+Note: There is no limit to the number of mirrors. If some one wants to input all
+200 some odd mirrors in CPAN or some other project that is mirrored, they are
+free to do so.
 
 =cut
 
 sub download_file {
+    my $url = shift;
+
+    my $filename;
+
+    eval {
+
+    # Try the url directly without trying any mirrors.
+    $filename = no_mirror_download_file($url);
+
+    };
+
+    my $mirror;
+    my $mirror_iter = config_iter('mirror');
+
+    # While the above no_mirror_download_file() call has failed, and while the
+    # calls in this loop continue to fail.
+    while ($@) {
+
+use Test::More;
+diag explain \config('mirror');
+        if (defined($mirror = $mirror_iter->())) {
+note("MIRROR[$mirror]");
+            ###BUGALERT### Must process $mirror!!!
+            #if it has no path replace its hostname with the hostname in $url.
+            #the scheme *can* change!
+            #if the mirror has a path keep the path.
+            #NOTE: in the download_file() mirror one, you'll have to add in
+            #$url's filename into the new mirror.
+            msg <<EOM;
+Directory download attempt failed! Retrying with mirror:
+[$mirror]
+EOM
+
+            eval {
+
+                # Try the url directly without trying any mirrors.
+                $filename = no_mirror_download_file($mirror);
+
+            };
+        } else {
+            msg <<EOM;
+Directory download attempt failed!
+EOM
+            # Forward trapped exception back to caller.
+            die $@;
+        }
+    }
+
+    return $filename;
+}
+
+
+=head2 no_mirror_download_file()
+
+    my $filename = no_mirror_download_file($url)
+
+Downloads one $url and assumes it is a file that will be downloaded instead of a
+file listing that will be returned. no_mirror_download_file() returns the file
+name of the file it downloads.
+
+Like its name says it does not try any configured mirrors at all. This
+subroutine should not be used; instead download_file() should be used, because
+you should respect your user's desired mirrors.
+
+=cut
+
+sub no_mirror_download_file {
     my $url = shift;
 
     my $filename;
@@ -907,9 +1055,102 @@ EOD
 }
 
 
+=head2 drop_privs()
+    
+    drop_privs(sub {
+        # Do stuff as $regular_user
+        }, $regular_user
+    );
+
+Forks drops privs to $regular_user, and then executes whatever is in the first
+argument, which should be a code reference. Throws an exception on any problems
+with the fork.
+
+It only allows you to specify what the lower priveledged user does. The parent
+process's behavior can not be changed. All the parent does is wait for the child
+to finish and collect its exist status to avoid making a zombie.
+
+drop_privs() handles being on nonunix for you. On a platform that is not Unix
+that does not have Unix's fork() and exec() security model, drop_privs() simply
+executes the provided code reference I<without> dropping priveledges.
+
+=cut
+
+sub drop_privs {
+    my $child_code = shift;
+    my $regular_user = shift // 'nobody';
+
+    # Only for on Unix-like systems, or we're root.
+    if (is_os_type('Unix') and ($< == 0 or $> == 0)) {
+        # Code below bassed on a cool forking idiom by Aristotle.
+        # (http://blogs.perl.org/users/aristotle/2012/10/concise-fork-idiom.html)
+        given ( scalar fork ) {
+            # Fork failed.
+            when ( undef ) {
+                die <<EOD; 
+App-Fetchware-Util: Fork failed! This shouldn't happen!?! Os error [$!].
+EOD
+            # Fork succeeded, Child code goes here.
+            } when ( 0 ) {
+                # Drop privs.
+                # drop_privileges() dies on an error just let drop_privs() caller
+                # catch it.
+                my ($uid, $gid) = drop_privileges($regular_user); 
+
+
+                # Execute the coderef that is supposed to be done as non-root.
+                $child_code->();
+
+                # Exit success, because failure is only indicated by a thrown
+                # exception that bin/fetchware's main eval {} will catch, print,
+                # and exit non-zero indicating failure.
+                exit 0;
+
+            # Fork succeeded, parent code goes here.
+            } default {
+                my $kidpid = $_;
+
+                # Just block waiting for the child to finish.
+                waitpid($kidpid, 0);
+
+                # If the child failed ($? >> 8 != 0), then the parent should
+                # fail as well, because the child only exists to drop privs with
+                # the ability to still at a later time execute something as root
+                # again, so the fork is needed, because once you drop privs
+                # you can't get them back, and you don't want to be able to for
+                # security reasons.
+                if (($? >> 8) != 0) {
+                    # Note this message is only vmsg()'d instead of die()'d,
+                    # because if its printed always, it could confuse users.
+                    # Because priv_drop()ing is the default, this error would be
+                    # seen all the time making getting confused by it likely.
+                    vmsg <<EOD;
+App-Fetchware-Util: An error occured forcing fetchware to exit while fetchware
+has forked to drop its root priviledges to avoid downloading files and building
+programs as root. Root priviledges are only maintained to install the software
+in a system directory requiring root access. This error should have been
+previously printed out by fetchware's lower priviledged child process above.
+EOD
+                    # Exit non-zero indicating failure, because whatever the
+                    # child did failed, and the child's main eval {} in
+                    # bin/fetchware caught that failure, printed it to the
+                    # screen, and exit()ed non-zero for failure. And since the
+                    # child failed ($? >> 8 != 0), the parent should fail too.
+                    exit 1;
+                }
+            }
+        }    
+    # Non-Unix OSes just execute the $child_code.
+    } else {
+        return $child_code->();
+    }
+}
+
+
+
 =head1 MISCELANEOUS UTILTY SUBROUTINES
 
-This is just a catchall category for everythig else in App::Fetchware::Utility.
+This is just a catch all category for everything else in App::Fetchware::Utility.
 
 =cut
 

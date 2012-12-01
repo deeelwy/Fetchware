@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '18'; #Update if this changes.
+use Test::More 0.98 tests => '21'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir rootdir);
 use URI::Split 'uri_split';
@@ -40,10 +40,12 @@ subtest 'UTIL export what they should' => sub {
         msg
         vmsg
         run_prog
+        no_mirror_download_dirlist
         download_dirlist
         ftp_download_dirlist
         http_download_dirlist
         file_download_dirlist
+        no_mirror_download_file
         download_file
         download_ftp_url
         download_http_url
@@ -51,6 +53,7 @@ subtest 'UTIL export what they should' => sub {
         just_filename
         do_nothing
         safe_open
+        drop_privs
         create_tempdir
         original_cwd
         cleanup_tempdir
@@ -145,23 +148,103 @@ diag explain $dirlist;
 };
 
 
-subtest 'test download_dirlist' => sub {
+
+subtest 'test no_mirror_download_dirlist' => sub {
     skip_all_unless_release_testing();
 
     my $url = 'invalidscheme://fake.url';
-    eval_ok(sub {download_dirlist($url)}, <<EOS, 'checked download_dirlist() invalid url scheme');
+    eval_ok(sub {no_mirror_download_dirlist($url)}, <<EOS, 'checked no_mirror_download_dirlist() invalid url scheme');
 App-Fetchware: run-time syntax error: the url parameter your provided in
 your call to download_dirlist() [invalidscheme://fake.url] does not have a supported URL scheme (the
 http:// or ftp:// part). The only supported download types, schemes, are FTP and
 HTTP. See perldoc App::Fetchware.
 EOS
 
-    ok(download_dirlist($ENV{FETCHWARE_FTP_LOOKUP_URL}),
-        'check download_dirlist() ftp success');
+    ok(no_mirror_download_dirlist($ENV{FETCHWARE_FTP_LOOKUP_URL}),
+        'check no_mirror_download_dirlist() ftp success');
 
-    ok(download_dirlist($ENV{FETCHWARE_HTTP_LOOKUP_URL}),
-        'check download_dirlist() http success');
+    ok(no_mirror_download_dirlist($ENV{FETCHWARE_HTTP_LOOKUP_URL}),
+        'check no_mirror_download_dirlist() http success');
 
+    # No cleanup code needed ftp doesn't download files, and http uses
+    # HTTP::Tiny, which returns a scalar ref. None of these are files written to
+    # the filesystem, so nothing needs cleaning up.
+};
+
+
+subtest 'test download_dirlist' => sub {
+    skip_all_unless_release_testing();
+
+    my $url = 'invalidscheme://fake.url';
+    # Setup a fake mirror to test the mirror failing too.
+    config(mirror => $url);
+    eval_ok(sub {download_dirlist($url)}, <<EOS, 'checked download_dirlist() invalid url scheme');
+App-Fetchware: run-time syntax error: the url parameter your provided in
+your call to download_dirlist() [invalidscheme://fake.url] does not have a supported URL scheme (the
+http:// or ftp:// part). The only supported download types, schemes, are FTP and
+HTTP. See perldoc App::Fetchware.
+EOS
+    # Clear previous mirror.
+    config_delete('mirror');
+
+    # Determine what we download should look like.
+    my $expected_output;
+    ok($expected_output = download_dirlist($ENV{FETCHWARE_FTP_LOOKUP_URL}),
+        'check download_dirlist() expected ftp success');
+
+    # Setup a mirror that should succeed, but a $url that should fail.
+    config(mirror => $ENV{FETCHWARE_FTP_LOOKUP_URL});
+    my $got_output = download_dirlist($url);
+    ok($got_output,
+        'check download_dirlist() ftp mirror success');
+
+    # Compare what no mirror gets to what a failed try with one mirror gets.
+    is_deeply($got_output, $expected_output,
+        'check download_dirlist() proper output');
+
+    # Now try multiple mirrors.
+
+    # Delete all mirrors.
+    config_delete('mirror');
+
+    # Set up mirrors that will fail, and one final mirror that should succeed.
+    config(mirror => $url);
+    config(mirror => $url);
+    config(mirror => $url);
+    config(mirror => $url);
+    config(mirror => $ENV{FETCHWARE_FTP_LOOKUP_URL});
+
+    # Test multiple mirrors.
+    ok($got_output = download_dirlist($url),
+        'check download_dirlist() multi-mirror ftp success');
+
+    # Compare what no mirror gets to what a failed try with one mirror gets.
+    is_deeply($got_output, $expected_output,
+        'check download_dirlist() proper output');
+
+
+    # Clean up mirrors again.
+    config_delete('mirror');
+
+
+    # Change $expected_output to http, which is a scalar ref instead of a
+    # arrayref.
+    ok($expected_output = download_dirlist($ENV{FETCHWARE_HTTP_LOOKUP_URL}),
+        'check download_dirlist() expected http success');
+
+    # Set up mirrors that will fail, and one final mirror that should succeed.
+    config(mirror => $url);
+    config(mirror => $url);
+    config(mirror => $url);
+    config(mirror => $url);
+    config(mirror => $ENV{FETCHWARE_HTTP_LOOKUP_URL});
+
+    # Test multiple mirrors.
+    ok($got_output = download_dirlist($url),
+        'check download_dirlist() multi-mirror http success');
+    # Compare what no mirror gets to what a failed try with one mirror gets.
+    is_deeply($got_output, $expected_output,
+        'check download_dirlist() proper output');
 };
 
 
@@ -263,7 +346,66 @@ subtest 'test download_file' => sub {
     skip_all_unless_release_testing();
 
     my $url = 'invalidscheme://fake.url';
+    # Setup a fake mirror to test the mirror failing too.
+    config(mirror => $url);
     eval_ok(sub {download_file($url)}, <<EOS, 'checked download_file() invalid url scheme');
+App-Fetchware: run-time syntax error: the url parameter your provided in
+your call to download_file() [invalidscheme://fake.url] does not have a supported URL scheme (the
+http:// or ftp:// part). The only supported download types, schemes, are FTP and
+HTTP. See perldoc App::Fetchware.
+EOS
+    # Clear previous mirror.
+    config_delete('mirror');
+
+    # Setup a mirror that should succeed, but a $url that should fail.
+    my $filename;
+    config(mirror => "$ENV{FETCHWARE_FTP_LOOKUP_URL}/KEYS");
+    ok($filename = download_file($url),
+        'check download_file() ftp mirror success');
+    ok(-e $filename, 'checked download_file() ftp filename success');
+    ok(unlink $filename, 'checked deleting downloaded file');
+
+    # Now try multiple mirrors.
+
+    # Delete all mirrors.
+    config_delete('mirror');
+
+    # Set up mirrors that will fail, and one final mirror that should succeed.
+    config(mirror => $url);
+    config(mirror => $url);
+    config(mirror => $url);
+    config(mirror => $url);
+    config(mirror => "$ENV{FETCHWARE_FTP_LOOKUP_URL}/KEYS");
+
+    # Test multiple mirrors.
+    ok($filename = download_file($url),
+        'check download_file() ftp multi-mirror success');
+    ok(-e $filename, 'checked download_file() ftp multi-mirror filename success');
+    ok(unlink $filename, 'checked deleting downloaded file');
+
+    # Clean up mirrors again.
+    config_delete('mirror');
+
+    # Set up mirrors that will fail, and one final mirror that should succeed.
+    config(mirror => $url);
+    config(mirror => $url);
+    config(mirror => $url);
+    config(mirror => $url);
+    config(mirror => "$ENV{FETCHWARE_HTTP_LOOKUP_URL}/KEYS");
+
+    # Test multiple mirrors.
+    ok($filename = download_file($url),
+        'check download_file() http multi-mirror success');
+    ok(-e $filename, 'checked download_file() http multi-mirror filename success');
+    ok(unlink $filename, 'checked deleting downloaded file');
+};
+
+
+subtest 'test no_mirror_download_file' => sub {
+    skip_all_unless_release_testing();
+
+    my $url = 'invalidscheme://fake.url';
+    eval_ok(sub {no_mirror_download_file($url)}, <<EOS, 'checked download_file() invalid url scheme');
 App-Fetchware: run-time syntax error: the url parameter your provided in
 your call to download_file() [invalidscheme://fake.url] does not have a supported URL scheme (the
 http:// or ftp:// part). The only supported download types, schemes, are FTP and
@@ -271,14 +413,14 @@ HTTP. See perldoc App::Fetchware.
 EOS
 
     # Add /KEYS to the lookup URLs, because download_file() must download an
-    # actual file *not* a worthless dirlist. This makes tese brittle tests.
+    # actual file *not* a worthless dirlist. This makes tests brittle.
     my $filename;
-    ok($filename = download_file("$ENV{FETCHWARE_FTP_LOOKUP_URL}/KEYS"),
+    ok($filename = no_mirror_download_file("$ENV{FETCHWARE_FTP_LOOKUP_URL}/KEYS"),
         'check download_file() ftp success');
     ok(-e $filename, 'checked download_ftp_url return success');
     ok(unlink $filename, 'checked deleting downloaded file');
 
-    ok($filename = download_file("$ENV{FETCHWARE_HTTP_LOOKUP_URL}/KEYS"),
+    ok($filename = no_mirror_download_file("$ENV{FETCHWARE_HTTP_LOOKUP_URL}/KEYS"),
         'check download_file() http success');
     ok(-e $filename, 'checked download_http_url return success');
     ok(unlink $filename, 'checked deleting downloaded file');
@@ -498,6 +640,11 @@ note "TEMPDIR[$temp_dir]";
     $temp_dir = create_tempdir();
     ok(-e $temp_dir, 'checked create_tempdir() success.');
 
+
+    # Cleanup $temp_dir, because this one won't automatically be cleaned up.
+    chdir original_cwd() or fail("Failed to chdir back to original_cwd()!");
+    rmdir $temp_dir or fail("Failed to delete temp_dir[$temp_dir]! [$!]");
+
     $temp_dir = create_tempdir(KeepTempDir => 1);
     ok(-e $temp_dir, 'checked create_tempdir() KeepTempDir success.');
 note "TEMPDIR[$temp_dir]";
@@ -523,6 +670,116 @@ EOE
     #this.
     chdir original_cwd() or fail("Failed to chdir back to [@{[original_cwd]}]!");
 };
+
+
+subtest 'test drop_privs()' => sub {
+    # Note: drop_privs() forks, and Test::More and Test::Builder don't support
+    # forking. It's a massive bug that's still not fixed. Test::Builder2 should
+    # fix it, but it isn't released yet as far as I know. Therefore I cannot use
+    # any Test::More tests inside drop_privs() coderefs :( Instead I'll have to
+    # write success to a tempfile, and then read the tempfile in a Test::More
+    # test back in the parent, and only run tests in the parent.
+
+
+    # If we not running as root.
+    if ($< != 0) {
+        my $previous_uid = $<;
+        my $previous_euid = $>;
+
+        drop_privs_ok(
+            sub {
+                my $fh = shift;
+                # Write our real and effective uids to the tempfile.
+                print $fh "$$\n";
+                print $fh "$<\n";
+                print $fh "$>\n";
+            }, sub {
+                my $rfh = shift;
+                chomp(my $child_pid = <$rfh>);
+                chomp(my $new_uid = <$rfh>);
+                chomp(my $new_euid = <$rfh>);
+
+                # Due to the if above we're nonroot, so check that we did not
+                # fork, because only root is supposed to fork.
+                ok($child_pid == $$,
+                    'checked drop_privs() didnt fork success.');
+
+                is($new_uid, $previous_uid,
+                    'checked drop_privs() success.');
+                is($new_euid, $previous_euid,
+                    'checked drop_privs() success.');
+            }
+        );
+
+        
+
+    # If we're running as root.
+    } elsif ($< == 0) {
+        my $previous_uid = $<;
+        my $previous_euid = $>;
+
+        # Check drop_privs() with no extra args.
+        drop_privs_ok(
+            sub {
+                my $fh = shift;
+                # Write our real and effective uids to the tempfile.
+                print $fh "$$\n";
+                print $fh "$<\n";
+                print $fh "$>\n";
+            }, sub {
+                my $rfh = shift;
+                chomp(my $child_pid = <$rfh>);
+                chomp(my $new_uid = <$rfh>);
+                chomp(my $new_euid = <$rfh>);
+
+                # Due to the if above we're nonroot, so check that we did not
+                # fork, because only root is supposed to fork.
+                ok($child_pid != $$,
+                    'checked drop_privs() did fork success.');
+
+                ok($new_uid != $previous_uid,
+                    'checked drop_privs() uid success.');
+                ok($new_euid != $previous_euid,
+                    'checked drop_privs() euid success.');
+            }
+        );
+
+
+        # Test drop_privs() extra args.
+        drop_privs_ok(
+            sub {
+                my $fh = shift;
+                # Write our real and effective uids to the tempfile.
+                print $fh "$$\n";
+                print $fh "$<\n";
+                print $fh "$>\n";
+            }, sub {
+                my $rfh = shift;
+                chomp(my $child_pid = <$rfh>);
+                chomp(my $new_uid = <$rfh>);
+                chomp(my $new_euid = <$rfh>);
+
+                # Due to the if above we're nonroot, so check that we did not
+                # fork, because only root is supposed to fork.
+                ok($child_pid != $$,
+                    'checked drop_privs() nobody did fork success.');
+
+                ok($new_uid != $previous_uid,
+                    'checked drop_privs() nobody uid success.');
+                ok($new_euid != $previous_euid,
+                    'checked drop_privs() nobody euid success.');
+            }, 'nobody'
+        );
+
+
+
+
+    } else {
+        fail('Uhmmmm...this shouldn\'t happen...!?!');
+    }
+
+};
+
 
 # Share these variables with the next subtest.
 my $tempdir;
@@ -710,6 +967,43 @@ sub is_fh {
     ok(ref($fh) eq 'GLOB', $test_name);
 }
 
+
+
+# Allows me to test drop_privs() more than once without shitloads of copying and
+# pasting the same stupid code over and over again.
+# $writer_code is a coderef that does something, and prints values to its one
+# argument $fh.
+# Then $tester_code, which is a coderef, gets passed $rfh, which is a read-only
+# file handle of the same file that $writer_code wrote to, and then $tester_code
+# reads from $rfh, and compares the values it gets to what it expects using
+# standard Test::More stuff such as is().
+# @drop_privs_args is an optional array of options that are passed to
+# drop_privs(), but the only option drop_privs() cares about is $regular_user.
+sub drop_privs_ok {
+    my $writer_code = shift;
+    my $tester_code = shift;
+    my @drop_privs_args = @_;
+
+
+    my ($fh, $filename)
+        =
+        tempfile("fetchware-test-$$-XXXXXXXXXXXXXXX",
+            UNLINKE => 1,
+            TMPDIR => 1);
+
+    drop_privs(sub {
+        $writer_code->($fh);
+    }, @drop_privs_args);
+
+    # Close $fh to flush the print statement above to disk.
+    close $fh;
+
+    # Read child uid and euid they're just newline separated.
+    open(my $rfh, '<', $filename)
+        or fail("Failed to open file [$filename]");
+
+    $tester_code->($rfh)
+}
 
 
 # Remove this or comment it out, and specify the number of tests, because doing
