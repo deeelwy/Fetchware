@@ -144,7 +144,7 @@ sub config_iter {
         if (ref $CONFIG{$config_sub_name} eq 'ARRAY') {
             # Return undef if $iterator is greater than the last element index
             # of the array ref.
-            return if $iterator == $#{$CONFIG{$config_sub_name}};
+            return if $iterator > $#{$CONFIG{$config_sub_name}};
 
             # Simply access whatever number the iterator is at now.
             my $retval = $CONFIG{$config_sub_name}->[$iterator];
