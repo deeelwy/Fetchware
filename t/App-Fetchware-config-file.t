@@ -10,6 +10,9 @@ use 5.010;
 # Test::More version 0.98 is needed for proper subtest support.
 use Test::More 0.98;# tests => '3'; #Update if this changes.
 
+use App::Fetchware::Config ':CONFIG';
+use Test::Fetchware ':TESTING';
+
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
 # Delete *bad* elements from environment to make it safer as recommended by
@@ -18,7 +21,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 
 # Test if I can load the module "inside a BEGIN block so its functions are exported
 # and compile-time, and prototypes are properly honored."
-BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :TESTING)); }
+BEGIN { use_ok('App::Fetchware', ':DEFAULT'); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
 diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
@@ -41,6 +44,7 @@ subtest 'test config file subs' => sub {
     verify_method 'test';
     no_install 'test';
     verify_failure_ok 'test';
+    stay_root 'test';
 
     debug_CONFIG();
 
@@ -58,6 +62,7 @@ subtest 'test config file subs' => sub {
         verify_method
         no_install
         verify_failure_ok
+        stay_root
     )) {
         is(config($config_sub), 'test', "checked config sub $config_sub");
     }
@@ -100,6 +105,7 @@ subtest 'test ONEARRREF config_file_subs()' => sub {
         [ mirror => 'MANY' ],
         [ no_install => 'BOOLEAN' ],
         [ verify_failure_ok => 'BOOLEAN' ],
+        [ stay_root => 'BOOLEAN' ],
     );
 
     { no strict 'refs';

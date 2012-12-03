@@ -75,6 +75,7 @@ our @EXPORT = qw(
     verify_method
     no_install
     verify_failure_ok
+    stay_root
     mirror
     config
 
@@ -316,6 +317,7 @@ make_config_sub() except for fetchware() and override().
         [ mirror => 'MANY' ],
         [ no_install => 'BOOLEAN' ],
         [ verify_failure_ok => 'BOOLEAN' ],
+        [ stay_root => 'BOOLEAN' ],
     );
 
 
