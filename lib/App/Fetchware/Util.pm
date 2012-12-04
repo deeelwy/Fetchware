@@ -1074,11 +1074,40 @@ drop_privs() handles being on nonunix for you. On a platform that is not Unix
 that does not have Unix's fork() and exec() security model, drop_privs() simply
 executes the provided code reference I<without> dropping priveledges.
 
+=over
+
+=item NOTICE
+
+Due to the nature for fork()ing, it is impossible to access the return value of
+$child_code on the parent. The could be worked around with pipes and perhaps
+L<Storable>, but the possible bugs and pipe deadlock headaches are not worth it.
+So, we're stuck with not being able to access the child's return value.
+Furthermore, any changes to %CONFIG variables done in the child process are
+B<not> currently sync'd with the parent. This is done to avoid using pipes, and
+better security, because the child's behavior cannot directly impact the parents
+via %CONFIG. However, the parent trusts the code the child downloads especially
+after verify() verifies it with gpg, so an attacker could modify the install
+scripts that root will later blindly execute. But again the attacker would need
+to know to modify the install scripts; instead, of just gain root with a
+standard shell code payload, which would only give them C<nobody> access or
+perhaps a dedicated fetchware user access
+
+=back
+
 =cut
 
 sub drop_privs {
     my $child_code = shift;
     my $regular_user = shift // 'nobody';
+
+    # Execute $child_code without dropping privs if the user's configuration
+    # file is configured to force fetchware to "stay_root."
+    if (config('stay_root')) {
+        msg <<EOM;
+stay_root is set to true. NOT dropping privileges!
+EOM
+        return $child_code->();
+    }
 
     # Only for on Unix-like systems, or we're root.
     if (is_os_type('Unix') and ($< == 0 or $> == 0)) {
@@ -1105,6 +1134,10 @@ EOD
                 # exception that bin/fetchware's main eval {} will catch, print,
                 # and exit non-zero indicating failure.
                 exit 0;
+
+                ###BUGALERT### Should I setup a pipe to communicate changes to
+                #%CONFIG and $child_code's return value back to caller??? It
+                #perhaps has security implications.
 
             # Fork succeeded, parent code goes here.
             } default {
@@ -1137,6 +1170,7 @@ EOD
                     # screen, and exit()ed non-zero for failure. And since the
                     # child failed ($? >> 8 != 0), the parent should fail too.
                     exit 1;
+                # If successful, return child's return value to caller.
                 }
             }
         }    

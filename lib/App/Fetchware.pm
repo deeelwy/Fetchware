@@ -3066,7 +3066,7 @@ directory that it uses to download, verify, unarchive, build, and install your
 software. By default it uses your system temp directory, which is whatever
 directory L<File::Temp::tempdir> decides to use.
 
-=head2 user 'nobody'; # UNIMPLEMENTED!!!
+=head2 user 'nobody';
 
 Tells fetchware what user it should drop priveledges to. The default is
 C<nobody>, but you can specify a different username with this configuration
@@ -3081,6 +3081,37 @@ downloaded is exactly what the author uploaded.
 
 Note this only works for unix like systems, and is not used on Windows and
 other non-unix systems.
+
+=head2 stay_root 'On';
+
+Tells fetchware to B<not> drop privileges. Dropping privileges when run as root
+is fetchware's default behavior. It improves security, and allows fetchware to
+avoid exposing the root account by downloading files as root. Instead,
+everything but the API functions install(), which installs your program, and
+end(), which deletes fetchware's temporary directory, runs as C<nobody> or
+whatever C<user> option you provide. 
+
+Do B<not> use this feature unless you are absolutely sure you need it.
+
+=over
+
+=item SECURITY NOTICE
+
+stay_root, when turned on, causes fetchware to not drop privileges when
+fetchware looks up, downloads, verifies, and builds your program. Instead,
+fetchware will stay root through the entire build cycle, which needlessly
+exposes the root account when downloading files from the internet. These files
+may come from trusted mirrors, but mirrors can, and do get cracked:
+
+L<http://www.itworld.com/security/322169/piwik-software-installer-rigged-back-door-following-website-compromise?page=0,0>
+
+L<http://www.networkworld.com/news/2012/092612-compromised-sourceforge-mirror-distributes-backdoored-262815.html>
+
+L<http://www.csoonline.com/article/685037/wordpress-warns-server-admins-of-trojans>
+
+L<http://www.computerworld.com/s/article/9233822/Hackers_break_into_two_FreeBSD_Project_servers_using_stolen_SSH_keys>
+
+=back
 
 =head2 lookup_url 'ftp://somedomain.com/some/path
 
@@ -3174,12 +3205,32 @@ Fetchware's default regarding failing to verify your downloaded Archive with
 gpg, sha1, or md5 is to exit with an error message, because installing software
 that cannot be cryptographically verified should never be done.
 
+
+=over
+
+=item SECURITY NOTICE
+
+
 However, if the author of a program you want to use fetchware to manage for you
 does not offer a gpg, sha1, or md5 file to verify its integrity, then you can
 use this option to force Fetchware to install this program anyway. However, do
 not enable this option lightly. Please scour the program's mirrors and homepage
 to see which C<gpg_key_url>, C<sha1_url>, or C<md5_url> you can use to ensure
-that your archive is verified before it is compiled and installed.
+that your archive is verified before it is compiled and installed. Even mirrors
+from sites large and small get hacked regularly:
+
+L<http://www.itworld.com/security/322169/piwik-software-installer-rigged-back-door-following-website-compromise?page=0,0>
+
+L<http://www.networkworld.com/news/2012/092612-compromised-sourceforge-mirror-distributes-backdoored-262815.html>
+
+L<http://www.csoonline.com/article/685037/wordpress-warns-server-admins-of-trojans>
+
+L<http://www.computerworld.com/s/article/9233822/Hackers_break_into_two_FreeBSD_Project_servers_using_stolen_SSH_keys>
+
+So, Please give searching for a C<gpg_key_url>, C<sha1_url>, or C<md5_url> for
+your program another change before simply enabling this option.
+
+=back
 
 =over
 

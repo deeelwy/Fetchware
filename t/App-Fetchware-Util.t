@@ -771,7 +771,37 @@ subtest 'test drop_privs()' => sub {
             }, 'nobody'
         );
 
+        # Set stay_root to true to disable priv dropping.
+        config(stay_root => 1);
 
+        # Test drop_privs() stay_root.
+        drop_privs_ok(
+            sub {
+                my $fh = shift;
+                # Write our real and effective uids to the tempfile.
+                print $fh "$$\n";
+                print $fh "$<\n";
+                print $fh "$>\n";
+            }, sub {
+                my $rfh = shift;
+                chomp(my $child_pid = <$rfh>);
+                chomp(my $new_uid = <$rfh>);
+                chomp(my $new_euid = <$rfh>);
+
+                # Due to the if above we're nonroot, so check that we did not
+                # fork, because only root is supposed to fork.
+                ok($child_pid == $$,
+                    'checked drop_privs() stay_root no fork success.');
+
+                ok($new_uid == $previous_uid,
+                    'checked drop_privs() stay_root uid success.');
+                ok($new_euid == $previous_euid,
+                    'checked drop_privs() stay_root euid success.');
+            }
+        );
+
+        # clear stay_root to avoid messing up other tests.
+        config_delete('stay_root');
 
 
     } else {
@@ -995,10 +1025,11 @@ sub drop_privs_ok {
         $writer_code->($fh);
     }, @drop_privs_args);
 
-    # Close $fh to flush the print statement above to disk.
+    # Close $fh to flush the print above output to disk.
     close $fh;
 
-    # Read child uid and euid they're just newline separated.
+    # Open same file $writer_code used for reading, and then pass its $fh to
+    # $tester_code to test the dropped priv's child's output.
     open(my $rfh, '<', $filename)
         or fail("Failed to open file [$filename]");
 
