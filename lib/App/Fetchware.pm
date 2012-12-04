@@ -69,7 +69,7 @@ our @EXPORT = qw(
     install_commands
     lookup_url
     lookup_method
-    gpg_key_url
+    gpg_sig_url
     sha1_url
     md5_url
     verify_method
@@ -167,7 +167,7 @@ subroutines as Fetchwarefile configuration syntax.
 =item uninstall_commands $value;
 =item lookup_url $value;
 =item lookup_method $value;
-=item gpg_key_url $value;
+=item gpg_sig_url $value;
 =item verify_method $value;
 
 =back
@@ -184,7 +184,7 @@ These subroutines are generated at compile time by make_config_sub().
 =back
 
 C<mirror> can be called many times with each one adding a mirror that fetchware
-will try if the one included in lookup_url or gpg_key_url fails.
+will try if the one included in lookup_url or gpg_sig_url fails.
 
 C<mirror> is the only 'MANY' API subroutine that can be called more than one
 time.
@@ -310,7 +310,7 @@ make_config_sub() except for fetchware() and override().
         [ uninstall_commands => 'ONEARRREF' ],
         [ lookup_url => 'ONE' ],
         [ lookup_method => 'ONE' ],
-        [ gpg_key_url => 'ONE' ],
+        [ gpg_sig_url => 'ONE' ],
         [ sha1_url => 'ONE' ],
         [ md5_url => 'ONE' ],
         [ verify_method => 'ONE' ],
@@ -1273,7 +1273,6 @@ sub determine_package_path {
 =over
 =item Configuration subroutines used:
 =over
-=item gpg_key_url 'a.browser/like.url';
 =item gpg_sig_url 'a.browser/like.url';
 =item sha1_url 'a browser-like url';
 =item md5_url 'a browser-like url';
@@ -2656,7 +2655,7 @@ __END__
     install_commands 'make install';
     lookup_url 'http://whatevermirror.your/program/is/on';
     lookup_method 'versionstring';
-    gpg_key_url 'http://whatevermirror.your/program/gpg/key/url.asc';
+    gpg_sig_url 'http://whatevermirror.your/program/gpg/key/url.asc';
     sha1_url 'http://whatevermirror.your/program/sha1/url.sha1';
     md5_url 'http://whatevermirror.your/program/md5/url.md5';
     verify_method 'gpg';
@@ -2947,7 +2946,7 @@ L<App::Fetchware FETCHWAREFILE CONFIGURATION OPTIONS>.
 
 =over
 
-=item B<gpg_key_url> - Specifies an alternate directory url to use to try to download a gpg signature file that usually has a C<.asc> or a C<.sig> file extension.
+=item B<gpg_sig_url> - Specifies an alternate directory url to use to try to download a gpg signature file that usually has a C<.asc> or a C<.sig> file extension.
 
 =item B<sha1_url> - Specifies a directory url to use to download a SHA1 checksum.  This should only specify the master download site not a mirror, because of security concerns.  
 
@@ -3158,7 +3157,7 @@ number, which should also be the newest and best version of the archive to use.
 
 =back
 
-=head2 gpg_key_url 'mastermirror.com/some/path';
+=head2 gpg_sig_url 'mirror.com/some/path';
 
 Specifies an alternate url to use to download the cryptographic signature that
 goes with your program. This is usually a file with the same name as the
@@ -3218,7 +3217,7 @@ However, if the author of a program you want to use fetchware to manage for you
 does not offer a gpg, sha1, or md5 file to verify its integrity, then you can
 use this option to force Fetchware to install this program anyway. However, do
 not enable this option lightly. Please scour the program's mirrors and homepage
-to see which C<gpg_key_url>, C<sha1_url>, or C<md5_url> you can use to ensure
+to see which C<gpg_sig_url>, C<sha1_url>, or C<md5_url> you can use to ensure
 that your archive is verified before it is compiled and installed. Even mirrors
 from sites large and small get hacked regularly:
 
@@ -3230,7 +3229,7 @@ L<http://www.csoonline.com/article/685037/wordpress-warns-server-admins-of-troja
 
 L<http://www.computerworld.com/s/article/9233822/Hackers_break_into_two_FreeBSD_Project_servers_using_stolen_SSH_keys>
 
-So, Please give searching for a C<gpg_key_url>, C<sha1_url>, or C<md5_url> for
+So, Please give searching for a C<gpg_sig_url>, C<sha1_url>, or C<md5_url> for
 your program another change before simply enabling this option.
 
 =back

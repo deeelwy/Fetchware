@@ -40,7 +40,7 @@ subtest 'test config file subs' => sub {
     install_commands 'test';
     lookup_url 'test';
     lookup_method 'test';
-    gpg_key_url 'test';
+    gpg_sig_url 'test';
     verify_method 'test';
     no_install 'test';
     verify_failure_ok 'test';
@@ -58,7 +58,7 @@ subtest 'test config file subs' => sub {
         install_commands
         lookup_url
         lookup_method
-        gpg_key_url
+        gpg_sig_url
         verify_method
         no_install
         verify_failure_ok
@@ -98,7 +98,7 @@ subtest 'test ONEARRREF config_file_subs()' => sub {
         [ install_commands => 'ONEARRREF' ],
         [ lookup_url => 'ONE' ],
         [ lookup_method => 'ONE' ],
-        [ gpg_key_url => 'ONE' ],
+        [ gpg_sig_url => 'ONE' ],
         [ sha1_url => 'ONE' ],
         [ md5_url => 'ONE' ],
         [ verify_method => 'ONE' ],
