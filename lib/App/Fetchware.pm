@@ -4079,15 +4079,12 @@ So the real answer is no, but I intend to support Windows in a future release.
 
 App::Fetchware is inherently insecure, because its Fetchwarefile's are
 executable Perl code that actually is executed by Perl. These Fetchwarefiles are
-capable of doing everything someone can program Perl can do. This is why
+capable of doing everything someone can program Perl to do. This is why
 App::Fetchware will refuse to execute any Fetchwarefile's that are writable by
 anyone other than the owner who is executing them. It will also exit with a
 fatal error if you try to use a Fetchwarefile that is not the same user as the
 one who is running fetchware. These saftey measures help prevent fetchware being
 abused to get unauthorized code executed on your computer.
-
-###BUGALERT### user does nothing and the drop priv code isn't written! Write
-#it!!!!!! and test it!!!!!!!!!
 
 App::Fetchware also features the C<user> configuration option that tells
 fetchware what user you want fetchware to drop priveledges to when it does
@@ -4096,7 +4093,8 @@ option does B<not> tell fetchware to turn on the drop privelege code; that code
 is B<always> on, but just uses the fairly ubuiquitous C<nobody> user by default.
 This feature requires the OS to be some version of Unix, because Windows and
 other OSes do not support the same fork()ing method of limiting what processes
-can do.
+can do. On non-Unix OSes, fetchware won't fork() or try to use some other way of
+dropping privileges. It only does it on Unix.
 
 =cut
 
