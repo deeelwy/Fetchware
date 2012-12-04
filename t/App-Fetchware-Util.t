@@ -636,8 +636,7 @@ note "TEMPDIR[$temp_dir]";
     rmdir $temp_dir or fail("Failed to delete temp_dir[$temp_dir]! [$!]");
 
     # Test create_tempdir() successes with a custom temp_dir set.
-    config(temp_dir => tmpdir());
-    $temp_dir = create_tempdir();
+    $temp_dir = create_tempdir(TempDir => tmpdir());
     ok(-e $temp_dir, 'checked create_tempdir() success.');
 
 
@@ -654,16 +653,13 @@ note "TEMPDIR[$temp_dir]";
     rmdir $temp_dir or fail("Failed to delete temp_dir[$temp_dir]! [$!]");
 
     # Test create_tempdir() failure
-    config_replace(temp_dir => ( 'doesnotexist' . int(rand(238378290)) ));
-    eval_ok( sub {create_tempdir()},
+    eval_ok( sub {create_tempdir(
+                TempDir => 'doesnotexist' . int(rand(238378290)))},
         <<EOE, 'tested create_tempdir() temp_dir does not exist failure.');
 App-Fetchware: run-time error. Fetchware tried to use File::Temp's tempdir()
 subroutine to create a temporary file, but tempdir() threw an exception. That
 exception was []. See perldoc App::Fetchware.
 EOE
-
-    # Clean up after test that forces tempdir() to fail.
-    config_delete('temp_dir');
 
     #chdir back to $original_cwd, so that File::Temp's END block can delete
     #this last temp_dir. Otherwise, a warning is printed from File::Temp about

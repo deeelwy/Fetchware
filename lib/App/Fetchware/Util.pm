@@ -1264,6 +1264,10 @@ Creates a temporary directory, chmod 700's it, and chdir()'s into it.
 Accepts the fake hash argument C<KeepTempDir => 1>, which tells create_tempdir()
 to B<not> delete the temporary directory when the program exits.
 
+Also, accepts C<TempDir =E<gt> '/tmp'> to specify what temporary directory to
+use. The default with out this argument is to use tempdir()'s default, which is
+whatever File::Spec's tmpdir() says to use.
+
 =cut
 
 sub create_tempdir {
@@ -1280,33 +1284,19 @@ sub create_tempdir {
     my $exception;
     my $temp_dir;
     eval {
-        unless (defined $opts{KeepTempDir}) {
-            # Mind user's temp_dir preference if present.
-            unless (config('temp_dir')) {
-                $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
-                    TMPDIR => 1,
-                    CLEANUP => 1);
-            } else {
-                $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
-                    DIR => config('temp_dir'),
-                    TMPDIR => 1,
-                    CLEANUP => 1);
-            }
 
-            vmsg "Created temp dir [$temp_dir] that will be deleted on exit";
-        } else {
-            # Mind user's temp_dir preference if present.
-            unless (config('temp_dir')) {
-                $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
-                    TMPDIR => 1);
-            } else {
-                $temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
-                    DIR => config('temp_dir'),
-                    TMPDIR => 1);
-            }
+        # Determine tempdir()'s arguments.
+        my @args = ("fetchware-$$-XXXXXXXXXX", TMPDIR => 1);
 
-            vmsg "Created temp dir [$temp_dir] that will be kept on exit";
-        }
+        # Specify the caller's TempDir (DIR) if they specify it.
+        push @args, DIR => $opts{TempDir} if defined $opts{TempDir};
+
+        # Don't CLEANUP if KeepTempDir is set.
+        push @args, CLEANUP => 1 if not defined $opts{KeepTempDir};
+
+        # Call tempdir() with the @args I've built.
+note("ARGS[@args]");
+        $temp_dir = tempdir(@args);
 
         # Must chown 700 so gpg's localized keyfiles are good.
         chown 0700, $temp_dir;

@@ -544,6 +544,9 @@ EOD
 
         my %opts = @_;
 
+        # Add temp_dir config sub to create_tempdir()'s arguments.
+        $opts{TempDir} = config('temp_dir') if config('temp_dir');
+
         # Forward opts to create_tempdir(), which does the heavy lifting.
         my $temp_dir = create_tempdir(%opts);
 
@@ -3059,7 +3062,7 @@ See L<perlretut> for details on how to use and create Perl regular expressions;
 however, actual regex know how is not really needed just paste verbatim text
 between the single quotes C<'>. For example, C<filter 'httpd-2.2';>.
 
-=head2 temp_dir '/var/tmp'; #UNIMPLEMENTED!!!
+=head2 temp_dir '/var/tmp';
 
 C<temp_dir> tells fetchware where to store fetchware's temporary working
 directory that it uses to download, verify, unarchive, build, and install your
