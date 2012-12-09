@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '21'; #Update if this changes.
+use Test::More 0.98 tests => '22'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir rootdir);
 use URI::Split 'uri_split';
@@ -623,15 +623,18 @@ subtest 'test create_tempdir()' => sub {
     # Test create_tempdir() successes.
     my $temp_dir = create_tempdir();
     ok(-e $temp_dir, 'checked create_tempdir() success.');
+    ok(-e 'fetchware.sem', 'checked fetchware semaphore creation.');
 
     # chdir back to original_cwd(), so that this tempdir can be deleted.
     chdir original_cwd() or fail("Failed to chdir back to original_cwd()!");
 
     $temp_dir = create_tempdir(KeepTempDir => 1);
     ok(-e $temp_dir, 'checked create_tempdir() KeepTempDir success.');
+    ok(-e 'fetchware.sem', 'checked fetchware semaphore creation.');
 note "TEMPDIR[$temp_dir]";
 
     # Cleanup $temp_dir, because this one won't automatically be cleaned up.
+    unlink 'fetchware.sem' or fail("Failed to delete 'fetchware.sem'! [$!]");
     chdir original_cwd() or fail("Failed to chdir back to original_cwd()!");
     rmdir $temp_dir or fail("Failed to delete temp_dir[$temp_dir]! [$!]");
 
@@ -641,14 +644,17 @@ note "TEMPDIR[$temp_dir]";
 
 
     # Cleanup $temp_dir, because this one won't automatically be cleaned up.
+    unlink 'fetchware.sem' or fail("Failed to delete 'fetchware.sem'! [$!]");
     chdir original_cwd() or fail("Failed to chdir back to original_cwd()!");
     rmdir $temp_dir or fail("Failed to delete temp_dir[$temp_dir]! [$!]");
 
     $temp_dir = create_tempdir(KeepTempDir => 1);
     ok(-e $temp_dir, 'checked create_tempdir() KeepTempDir success.');
+    ok(-e 'fetchware.sem', 'checked fetchware semaphore creation.');
 note "TEMPDIR[$temp_dir]";
 
     # Cleanup $temp_dir, because this one won't automatically be cleaned up.
+    unlink 'fetchware.sem' or fail("Failed to delete 'fetchware.sem'! [$!]");
     chdir original_cwd() or fail("Failed to chdir back to original_cwd()!");
     rmdir $temp_dir or fail("Failed to delete temp_dir[$temp_dir]! [$!]");
 
@@ -665,6 +671,18 @@ EOE
     #this last temp_dir. Otherwise, a warning is printed from File::Temp about
     #this.
     chdir original_cwd() or fail("Failed to chdir back to [@{[original_cwd]}]!");
+};
+
+
+subtest 'test cleanup_tempdir()' => sub {
+    # Create a tempdir to test cleaning it up.
+    my $temp_dir = create_tempdir();
+    ok(-e $temp_dir, 'checked create_tempdir() success.');
+    ok(-e 'fetchware.sem', 'checked fetchware semaphore creation.');
+
+    # Now test cleaning it up.
+    cleanup_tempdir();
+    ok( ! -e $temp_dir, 'checked cleanup_tempdir() success.');
 };
 
 

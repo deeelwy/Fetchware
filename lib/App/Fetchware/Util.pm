@@ -17,7 +17,7 @@ use App::Fetchware::Config ':CONFIG';
 use File::Copy 'cp';
 use File::Temp 'tempdir';
 use File::stat;
-use Fcntl 'S_ISDIR';
+use Fcntl qw(S_ISDIR :flock);
 # Privileges::Drop only works on Unix, so only load it on Unix.
 use if is_os_type('Unix'), 'Privileges::Drop';
 
@@ -105,6 +105,10 @@ command line option.
 
 =cut
 
+
+###BUGALERT### Add Test::Wrap support to msg() and vmsg() so that they will
+#inteligently rewrap any text they receive so newly filled in variables won't
+#screw up the wrapping.
 sub msg (@) {
 
     # If fetchware was not run in quiet mode, -q.
@@ -1254,6 +1258,14 @@ create a tempdir just call File::Temp's tempdir() directly.
     # working directory for later use if its needed. It is access with
     # original_cwd() below.
     my $original_cwd;
+    # $fh_sem is a semaphore lock file that create_tempdir() creates, and
+    # cleanup_tempdir() closes clearing the lock. This is used to support
+    # fetchware clean. The filehandle needs to be declared outside
+    # create_tempdir()'s scope, because when this filehandle goes out of scope
+    # the file is closed, and the lock is released, but fetchware needs to keep
+    # hold of this lock for the life of fetchware to ensure that any fetchware
+    # clean won't delete this fetchware temporary directory.
+    my $fh_sem;
 
 =head2 create_tempdir()
 
@@ -1267,6 +1279,25 @@ to B<not> delete the temporary directory when the program exits.
 Also, accepts C<TempDir =E<gt> '/tmp'> to specify what temporary directory to
 use. The default with out this argument is to use tempdir()'s default, which is
 whatever File::Spec's tmpdir() says to use.
+
+
+=head3 Locking Fetchware's temp directories with a semaphore file.
+
+In order to support C<fetchware clean>, create_tempdir() creates a semaphore
+file. The file is used by C<fetchware clean> (via bin/fetchware's cmd_clean())
+to determine if another fetchware process out there is currently using this
+temporary directory, and if it is not, the file is not currently locked with
+flock, then the entire directory is deleted using File::Path's remove_path()
+function. If the file is there and locked, then the directory is skipped by
+cmd_clean(). Note: you can call C<fetchware clean> with the -f or --force option
+to force fetchware to delete B<all> fetchware temporary directories even out
+from under the pants of any currently running fetchware process!
+
+cleanup_tempdir() is responsible for unlocking the semaphore file that
+create_tempdir() creates. However, the coolest part of using flock is that if
+fetchware is killed in any manner whether its C<END> block or File::Temp's
+C<END>block run, flock will still unlock the file, so no edge cases need
+handling, because flock will do them for us!
 
 =cut
 
@@ -1327,6 +1358,25 @@ EOD
     diag("cwd[@{[cwd()]}]");
     vmsg "Successfully changed working directory to [$temp_dir].";
 
+    # Create 'fetcwhare.sem' - the fetchware semaphore lock file.
+    open $fh_sem, '>', 'fetchware.sem' or die <<EOD;
+App-Fetchware-Util: Failed to create [fetchware.sem] semaphore lock file! This
+should not happen, because fetchware is creating this file in a brand new
+directory that only fetchware should be accessing. You simply shouldn't see this
+error unless some one is messing with fetchware, or perphaps there actually is a
+bug? I don't know, but this just shouldn't happen. It's so hard to trigger it to
+happen, it can't easily be tested in fetchware's test suite. OS error [$!].
+EOD
+    vmsg "Successfully created [fetchware.sem] semaphore lock file.";
+    # Now flock 'fetchware.sem.' This should
+    flock $fh_sem, LOCK_EX or die <<EOD;
+App-Fetchware-Util: Failed to flock [fetchware.sem] semaphore lock file! This
+should not happen, because this is being done in a brand new temporary directory
+that only this instance of fetchware cares about. This just shouldn't happen. OS
+error [$!].
+EOD
+    vmsg "Successfully locked [fetchware.sem] semaphore lock file using flock.";
+
     msg "Temporary directory created [$temp_dir]";
 
     return $temp_dir;
@@ -1349,9 +1399,6 @@ another call to start() will also reset original_cwd().
     }
 
 
-} # End scope block for $original_cwd.
-
-
 =head2 cleanup_tempdir()
 
     cleanup_tempdir();
@@ -1361,12 +1408,29 @@ File::Temp to create. You cannot only clean up one directory or another;
 instead, you must just use this sparingly or in an END block although file::Temp
 takes care of that for you unless you asked it not to.
 
+It also closes $fh_sem, which is the filehandle of the 'fetchware.sem' file
+create_tempdir() opens and I<locks>. By closing it in cleanup_tempdir(), we're
+unlocking it. According to MJD's "File Locking Tips and Traps," it's better to
+just close the file, then use flock to unlock it.
+
 =cut
 
 sub cleanup_tempdir {
     msg 'Cleaning up temporary directory temporary directory.';
-    # chdir to original_cwd() directory, so File::Temp can delete the tempdir. This
-    # is necessary, because operating systems do not allow you to delete a
+
+    # Close and unlock the fetchware semaphore lock file, 'fetchware.sem.'
+    close $fh_sem or die <<EOD;
+App-Fetchware-Util: Huh? close() failed! Fetchware failed to close(\$fh_sem).
+Perhaps some one or something deleted it under us? Maybe a fetchware clean was
+run with the force flag (--force) while this other fetchware was running?
+EOD
+    vmsg <<EOM;
+Closed $fh_sem filehandle to unlock this fetchware temporary directory from any
+fetchware clean runs.
+EOM
+
+    # chdir to original_cwd() directory, so File::Temp can delete the tempdir.
+    # This is necessary, because operating systems do not allow you to delete a
     # directory that a running program has as its cwd.
 
     vmsg 'Changing directory to [@{[original_cwd()]}].';
@@ -1385,6 +1449,9 @@ EOD
 
     msg 'Cleaned up temporary directory.';
 }
+
+
+} # End scope block for $original_cwd and $fh_sem.
 
 
 1;
