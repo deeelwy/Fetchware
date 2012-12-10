@@ -88,7 +88,7 @@ domain [doesntexist.ever]. The system error was [Net::FTP: Bad hostname 'doesnte
 See man App::Fetchware.
 EOS
 
-##HOWTOTEST##    eval_ok(sub {ftp_download_dirlist('whatftpserverdoesntsupportanonymous&ispublic?');,
+##HOWTOTEST##    eval_ok(sub #{ftp_download_dirlist('whatftpserverdoesntsupportanonymous&ispublic?');},
 ##HOWTOTEST##        <<EOS, 'checked ftp_download_dirlist() anonymous loginfailure');
 ##HOWTOTEST##App-Fetchware: run-time error. fetchware failed to log in to the ftp server at
 ##HOWTOTEST##domain [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
@@ -1029,25 +1029,16 @@ sub drop_privs_ok {
     my @drop_privs_args = @_;
 
 
-    my ($fh, $filename)
-        =
-        tempfile("fetchware-test-$$-XXXXXXXXXXXXXXX",
-            UNLINKE => 1,
-            TMPDIR => 1);
-
-    drop_privs(sub {
-        $writer_code->($fh);
+    my $output = drop_privs(sub {
+        my $write_pipe = shift;
+        $writer_code->($write_pipe);
     }, @drop_privs_args);
 
-    # Close $fh to flush the print above output to disk.
-    close $fh;
+    # Open $output as a scalar ref to use perl to parse the output.
+    open my $output_fh, '<', $output
+        or fail("Failed to open [$output] [$$output]. OS error [$!]");
 
-    # Open same file $writer_code used for reading, and then pass its $fh to
-    # $tester_code to test the dropped priv's child's output.
-    open(my $rfh, '<', $filename)
-        or fail("Failed to open file [$filename]");
-
-    $tester_code->($rfh)
+    $tester_code->($output_fh);
 }
 
 

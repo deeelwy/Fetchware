@@ -1061,18 +1061,85 @@ EOD
 
 =head2 drop_privs()
     
-    drop_privs(sub {
+    my $output = drop_privs(sub {
+        my $write_pipe = shift;
         # Do stuff as $regular_user
+        ...
+        # Communicate back to parent by printing to the supplied $write_pipe.
+        print $write_pipe "$variable1\n";
+        print $write_pipe "$variable2\n";
+        print $write_pipe "$variable3\n";
+
+        # Or use Storable.
+        store_fd(\%a_data_structure, $write_pipe);
         }, $regular_user
     );
+
+    # Then back in the parent, you can access the pipe from drop_priv()s return
+    # value.
+
+    # Open the returned scalar as a file to use Perl's line reading to parse it
+    # for us.
+    open my $output_fh, '<', $output or die <<EOD;
+    drop_privs() failed to open output. OS error [$!].
+    EOD
+    chomp(my $variable1 = <$output_fh>);
+    chomp(my $variable2 = <$output_fh>);
+    chomp(my $variable3 = <$output_fh>);
+
+    # If you used Storable, you'll have to unStorable your data.
+    # Open $output as if it were a file, because Storable doesn't work on
+    # scalars just files or file handles.
+    open my $output_fh, '<', $output or die <<EOD;
+    drop_privs() failed to open output. OS error [$!].
+    EOD
+    my $a_data_structure = fd_retrieve($output_fh);
 
 Forks drops privs to $regular_user, and then executes whatever is in the first
 argument, which should be a code reference. Throws an exception on any problems
 with the fork.
 
 It only allows you to specify what the lower priveledged user does. The parent
-process's behavior can not be changed. All the parent does is wait for the child
-to finish and collect its exist status to avoid making a zombie.
+process's behavior can not be changed. All the parent does:
+
+=over
+
+=item *
+
+Create a pipe to allow the child to communicate any information back to the
+parent.
+
+=item *
+
+Read any data the child may write to that pipe.
+
+=item *
+
+After the child has died, collect the child's exit status.
+
+=item *
+
+And return the output the child wrote on the pipe as a scalar reference.
+
+=back
+
+Whatever the child writes is returned. drop_privs() does not use Storable or
+JSON or XML or anything. It is up to you to specify how the data is to be
+represented and used.
+
+=over
+
+=item SECURITY NOTICE
+
+The output returned by drop_privs() is whatever the child wants it to be. If
+somehow the child got hacked, the $output could be something that could cause
+the parent (which has root perms!) execute some code, or otherwise do something
+that could cause the child to gain root access. So be sure to check how you use
+drop_privs() return value, and definatley don't just string eval it. Structure
+it so the return value can only be used as data for variables, and that those
+variables are never executed by root.
+
+=back
 
 drop_privs() handles being on nonunix for you. On a platform that is not Unix
 that does not have Unix's fork() and exec() security model, drop_privs() simply
@@ -1110,11 +1177,32 @@ sub drop_privs {
         msg <<EOM;
 stay_root is set to true. NOT dropping privileges!
 EOM
-        return $child_code->();
+        return _dont_drop_privs($child_code);
     }
 
     # Only for on Unix-like systems, or we're root.
     if (is_os_type('Unix') and ($< == 0 or $> == 0)) {
+        # Open a pipe to allow the child to talk back the parent.
+        pipe(READONLY, WRITEONLY) or die <<EOD;
+App-Fetchware-Util: Fetchware failed to create a pipe to allow the forked
+process to communication back to the parent process. OS error [$!].
+EOD
+        # Turn them into proper lexical file handles.
+        my ($readonly, $writeonly) = (*READONLY, *WRITEONLY);
+
+        # Set up a SIGPIPE handler in case the writer closes the pipe before the
+        # reader closes their pipe.
+        $SIG{'PIPE'} = sub {
+            die <<EOD;
+App-Fetchware-Util: Fetchware received a PIPE signal from the OS indicating the
+pipe is dead. This should not happen, and is because the child was killed out
+from under the parent, or there is a bug. This is a fatal error, because it's
+possible the parent needs whatever information the child was going to use the
+pipe to send to the parent, and now it is unclear if the proper expected output
+has been received or not; therefore, we're just playing it safe and die()ing.
+EOD
+        };
+
         # Code below bassed on a cool forking idiom by Aristotle.
         # (http://blogs.perl.org/users/aristotle/2012/10/concise-fork-idiom.html)
         given ( scalar fork ) {
@@ -1125,6 +1213,9 @@ App-Fetchware-Util: Fork failed! This shouldn't happen!?! Os error [$!].
 EOD
             # Fork succeeded, Child code goes here.
             } when ( 0 ) {
+                close $readonly or die <<EOD;
+App-Fetchware-Util: Failed to close $readonly pipe in child. Os error [$!].
+EOD
                 # Drop privs.
                 # drop_privileges() dies on an error just let drop_privs() caller
                 # catch it.
@@ -1132,7 +1223,13 @@ EOD
 
 
                 # Execute the coderef that is supposed to be done as non-root.
-                $child_code->();
+                $child_code->($writeonly);
+
+                # Now close the pipe, to avoid creating a dead pipe causing a
+                # SIGPIPE to be sent to the parent.
+                close $writeonly or die <<EOD;
+App-Fetchware-Util: Failed to close $writeonly pipe in child. Os error [$!].
+EOD
 
                 # Exit success, because failure is only indicated by a thrown
                 # exception that bin/fetchware's main eval {} will catch, print,
@@ -1146,6 +1243,20 @@ EOD
             # Fork succeeded, parent code goes here.
             } default {
                 my $kidpid = $_;
+
+                close $writeonly or die <<EOD;
+App-Fetchware-Util: Failed to close $writeonly pipe in parent. Os error [$!].
+EOD
+                my $output;
+
+                # Read the child's output until child closes pipe sending EOF.
+                $output .= $_ while (<$readonly>);
+
+                # Close $readonly pipe, because we have received the output from
+                # the user.
+                close $readonly or die <<EOD;
+App-Fetchware-Util: Failed to close $readonly pipe in parent. Os error [$!].
+EOD
 
                 # Just block waiting for the child to finish.
                 waitpid($kidpid, 0);
@@ -1174,14 +1285,36 @@ EOD
                     # screen, and exit()ed non-zero for failure. And since the
                     # child failed ($? >> 8 != 0), the parent should fail too.
                     exit 1;
-                # If successful, return child's return value to caller.
+                # If successful, return child's a ref of @output to caller.
+                } else {
+                    return \$output;
                 }
             }
         }    
     # Non-Unix OSes just execute the $child_code.
     } else {
-        return $child_code->();
+        return _dont_drop_privs($child_code);
     }
+}
+
+# Does what drop_privs() does when drop_privs() doesn't actually drop privs.
+# Only exists, because I need this code in two places.
+# Doesn't have POD, because nobody should call it.
+sub _dont_drop_privs {
+    my $child_code = shift;
+
+    my $output;
+    open my $output_fh, '>', \$output or die <<EOD;
+App-Fetchware-Util: fetchware failed to open an internal scalar reference as a
+file handle. OS error [$!].
+EOD
+    $child_code->($output_fh);
+
+    close $output_fh or die <<EOD;
+App-Fetchware-Util: fetchware failed to close an internal scalar reference that
+was open as a file handle. OS error [$!].
+EOD
+    return \$output;
 }
 
 
