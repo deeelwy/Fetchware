@@ -1369,7 +1369,9 @@ happen, it can't easily be tested in fetchware's test suite. OS error [$!].
 EOD
     vmsg "Successfully created [fetchware.sem] semaphore lock file.";
     # Now flock 'fetchware.sem.' This should
-    flock $fh_sem, LOCK_EX or die <<EOD;
+    # Use LOCK_NB so flock won't stupidly wait forever and ever until the lock
+    # becomes available.
+    flock $fh_sem, LOCK_EX | LOCK_NB or die <<EOD;
 App-Fetchware-Util: Failed to flock [fetchware.sem] semaphore lock file! This
 should not happen, because this is being done in a brand new temporary directory
 that only this instance of fetchware cares about. This just shouldn't happen. OS
