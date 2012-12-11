@@ -15,8 +15,10 @@ use Test::More 0.98 tests => '3'; #Update if this changes.
 use File::Spec::Functions qw(splitpath catfile);
 use URI::Split 'uri_split';
 use Cwd 'cwd';
+use File::Path 'remove_tree';
 
 use Test::Fetchware ':TESTING';
+use App::Fetchware::Config ':CONFIG';
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -37,7 +39,23 @@ diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 
 subtest 'test start()' => sub {
-    skip_all_unless_release_testing();
+
+    # Test start() with KeepTempDir being set.
+    my $tempdir = start(KeepTempDir => 1);
+    ok(-e $tempdir, 'check start() KeepTempDir success');
+    # chdir() so it can be delete the tempdir.
+    chdir();
+    ok(remove_tree($tempdir), 'check start() KeepTempDir cleanup');
+
+    # Test start() with no_install being set.
+    config(no_install => 1);
+    my $tempdir = start();
+    ok(-e $tempdir, 'check start() no_install success');
+    # chdir() so it can be delete the tempdir.
+    chdir();
+    ok(remove_tree($tempdir), 'check start() no_install cleanup');
+    # cleanup no_install.
+    config_delete('no_install');
 
     my $temp_dir = start();
 
