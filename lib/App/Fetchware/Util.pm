@@ -1332,6 +1332,9 @@ with pipe_read_newline() back in the parent.
 =cut
 
 
+###BUGALERT### Add quotemeta() support to pipe parsers to help prevent attacks.
+
+
 =head3 pipe_write_newline()
 
     pipe_write_newline($write_pipe, $variable1, $variable2, $variable3);
@@ -1374,7 +1377,7 @@ sub pipe_read_newline {
 
     die <<EOD if ref($output) ne 'SCALAR';
 App-Fetchware-Util: pipe_read_newling() was called with an output variable
-[$output] that was not a scalar reference. It must be a scalare reference.
+[$output] that was not a scalar reference. It must be a scalar reference.
 EOD
 
     # Open scalar ref $output for reading.
