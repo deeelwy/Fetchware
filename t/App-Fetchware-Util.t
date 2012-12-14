@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '22'; #Update if this changes.
+use Test::More 0.98 tests => '23'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir rootdir);
 use URI::Split 'uri_split';
@@ -54,6 +54,8 @@ subtest 'UTIL export what they should' => sub {
         do_nothing
         safe_open
         drop_privs
+        pipe_write_newline
+        pipe_read_newline
         create_tempdir
         original_cwd
         cleanup_tempdir
@@ -823,6 +825,82 @@ subtest 'test drop_privs()' => sub {
     }
 
 };
+
+
+SKIP: {
+    skip 'Test suite not being run on Unix.', 1 unless do {
+        if (is_os_type('Unix')) {
+            note('ISUNIX');
+            1
+        } else {
+            # Return false
+            note('ISNOTUNIX');
+            0
+        }
+    };
+
+
+
+    if (is_os_type('Unix')) {
+
+        subtest 'test pipe_{write,read}_newline()' => sub {
+            my @expected = qw(Did it work ?);
+
+            pipe (READONLY, WRITEONLY)
+                or fail("Failed to create pipe??? Os error [$!]");
+            given (scalar fork) {
+                when (undef) {
+                    fail("Fork failed??? OS error [$!]");
+                # For worked. Child goes here.
+                } when (0) {
+                    close READONLY
+                        or fail("child readonly pipe close failed??? [$!].");
+                    my $write_pipe = *WRITEONLY;
+                    # Test goes here.
+
+
+                    # Finally test pipe_write_newline().
+                    pipe_write_newline($write_pipe, @expected);
+
+
+                    # End test start fork and pipe boilerplate.
+                    close WRITEONLY
+                        or fail("child writeonly pipe close failed??? [$!].");
+                    exit 0;
+                # For worked. Parent goes here.
+                } default {
+                    my $kidpid = $_;
+                    close WRITEONLY
+                        or fail("parent writeonly pipe close failed??? [$!].");
+                    my $readonly = *READONLY;
+                    my $output;
+                    $output .= $_ while (<$readonly>);
+                    # Parent test goes here.
+                    
+
+                    my @got = pipe_read_newline(\$output);
+                    for my $i (0..$#expected) {
+                        is($got[$i], $expected[$i],
+                            "checked pipe_{write,read}_newline() success [$i]");
+                    }
+                    fail("Got more than we expected [@got] [@expected]!")
+                        if $#got > 3;
+
+
+                    # End test start fork and pipe boilerplate.
+                    close READONLY
+                        or fail("parent readonly pipe close failed??? [$!].");
+                    waitpid($kidpid, 0);
+                    fail("Chil exited with nonzero exit code!")
+                        if (($? >>8) != 0);
+                }
+            }
+
+        };
+    } else {
+        note("Should be skipped, because you're not running this on Unix! [$^O]");
+    }
+}
 
 
 # Share these variables with the next subtest.

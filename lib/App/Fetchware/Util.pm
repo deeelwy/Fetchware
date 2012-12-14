@@ -46,6 +46,8 @@ our %EXPORT_TAGS = (
         do_nothing
         safe_open
         drop_privs
+        pipe_write_newline
+        pipe_read_newline
         create_tempdir
         original_cwd
         cleanup_tempdir
@@ -1317,6 +1319,86 @@ EOD
     return \$output;
 }
 
+
+=head2 drop_privs() PIPE PARSING UTILITIES
+
+drop_privs() uses a pipe for IPC between the child and the parent. This section
+contains utilties that help users of drop_privs() parse the input and output
+they send from the child back to the parent.
+
+Use pipe_print_newline() to send data back to the parent, that later you'll read
+with pipe_read_newline() back in the parent.
+
+=cut
+
+
+=head3 pipe_write_newline()
+
+    pipe_write_newline($write_pipe, $variable1, $variable2, $variable3);
+
+Simply uses the caller provided $write_pipe file handle to write the rest of its
+args to that file handle separated by new lines.
+
+Throws an exception if a user provided variable has a new line it. They can't,
+because that's what it uses to separate each variable from the previous and next
+variables.
+
+=cut
+
+sub pipe_write_newline {
+    my $write_pipe = shift;
+
+    for my $a_var (@_) {
+        die <<EOD if not defined $a_var;
+fetchware: Huh? [$a_var] has a newline in it? This shouldn't happen, and messes up
+fetchware's simple IPC. If you actually have a newline in a file name, just
+change it to something else.
+EOD
+
+        print $write_pipe "$a_var\n"
+    }
+}
+
+
+=head3 pipe_read_newline()
+
+    my ($variable1, $variable2, $variable3) = pipe_read_newling($output);
+
+pipe_read_newling() opens the scalar $output, and returns a list of $outputs
+parsed out varialbes based on newlines.
+
+=cut
+
+sub pipe_read_newline {
+    my $output = shift;
+
+    die <<EOD if ref($output) ne 'SCALAR';
+App-Fetchware-Util: pipe_read_newling() was called with an output variable
+[$output] that was not a scalar reference. It must be a scalare reference.
+EOD
+
+    # Open scalar ref $output for reading.
+    open my $output_fh, '<', $output or die <<EOD;
+fetchware: Failed to open a scalar as a file handle! OS error [$!]
+EOD
+
+    my ($variable, @variables);
+    while (defined($variable = <$output_fh>)) {
+        chomp($variable);
+
+        # And some error handling just in case.
+        die <<EOD if not defined $variable;
+fetchware: Huh? The child failed to write the proper variable back to the
+parent! The variable is [$variable]. This should be defined but it is 
+not!
+EOD
+
+        push @variables, $variable;
+    }
+
+    return @variables;
+}
+###BUGALERT### Add some pipe parsers that use Storable too.
 
 
 =head1 MISCELANEOUS UTILTY SUBROUTINES
