@@ -513,6 +513,12 @@ sub verbose_on {
 }
 
 
+###BUGALERT### Create a frt() subroutine to mirror my frt bash function that
+#will work like Util's config() does, but access %ENV instead of %CONFIG, and if
+#the requested env var does not exist it will print a failure mesage using
+#fail().  I could also use this function as a place to paste in frt() as well.
+
+
 1;
 __END__
 
