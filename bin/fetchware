@@ -1801,26 +1801,153 @@ sub cmd_list {
 }
 
 
-sub cmd_clean {
+=head2 cmd_clean()
 
-    #1. Loop over each tempdir (system tempdir as returned by File::Spec and any
-    #temp_dir's specified in installed package's Fetchwarefile's.
-        #2. obtain a list of fetchware-\d+?-\d+ dirs and files.
-        #3. Skip any dirs and files whose running pid is still running and is a
-        #perl process.
-            #* Proc::ProcessTable is buggy unmaintained garbage, so just use
-            #each Unix's ps command. Just create a dispatch table based on $^O
-            #output, and run that systems ps command. I should be able to find
-            #ps manpage's for all Unixes still in use: {Free,Net,Open}BSD, HPUX,
-            #AIX, Solaris, Linux, and MacOSX. Now that I list them out, it seems
-            #even easier to do so! Perhaps even add Win32::Process::List for
-            #Win32 support!!!, but do it conditionally only if installing on
-            #Windows. A CPAN module perhaps??? Proc::List perhaps???
-            #* This is done so that a files and directories that could still be
-            #in use if you happen to run fetchware clean while someone else is
-            #running fetchware to install something.
-        #4. Delete a files and directories that are still in the list.
-        #5. Go to next temp_dir file listing.
+    cmd_clean(@ARGV);
+
+cmd_clean() implements fetchware's clean command, which deletes any left over
+fetchware temporary directories from your system's temorary directory. It
+cleverly uses locking to ensure that cmd_clean() does B<not> delete a temporary
+directory that is still being used by a running fetchware process.
+
+flock() is used along with C<LOCK_{EX,NB}> from L<Fcntl>. C<LOCK_EX> gets an
+exclusive lock (only current process who got lock can access the file, and
+C<LOCK_NB>, which does a non-blocking attempt to get a lock returning success at
+getting the or not getting the lock immediately. flock() is used on a semaphore
+file called C<fetchware.sem> it is a useless empty file, that is only used for
+locking each fetchware temporary directory.
+
+flock() is used, because if the fetchware process using the lock closes the
+file or the process dies, exits itself, or is killed even sith C<SIGKILL>, the
+lock is released automatically by the OS and/or system libraries.
+
+cmd_clean() simply attempts to get a lock, and if it does it deletes that
+particular fetchware temporary directory. If it fails to get the exclusive lock,
+then it probably means that that fetchware temporary directory is still being
+used by another fetchware process, so that directory is skipped.
+
+create_tempdir() and cleanup_tempdir() create and lock the fetchware semaphore
+lock file, and close and unlock it as they are executed by start() and end().
+
+cmd_clean() via @ARGV, which run() calls it with, takes the arguments it
+receives as paths to whatever temporary directories it should clean.
+
+=cut
+
+sub cmd_clean {
+    my @fetchware_temp_dirs = @_;
+
+    # Add the system temp dir as File::Spec sees it.
+    unshift @fetchware_temp_dirs, tmpdir();
+
+    my @globbed_fetchware_temp_dirs;
+
+    # Build a list of fetchware temporary directories across tmpdir() and any
+    # user provided paths on the command line.
+    for my $fetchware_temp_dir (@fetchware_temp_dirs) {
+        # What the user specified or tmpdir() must be a directory.
+        die <<EOD if not -d $fetchware_temp_dir;
+fetchware: The specified directory [$fetchware_temp_dir] is not a directory or
+does not exist. Please only specify directories that exist, and ones you have
+read and write permission in. OS error [$!].
+EOD
+
+        # Store all of the fetchware-* temp dirs in @globbed_fetchware_temp_dirs
+        # for later processing.
+        for my $globed_dir (glob(catfile($fetchware_temp_dir, 'fetchware-*'))) {
+            # Skip fetchware-* files that are not directories.
+            next unless -d $globed_dir;
+            push @globbed_fetchware_temp_dirs, $globed_dir;
+        }
+    }
+
+    msg "fetchware clean found no fetchware temporary directories to clean"
+        if @globbed_fetchware_temp_dirs < 1;
+
+    # Holds the number of directories that had errors when they were
+    # deleted.
+    my $num_remove_tree_errors = 0;
+    # Number of directories remove_tree removed successfully.
+    my $num_remove_tree_successes = 0;
+
+use Test::More;
+note('glob');
+note explain \@globbed_fetchware_temp_dirs;
+note('glob');
+
+    # Loop over fetchware temp dirs, and delete the ones that are not locked.
+    for my $temp_dir (@globbed_fetchware_temp_dirs) {
+        # Try to lock the 'fetchware.sem' semaphore lock file
+
+        # I annoying must open the file before I can see if I can lock it or
+        # not.
+        my $sem_lock_file = catfile($temp_dir, 'fetchware.sem');
+        open my $fh_sem, '>', $sem_lock_file or die <<EOD;
+App-Fetchware-Util: Failed to create [$sem_lock_file] semaphore lock file! This
+should not happen, because fetchware is creating this file in a brand new
+directory that only fetchware should be accessing. You simply shouldn't see this
+error unless some one is messing with fetchware, or perphaps there actually is a
+bug? I don't know, but this just shouldn't happen. It's so hard to trigger it to
+happen, it can't easily be tested in fetchware's test suite. OS error [$!].
+EOD
+        vmsg "Successfully created [fetchware.sem] semaphore lock file.";
+        # Now flock 'fetchware.sem.' This should
+        # Use LOCK_NB so flock won't stupidly wait forever and ever until 
+        # he lock becomes available.
+        # If flock fails, don't die! Instead, just skip deleting this
+        # fetchware temporary directory, and go on to the next one.
+        unless (flock $fh_sem, LOCK_EX | LOCK_NB) {
+            # Flock failed, something else has the lock, print message, and skip
+            # this directory, and go on to the next one.
+            msg <<EOM;
+[$temp_dir] locked by another fetchware process. Skipping.
+EOM
+            next;
+        }
+
+        # Delete the whole $tempdir. Use error and result for File::Path's
+        # experimental error handling, and set safe to true to avoid borking the
+        # filesystem. This might be run as root, so it really could screw up
+        # your filesystem big time! So set safe to true to avoid doing so.
+        remove_tree($temp_dir, {
+            error => \my $err,
+            result => \my $res,
+            safe => 1} );
+
+        # Parse remove_tree()'s insane error handling system. It's expirimental,
+        # but it's been experimental forever, so I can't see it changing.
+        if (@$err) {
+            $num_remove_tree_errors++;
+            for my $diag (@$err) {
+                my ($file, $message) = %$diag;
+                if ($file eq '') {
+                    msg "general error: $message\n";
+                } else {
+                    ###BUGALERT### Make a wmsg() that does the same thing
+                    #msg()does except it prints the message to STDERR
+                    #instead of STDOUT.
+                    ###BUGALERT### Perhaps a wvmsg() too?
+                    msg "problem unlinking $file: $message\n";
+                }
+            }
+        } else {
+            msg "No errors encountered\n";
+        }
+
+        if (@$res) {
+            $num_remove_tree_successes = @$res;
+            vmsg "unlinked [$_]" for @$res;
+        }
+    }
+
+    # Summarize success or failure for user, so he doesn't have to dig
+    # through a bunch of error messages to see if it worked right.
+    msg <<EOM if $num_remove_tree_errors > 0;
+fetchware clean had [$num_remove_tree_errors] directories give errors.
+EM
+    msg <<EOM if $num_remove_tree_successes > 0;
+fetchware clean successfully deleted [$num_remove_tree_successes] directories. 
+EOM
 
 }
 
