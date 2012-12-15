@@ -521,6 +521,12 @@ the directory they should use for storing file operations.
     sub start (;$$) {
         # Based on what package we're called in, either accept a callback as an
         # argument and save it for later, or execute the already saved callback.
+###BUGALERT### Save this copy and paste boilerplate into a sub before_api_sub()
+        #perhaps, and use Sub::Mage's before (just like Moose's before, but
+        #works for regular subroutines) to execute this subroutine before the
+        #main subroutine is executed. Instead of forcing extension developers to
+        #remember to call Sub::Mage's before(), bin/fetchware could do it for
+        #them after it inherits them. parse_fetchwarefile() could do it!
         state $callback; # A state variable to keep its value between calls.
         if (caller ne 'fetchware') {
             $callback = shift;
