@@ -581,13 +581,16 @@ EOD
 
         # Add temp_dir config sub to create_tempdir()'s arguments.
         $opts{TempDir} = config('temp_dir') if config('temp_dir');
+        vmsg "Using user specified temporary directory [$opts{TempDir}]";
 
         # Add KeepTempDir option if no_install is set. That way user can still
         # access the build directory to do the install themselves.
         $opts{KeepTempDir} = 1 if config('no_install');
+        vmsg "no_install option enabled not deleting temporary directory.";
 
         # Forward opts to create_tempdir(), which does the heavy lifting.
         my $temp_dir = create_tempdir(%opts);
+        msg "Created fetchware temporary directory [$temp_dir]";
 
         return $temp_dir;
     }
