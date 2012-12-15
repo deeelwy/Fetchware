@@ -155,13 +155,13 @@ sub print_ok {
     $error = $@ if $@;
     fail($error) if defined $error;
 
-    if (ref($expected) eq undef) {
+    if (ref($expected) eq '') {
         is($stdout, $expected,
             $test_name);
     } elsif (ref($expected) eq 'Regexp') {
         like($stdout, $expected,
             $test_name);
-    } elsif (ref($expected) eq 'CODEREF') {
+    } elsif (ref($expected) eq 'CODE') {
         # Call the provided callback with what $printer->() printed.
         ok($expected->($stdout),
             $test_name);

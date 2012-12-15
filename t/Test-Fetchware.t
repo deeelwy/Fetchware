@@ -62,15 +62,15 @@ subtest 'test print_ok()' => sub {
     # Test print_ok() string message.
     my $test_message = 'A test message';
     print_ok(sub {print $test_message},
-        $test_message, 'checked print_ok() simple message success');
+        $test_message, 'checked print_ok() string message success');
 
     # Test print_ok() regex.
     print_ok(sub {print $test_message},
-        qr/$test_message/, 'checked print_ok() simple message success');
+        qr/$test_message/, 'checked print_ok() regex message success');
 
     print_ok(sub {print $test_message},
-        sub {return 1 if $_[0] eq $test_message; return;}
-        , 'checked print_ok() simple message success');
+        sub {return 1 if $_[0] eq $test_message; return;},
+        'checked print_ok() simple coderef success');
 };
 
 
