@@ -1173,13 +1173,31 @@ sub drop_privs {
     my $child_code = shift;
     my $regular_user = shift // 'nobody';
 
+    # Need to do this in 2 places.
+    my $dont_drop_privs = sub {
+        my $child_code = shift;
+
+        my $output;
+        open my $output_fh, '>', \$output or die <<EOD;
+App-Fetchware-Util: fetchware failed to open an internal scalar reference as a
+file handle. OS error [$!].
+EOD
+        $child_code->($output_fh);
+
+        close $output_fh or die <<EOD;
+App-Fetchware-Util: fetchware failed to close an internal scalar reference that
+was open as a file handle. OS error [$!].
+EOD
+        return \$output;
+    };
+
     # Execute $child_code without dropping privs if the user's configuration
     # file is configured to force fetchware to "stay_root."
     if (config('stay_root')) {
         msg <<EOM;
 stay_root is set to true. NOT dropping privileges!
 EOM
-        return _dont_drop_privs($child_code);
+        return $dont_drop_privs->($child_code);
     }
 
     # Only for on Unix-like systems, or we're root.
@@ -1295,28 +1313,8 @@ EOD
         }    
     # Non-Unix OSes just execute the $child_code.
     } else {
-        return _dont_drop_privs($child_code);
+        return $dont_drop_privs->($child_code);
     }
-}
-
-# Does what drop_privs() does when drop_privs() doesn't actually drop privs.
-# Only exists, because I need this code in two places.
-# Doesn't have POD, because nobody should call it.
-sub _dont_drop_privs {
-    my $child_code = shift;
-
-    my $output;
-    open my $output_fh, '>', \$output or die <<EOD;
-App-Fetchware-Util: fetchware failed to open an internal scalar reference as a
-file handle. OS error [$!].
-EOD
-    $child_code->($output_fh);
-
-    close $output_fh or die <<EOD;
-App-Fetchware-Util: fetchware failed to close an internal scalar reference that
-was open as a file handle. OS error [$!].
-EOD
-    return \$output;
 }
 
 
