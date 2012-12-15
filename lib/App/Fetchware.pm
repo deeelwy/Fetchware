@@ -516,6 +516,35 @@ will be deleted by File::Temp when fetchware closes.
 Returns the $temp_file that start() creates, so everything else has access to
 the directory they should use for storing file operations.
 
+=item EXTENSION OVERRIDE NOTES
+
+start() calls L<App::Fetchware::Util>'s create_tempdir() subroutine that cleans
+up the temporary directory. If your fetchware extension overrides start() or
+end(), you must call create_tempdir() or name your temproary directories in a
+manner that fetchware clean won't find them, so something that does not start
+with C<fetchware-*>.
+
+If you fail to do this, and you use some other method to create temporary
+directories that begin with C<fetchware-*>, then fetchware clean may delete your
+temporary directories out from under your feet. To fix this problem:
+
+=over
+
+=item *
+
+Use L<App::Fetchware::Util>'s create_tempdir() in your start() and
+cleanup_tempdir() in your end().
+
+=item *
+
+Or, be sure not to name your temprorary directory that you create and manage
+yourself to begin with C<fetchware-*>, which is the glob pattern fetchware clean
+uses.
+
+=back
+
+=back
+
 =cut
 
     sub start (;$$) {
@@ -2607,6 +2636,37 @@ calls C<File::Temp>'s internalish File::Temp::cleanup() subroutine.
 It also calls the very internal only __clear_CONFIG() subroutine that clears
 App::Fetchware's internal %CONFIG variable used to hold your parsed
 Fetchwarefile. 
+
+=over
+
+=item EXTENSION OVERRIDE NOTES
+
+end() calls L<App::Fetchware::Util>'s cleanup_tempdir() subroutine that cleans
+up the temporary directory. If your fetchware extension overrides end() or
+start(), you must call cleanup_tempdir() or name your temproary directories
+in a manner that fetchware clean won't find them, so something that does not
+start with C<fetchware-*>.
+
+If you fail to do this, and you use some other method to create temporary
+directories that begin with C<fetchware-*>, then fetchware clean may delete your
+temporary directories out from under your feet. To fix this problem:
+
+=over
+
+=item *
+
+Use L<App::Fetchware::Util>'s create_tempdir() in your start() and
+cleanup_tempdir() in your end().
+
+=item *
+
+Or, be sure not to name your temprorary directory that you create and manage
+yourself to begin with C<fetchware-*>, which is the glob pattern fetchware clean
+uses.
+
+=back
+
+=back
 
 =cut
 
