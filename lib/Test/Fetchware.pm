@@ -265,20 +265,21 @@ sub make_test_dist {
 
 
     # Set optional 3 argument to be the destination directory.
-    # If that option was not provided set the destination directory to be the
-    # orignal_cwd().
-    my $destination_directory = shift || tmpdir();
+    # If that option was not provided set the destination directory to be a
+    # a new temporary directory.
+    my $destination_directory = shift
+        || tempdir("fetchware-$$-XXXXXXXXXXX", TMPDIR => 1, UNLINK => 1);
 
     # Append $ver_num to $file_name to complete the dist's name.
     my $dist_name = "$file_name-$ver_num";
 diag("dist_name[$dist_name]");
 
+    $destination_directory = rel2abs($destination_directory);
+diag("destination_directory[$destination_directory]");
+
     my $test_dist_filename = catfile($destination_directory, "$dist_name.fpkg");
 diag("test_dist_filename[$test_dist_filename]");
 
-    ###DELMEAFTERTEST### Try to fix bug by absolutizing filename?
-    $test_dist_filename = rel2abs($test_dist_filename);
-diag("test_dist_filename[$test_dist_filename]");
 
 
     my $configure_path = catfile($dist_name, 'configure');
@@ -293,7 +294,6 @@ program '$file_name';
 # Need to filter out the cruft.
 filter '$file_name';
 
-lookup_url 'file://t';
 EOF
         ,
 
@@ -338,6 +338,12 @@ build-package:
 EOF
         ,
     );
+
+    # Append the lookup_url customized based the the $destination_directory for
+    # this generated test dist.
+    $test_dist_files{'./Fetchwarefile'}
+        .= 
+        "lookup_url 'file://$destination_directory';";
 
     # Create a temp dir to create or test-dist-1.$ver_num directory in.
     # Must be done before original_cwd() is used to set $destination_directory,

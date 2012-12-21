@@ -10,6 +10,7 @@ use 5.010;
 use Test::More 0.98 tests => '6'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir);
+use Path::Class;
 use URI::Split 'uri_split';
 use Cwd 'cwd';
 
@@ -81,7 +82,7 @@ subtest 'test make_test_dist()' => sub {
     my $file_name = 'test-dist';
     my $ver_num = '1.00';
     my $retval = make_test_dist($file_name, $ver_num);
-    is($retval, catfile(tmpdir(), "$file_name-$ver_num.fpkg"),
+    is(file($retval)->basename(), "$file_name-$ver_num.fpkg",
         'check make_test_dist() success.');
 
     ok(unlink $retval, 'checked make_test_dist() cleanup');
@@ -92,7 +93,7 @@ subtest 'test make_test_dist()' => sub {
     my @retvals;
     for my $filename (@filenames) {
         my $retval = make_test_dist($file_name, $ver_num);
-        is($retval, catfile(tmpdir(), "$file_name-$ver_num.fpkg"),
+        is(file($retval)->basename(), "$file_name-$ver_num.fpkg",
             'check make_test_dist() 2 calls  success.');
         push @retvals, $retval;
     }
@@ -112,7 +113,7 @@ subtest 'test make_test_dist()' => sub {
     # temp_dir.
     my $name2 = 'test-dist';
     my $rv = make_test_dist($name2, $ver_num, tmpdir());
-    is($rv, catfile(tmpdir(), "$name2-$ver_num.fpkg"),
+    is(file($rv)->basename(), "$name2-$ver_num.fpkg",
         'check make_test_dist() temp_dir destination directory success.');
 
     ok(unlink $rv, 'checked make_test_dist() cleanup');
