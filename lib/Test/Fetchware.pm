@@ -5,7 +5,7 @@ use warnings;
 
 # CPAN modules making Fetchwarefile better.
 use File::Temp 'tempdir';
-use File::Spec::Functions qw(catfile rel2abs updir);
+use File::Spec::Functions qw(catfile rel2abs updir tmpdir);
 use Test::More 0.98; # some utility test subroutines need it.
 use Cwd;
 use Archive::Tar;
@@ -243,19 +243,17 @@ sub make_clean {
     my $test_dist_path = make_test_dist($file_name, $ver_num, rel2abs($destination_directory));
 
 Makes a C<$filename-$ver_num.fpkg> fetchware package that can be used for
-testing fetchware's functionality without actually installing anything. All of
-the tests in the t/ directory use this, while all of the tests in the xt/
-directory use real programs like apache and ctags to test fetchware's
-functionality.
+testing fetchware's functionality without actually installing anything.
 
-Reuses start() to create a temp directory that is used to put the test-dist's
-files in. Then an archive is created based on original_cwd() or
+Reuses create_tempdir() to create a temp directory that is used to put the
+test-dist's files in. Then an archive is created based on original_cwd() or
 $destination_directory if provided, which is the current working directory
 before you call make_test_dist(). After the archive is created in original_cwd(),
-make_test_dist() deletes the $temp_dir using end().
+make_test_dist() deletes the $temp_dir using cleanup_tempdir().
 
 If $destination_directory is not provided as an argument, then make_test_dist()
-will just use cwd(), your current working directory.
+will just use tmpdir(), File::Spec's location for your system's temporary
+directory.
 
 Returns the full path to the created test-dist fetchwware package.
 
@@ -269,7 +267,7 @@ sub make_test_dist {
     # Set optional 3 argument to be the destination directory.
     # If that option was not provided set the destination directory to be the
     # orignal_cwd().
-    my $destination_directory = shift || cwd();
+    my $destination_directory = shift || tmpdir();
 
     # Append $ver_num to $file_name to complete the dist's name.
     my $dist_name = "$file_name-$ver_num";

@@ -81,7 +81,7 @@ subtest 'test make_test_dist()' => sub {
     my $file_name = 'test-dist';
     my $ver_num = '1.00';
     my $retval = make_test_dist($file_name, $ver_num);
-    is($retval, rel2abs("$file_name-$ver_num.fpkg"),
+    is($retval, catfile(tmpdir(), "$file_name-$ver_num.fpkg"),
         'check make_test_dist() success.');
 
     ok(unlink $retval, 'checked make_test_dist() cleanup');
@@ -92,7 +92,7 @@ subtest 'test make_test_dist()' => sub {
     my @retvals;
     for my $filename (@filenames) {
         my $retval = make_test_dist($file_name, $ver_num);
-        is($retval, rel2abs("$file_name-$ver_num.fpkg"),
+        is($retval, catfile(tmpdir(), "$file_name-$ver_num.fpkg"),
             'check make_test_dist() 2 calls  success.');
         push @retvals, $retval;
     }
