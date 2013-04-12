@@ -94,7 +94,7 @@ run() unless caller();
 sub run {
     # Set up a %SIG handler for CTRL-C or CTRL-Z on Windows.
     # And a %SIG handler for QUIT, which is CTRL-\
-    @SIG{qw(TERM QUIT)} = sub {
+    @SIG{qw(INT TERM QUIT EXIT)} = sub {
         my $sig = shift;
         msg <<EOM;
 Signal [$sig] received. Cleaning up Fetchware by deleting temporary directory.
