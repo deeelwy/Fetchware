@@ -496,6 +496,9 @@ EOD
 =head2 start()
 
     my $temp_dir = start();
+
+    # Or
+
     start sub {
         # Callback that replaces start()'s behavior.
         # Callback receives the same arguments as start(), and is must return
@@ -505,7 +508,7 @@ EOD
 =over
 =item Configuration subroutines used:
 =over
-=item none
+=item temp_dir 
 
 =back
 
@@ -516,6 +519,8 @@ will be deleted by File::Temp when fetchware closes.
 
 Returns the $temp_file that start() creates, so everything else has access to
 the directory they should use for storing file operations.
+
+=over
 
 =item EXTENSION OVERRIDE NOTES
 
@@ -540,7 +545,30 @@ cleanup_tempdir() in your end().
 
 Or, be sure not to name your temprorary directory that you create and manage
 yourself to begin with C<fetchware-*>, which is the glob pattern fetchware clean
-uses.
+uses. I recommend using something like
+C<App-Fetchware-NameOfExtension-$$-XXXXXXXXXXXXXX> as the name you would use in
+your File::Temp::temdir $pattern, with $$ being the special perlvar for the
+curent processes id.
+
+=item drop_privs() NOTES
+
+This section notes whatever problems you might come accross implementing and
+debugging your Fetchware extension due to fetchware's drop_privs mechanism.
+
+See L<whatshould thelinkbe|Util's drop_privs() subroutine for more info>.
+
+=over
+
+=item *
+
+start() is called in the parent with root privileges. This is done, so that when
+the parent calls cleanup_tempdir() in its end() call, cleanup_tempdir() still
+has a valid filehandle to the fetchware semaphore file, which is used to keep
+C<fetchware clean> from deleting fetchware's temporary directories out from
+under if you run a C<fetchware clean> while another process is running another
+fetchware comand at the same time.
+
+=back
 
 =back
 
@@ -639,10 +667,25 @@ Fetchwarefile belongs to.
 
 Only ftp://, http://, and file:// URL scheme's are supported.
 
+=item drop_privs() NOTES
+
+This section notes whatever problems you might come accross implementing and
+debugging your Fetchware extension due to fetchware's drop_privs mechanism.
+
+See L<whatshould thelinkbe|Util's drop_privs() subroutine for more info>.
+
+=over
+
+=item *
+
+Under drop_privs() lookup() is executed in the child with reduced privileges.
+
+=back
+
 =back
 
 C<lookup_method> can be either C<'timestamp'> or C<'versionstring'>, any other
-values will result in fetchware die()ing with an error message.
+values will result in fetchware throwing an exception.
 
 =cut
 
@@ -1234,6 +1277,21 @@ Uses Net::FTP and HTTP::Tiny to download ftp and http files. No other types of
 downloading are supported, and fetchware is stuck with whatever limitations or
 bugs Net::FTP or HTTP::Tiny impose.
 
+=item drop_privs() NOTES
+
+This section notes whatever problems you might come accross implementing and
+debugging your Fetchware extension due to fetchware's drop_privs mechanism.
+
+See L<whatshould thelinkbe|Util's drop_privs() subroutine for more info>.
+
+=over
+
+=item *
+
+Under drop_privs() download() is executed in the child with reduced privileges.
+
+=back
+
 =back
 
 =cut
@@ -1346,6 +1404,21 @@ helper subroutines C<{gpg,sha1,md5,digest}_verify()>.
 Uses gpg command line or Crypt::OpenPGP for Windows, and the interface to gpg is
 a little brittle, while Crypt::OpenPGP is complex, poorly maintained, and bug
 ridden, but still usable.
+
+=item drop_privs() NOTES
+
+This section notes whatever problems you might come accross implementing and
+debugging your Fetchware extension due to fetchware's drop_privs mechanism.
+
+See L<whatshould thelinkbe|Util's drop_privs() subroutine for more info>.
+
+=over
+
+=item *
+
+Under drop_privs() verify() is executed in the child with reduced privileges.
+
+=back
 
 =back
 
@@ -1867,6 +1940,21 @@ in the archive, and throwing a fatal error, because Archive::Extract B<only>
 extracts files it gives you B<zero> chance of listing them except after you
 already extract them.
 
+=item drop_privs() NOTES
+
+This section notes whatever problems you might come accross implementing and
+debugging your Fetchware extension due to fetchware's drop_privs mechanism.
+
+See L<whatshould thelinkbe|Util's drop_privs() subroutine for more info>.
+
+=over
+
+=item *
+
+Under drop_privs() unarchive() is executed in the child with reduced privileges.
+
+=back
+
 =back
 
 =cut
@@ -2218,6 +2306,25 @@ specify none. Fetchware will check if the commands you specify exist and are
 executable, but the kernel will do it for you and any errors will be in
 fetchware's output.
 
+=item drop_privs() NOTES
+
+This section notes whatever problems you might come accross implementing and
+debugging your Fetchware extension due to fetchware's drop_privs mechanism.
+
+See L<whatshould thelinkbe|Util's drop_privs() subroutine for more info>.
+
+=over
+
+=item *
+
+Under drop_privs() build() is executed in the child with reduced privileges.
+
+The $build_path it returns is very important, because the parent process will
+need to know this path, which is in turn provided to install() as an argument,
+and install will then chdir to $build_path.
+
+=back
+
 =back
 
 =cut
@@ -2405,6 +2512,9 @@ EOD
 Executes C<make install>, which installs the specified software, or executes
 whatever C<install_commands 'install, commands';> if its defined.
 
+install() takes $build_path as its argument, because it must chdir() to this
+path if fetchware drops privileges.
+
 =over
 =item LIMITATIONS
 install() like build() inteligently parses C<install_commands> by C<split()ing>
@@ -2416,8 +2526,23 @@ specify none. Fetchware will check if the commands you specify exist and are
 executable, but the kernel will do it for you and any errors will be in
 fetchware's output.
 
-install() takes $build_path as its argument, because it must chdir() to this
-path if fetchware drops privileges.
+=item drop_privs() NOTES
+
+This section notes whatever problems you might come accross implementing and
+debugging your Fetchware extension due to fetchware's drop_privs mechanism.
+
+See L<whatshould thelinkbe|Util's drop_privs() subroutine for more info>.
+
+=over
+
+=item *
+
+install() is run in the B<parent> process as root, because most server programs
+must be installed as root. install() must be called with $build_path as its
+argument, because it may need to chdir to $build_path, the same path that
+build() built the package in, in order to be able to install the program.
+
+=back
 
 =back
 
@@ -2543,6 +2668,25 @@ Also, simply executes the commands you specify or the default ones if you
 specify none. Fetchware will check if the commands you specify exist and are
 executable, but the kernel will do it for you and any errors will be in
 fetchware's output.
+
+=item drop_privs() NOTES
+
+This section notes whatever problems you might come accross implementing and
+debugging your Fetchware extension due to fetchware's drop_privs mechanism.
+
+See L<whatshould thelinkbe|Util's drop_privs() subroutine for more info>.
+
+=over
+
+=item *
+
+uninstall() is run in the B<parent> process as root, because most server
+programs must be uninstalled as root. uninstall() must be called with
+$build_path as its argument, because it may need to chdir to $build_path, the
+same path that build() built the package in, in order to be able to uninstall
+the program.
+
+=back
 
 =back
 
@@ -2697,6 +2841,23 @@ cleanup_tempdir() in your end().
 Or, be sure not to name your temprorary directory that you create and manage
 yourself to begin with C<fetchware-*>, which is the glob pattern fetchware clean
 uses.
+
+=item drop_privs() NOTES
+
+This section notes whatever problems you might come accross implementing and
+debugging your Fetchware extension due to fetchware's drop_privs mechanism.
+
+See L<whatshould thelinkbe|Util's drop_privs() subroutine for more info>.
+
+=over
+
+=item *
+
+end() runs in the parent process similar to start(). It needs to be able to
+close the lockfile that start() created so that C<fetchware clean> cannot delete
+fetchware's temporary directory out from under it.
+
+=back
 
 =back
 
@@ -2867,7 +3028,7 @@ works as follows.
 
 =item 2. After it does so, it gives you a chance to edit its autogenerated Fetchwarefile manually in an editor of your choice.
 
-=item 3. Afterwards, it will ask you if you would like to go ahead and use your newly created Fetchwarefile to install your new program as a fetchware package.  If you answer yes, the default, it will install it, but if you anwer no; instead, it will simply print out the location to the Fetchwarefile that it created for you.
+=item 3. Afterwards, it will ask you if you would like to go ahead and use your newly created Fetchwarefile to install your new program as a fetchware package.  If you answer yes, the default, it will install it, but if you anwer no; instead, it will simply print out the location to the Fetchwarefile that it created for you. You can then cp that file to a location of your choice, or use that path as an option to additional fetchware commands.
 
 =back
 
