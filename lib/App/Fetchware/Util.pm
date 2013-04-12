@@ -22,8 +22,9 @@ use Fcntl qw(S_ISDIR :flock);
 use if is_os_type('Unix'), 'Privileges::Drop';
 use POSIX '_exit';
 
-# Enable Perl 6 knockoffs.
-use 5.010;
+# Enable Perl 6 knockoffs, and use 5.10.1, because smartmatching and other
+# things in 5.10 were changed in 5.10.1+.
+use 5.010001;
 
 # Set up Exporter to bring App::Fetchware::Util's API to everyone who use's it.
 use Exporter qw( import );

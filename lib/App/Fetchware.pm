@@ -24,8 +24,9 @@ use Cwd 'cwd';
 use App::Fetchware::Util ':UTIL';
 use App::Fetchware::Config ':CONFIG';
 
-# Enable Perl 6 knockoffs.
-use 5.010;
+# Enable Perl 6 knockoffs, and use 5.10.1, because smartmatching and other
+# things in 5.10 were changed in 5.10.1+.
+use 5.010001;
 
 # Add prototypes for the subroutines that can be used in Fetchwarefiles that can
 # take a coderef in packages other than fetchware, but if in fetchware will just

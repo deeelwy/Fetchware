@@ -15,8 +15,9 @@ use Digest::MD5;
 use App::Fetchware::Util ':UTIL';
 use App::Fetchware::Config '__clear_CONFIG';
 
-# Enable Perl 6 knockoffs.
-use 5.010;
+# Enable Perl 6 knockoffs, and use 5.10.1, because smartmatching and other
+# things in 5.10 were changed in 5.10.1+.
+use 5.010001;
 
 
 # Set up Exporter to bring App::Fetchware's API to everyone who use's it

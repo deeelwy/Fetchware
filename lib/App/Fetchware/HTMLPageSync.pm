@@ -3,8 +3,9 @@ package App::Fetchware::HTMLPageSync;
 use strict;
 use warnings;
 
-# Enable Perl 6 knockoffs.
-use 5.010;
+# Enable Perl 6 knockoffs, and use 5.10.1, because smartmatching and other
+# things in 5.10 were changed in 5.10.1+.
+use 5.010001;
 
 # Load only the fetchware API subroutines that A::P::HTMLPageSync does not
 # override by implementing them here in its own subroutine.
