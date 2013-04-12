@@ -97,9 +97,17 @@ sub run {
     @SIG{qw(INT TERM QUIT EXIT)} = sub {
         my $sig = shift;
         msg <<EOM;
-Signal [$sig] received. Cleaning up Fetchware by deleting temporary directory.
+Signal [$sig] received. Cleaning up Fetchware. Any temporary files that
+fetchware may have created will be deleted by File::Temp's END block.
 EOM
         cleanup_tempdir();
+
+        # Exit failure, because fetchware failed to properly install your
+        # software while it was running, because the signal it received forced
+        # it to exit prematurely making it questionable if fetchware succeeded
+        # in properly and completely completing the actions you specified on the
+        # command line and/or in a Fetchwarefile.
+        exit 1;
     };
 
     ###BUGALERT### Inside run() is where the %SIG signal handler stuff should go
