@@ -19,7 +19,7 @@ use Digest::MD5;
 #use Crypt::OpenPGP;
 use Archive::Tar;
 use Archive::Zip qw(:ERROR_CODES :CONSTANTS);
-use Cwd;
+use Cwd 'cwd';
 
 use App::Fetchware::Util ':UTIL';
 use App::Fetchware::Config ':CONFIG';
@@ -41,7 +41,7 @@ sub download ($;$);
 sub verify ($;$);
 sub unarchive ($);
 sub build ($);
-sub install (;$);
+sub install ($);
 sub uninstall ($);
 sub end (;$);
 
@@ -556,6 +556,11 @@ uses.
         #main subroutine is executed. Instead of forcing extension developers to
         #remember to call Sub::Mage's before(), bin/fetchware could do it for
         #them after it inherits them. parse_fetchwarefile() could do it!
+        #Another option is to still use Sub::Mage's before(), but to use a
+        #subroutine attribute sub :TakeCallback {..} or something to allow the
+        #user to control if their subs take callbacks or not.
+        #But I kinda prefer just having bin/fetchware doit for the user inside
+        #parse_fetchwarefile().
         state $callback; # A state variable to keep its value between calls.
         if (caller ne 'fetchware') {
             $callback = shift;
@@ -580,13 +585,17 @@ EOD
         my %opts = @_;
 
         # Add temp_dir config sub to create_tempdir()'s arguments.
-        $opts{TempDir} = config('temp_dir') if config('temp_dir');
-        vmsg "Using user specified temporary directory [$opts{TempDir}]";
+        if (config('temp_dir')) {
+            $opts{TempDir} = config('temp_dir');
+            vmsg "Using user specified temporary directory [$opts{TempDir}]";
+        }
 
         # Add KeepTempDir option if no_install is set. That way user can still
         # access the build directory to do the install themselves.
-        $opts{KeepTempDir} = 1 if config('no_install');
-        vmsg "no_install option enabled not deleting temporary directory.";
+        if (config('no_install')) {
+            $opts{KeepTempDir} = 1;
+            vmsg "no_install option enabled not deleting temporary directory.";
+        }
 
         # Forward opts to create_tempdir(), which does the heavy lifting.
         my $temp_dir = create_tempdir(%opts);
@@ -1256,6 +1265,7 @@ EOD
 
     msg "Downloading from url [$download_url] to temp dir [$temp_dir]";
 
+diag("CWD!!![@{[cwd()]}]");
     my $downloaded_file_path = download_file($download_url);
     vmsg "Downloaded file to [$downloaded_file_path]";
 
@@ -2197,7 +2207,7 @@ C<prefix '/usr/local'>.
 
 =over
 =item LIMITATIONS
-build() likeinstall() inteligently parses C<build_commands>, C<prefix>,
+build() like install() inteligently parses C<build_commands>, C<prefix>,
 C<make_options>, and C<configure_options> by C<split()ing> on C</,\s+/>, and
 then C<split()ing> again on C<' '>, and then execute them using fetchware's
 built in run_prog() to properly support -q.
@@ -2373,9 +2383,9 @@ EOD
 }
 
 
-=head2 install()
+=head2 install($build_path)
 
-    'install succeeded' = install();
+    'install succeeded' = install($build_path);
     install sub {
         # Callback that replaces install()'s behavior.
         # Callback receives the same arguments as install(), and is must return
@@ -2405,11 +2415,14 @@ specify none. Fetchware will check if the commands you specify exist and are
 executable, but the kernel will do it for you and any errors will be in
 fetchware's output.
 
+install() takes $build_path as its argument, because it must chdir() to this
+path if fetchware drops privileges.
+
 =back
 
 =cut
 
-sub install (;$) {
+sub install ($) {
     # Based on what package we're called in, either accept a callback as an
     # argument and save it for later, or execute the already saved callback.
     state $callback; # A state variable to keep its value between calls.
@@ -2432,6 +2445,7 @@ EOD
         }
     }
 
+    my $build_path = shift;
 
     # Skip installation if the user requests it.
     if (config('no_install')) {
@@ -2441,7 +2455,20 @@ EOM
         return 'installation skipped!' ;
     }
 
-    msg 'Installing your package.';
+    msg 'Installing your software package.';
+
+    # chdir() to $build_path unless its already our cwd.
+    # Needed, because we'll inherit the "child's" chdir if stay_root is
+    # turned on, because stay_root does *not* fork and drop privs, which
+    # typicially causes the child's chdir to be "inherited" by the parent,
+    # because there is not parent and there is not child due to *not* forking.
+    unless ( dir(cwd())->dir_list(-1, 1) eq $build_path ) {
+        chdir($build_path) or die <<EOD;
+fetchware: fetchware failed to chdir to the build directory [$build_path]. It
+needs to chdir() to this directory, so that it can install your program.
+EOD
+    }
+    vmsg "chdir()'d to the build path [$build_path].";
 
     if (defined config('install_commands')) {
         vmsg 'Installing your package using user specified commands.';
@@ -2552,17 +2579,18 @@ EOD
 
     msg "Uninstalling package unarchived at path [$build_path]";
 
-    # chdir to $build_path so make will find the correct make file!.
-    ###BUGALERT### Refactor our chdir to its own subroutine that cmd_install and
-    #uninstall can share.
-    chdir $build_path or die <<EOD;
-App-Fetchware: Failed to uninstall the specified package and specifically to change
-working directory to [$build_path] before running make uninstall or the
-uninstall_commands provided in this package's Fetchwarefile. Os error [$!].
+    # chdir() to $build_path unless its already our cwd.
+    # This is needed, because we'll inherit the "child's" chdir if stay_root is
+    # turned on, because stay_root does *not* fork and drop privs, which
+    # typicially causes the child's chdir to be "inherited" by the parent,
+    # because there is not parent and there is not child due to *not* forking.
+    unless ( dir(cwd())->dir_list(-1, 1) eq $build_path ) {
+        chdir($build_path) or die <<EOD;
+fetchware: fetchware failed to chdir to the build directory [$build_path]. It
+needs to chdir() to this directory, so that it can uninstall your program.
 EOD
-    vmsg "chdir()d to build path [$build_path].";
-
-
+    }
+    vmsg "chdir()'d to the build path [$build_path].";
 
     if (defined config('uninstall_commands')) {
         vmsg 'Uninstalling using user specified uninstall commands.';
@@ -2633,8 +2661,10 @@ EOM
 =back
 
 end() is called after all of the other main fetchware subroutines such as
-lookup() are called. It's job is to cleanup after everything else. It just
-calls C<File::Temp>'s internalish File::Temp::cleanup() subroutine.
+lookup() are called. It's job is to cleanup after everything else. It just calls
+cleanup_tempdir(), which mostly just closes the C<fetchware.sem> fetchware
+semaphore file used to lock each fetchware temporary directory so C<fetchware
+clean> does not delete it.
 
 It also calls the very internal only __clear_CONFIG() subroutine that clears
 App::Fetchware's internal %CONFIG variable used to hold your parsed

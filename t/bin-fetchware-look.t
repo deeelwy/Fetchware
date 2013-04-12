@@ -56,12 +56,12 @@ filter 'httpd-2.2';
 EOF
 
     my $fetchwarefile_path = create_test_fetchwarefile($fetchwarefile);
-
+diag("FFP[$fetchwarefile_path]");
     ok(-e $fetchwarefile_path,
         'check create_test_fetchwarefile() test Fetchwarefile');
 
     my $look_path = cmd_look($fetchwarefile_path);
-
+diag("LP[$look_path]");
     # And then test if cmd_look() was successful.
     like($look_path, qr/@{[config('filter')]}/,
         'check cmd_look(Fetchware) success.');
@@ -77,7 +77,7 @@ __clear_CONFIG();
 
 
 subtest 'test cmd_look() test-dist success' => sub {
-    my $test_dist_path = make_test_dist('test-dist', '1.00', 't');
+    my $test_dist_path = make_test_dist('test-dist', '1.00');
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
     my $look_path = cmd_look($test_dist_path);

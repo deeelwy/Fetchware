@@ -289,6 +289,9 @@ diag("test_dist_filename[$test_dist_filename]");
 # so on functionality.
 use App::Fetchware;
 
+# Delme!!!!!!!!!!!!!!
+stay_root 'On';
+
 program '$file_name';
 
 # Need to filter out the cruft.
@@ -403,7 +406,7 @@ sub md5sum_file {
         or die <<EOD;
 App-Fetchware: run-time error. Fetchware failed to open the file it downloaded
 while trying to read it in order to check its MD5 sum. The file was
-[$archive_to_md5]. See perldoc App::Fetchware.
+[$archive_to_md5]. OS error [$!]. See perldoc App::Fetchware.
 EOD
 
     my $digest = Digest::MD5->new();

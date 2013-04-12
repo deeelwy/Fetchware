@@ -44,6 +44,8 @@ subtest 'OVERRIDE_INSTALL exports what it should' => sub {
 
 # Needed my all other subtests.
 my $package_path = $ENV{FETCHWARE_LOCAL_BUILD_URL};
+fail("FETCHWARE environment vars not set!!! Run frt()")
+    if not defined $package_path;
 
 
 # Call start() to create & cd to a tempdir, so end() called later can delete all

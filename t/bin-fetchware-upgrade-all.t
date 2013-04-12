@@ -16,6 +16,7 @@ use Cwd 'cwd';
 use File::Copy 'cp';
 use File::Spec::Functions qw(catfile splitpath);
 use Path::Class;
+use File::Temp 'tempdir';
 
 
 # Set PATH to a known good value.
@@ -130,8 +131,8 @@ diag("ctags_upgrade[$ctags_upgrade]");
 
 
     # Test after both packages have been upgraded.
-    print_ok(sub {cmd_list()),
-        sub {grep({$_ =~ /httpd-2\.2\.22|ctags-5\.8/} (split "\n", $stdout)},
+    print_ok(sub {cmd_list()},
+        sub {grep({$_ =~ /httpd-2\.2\.22|ctags-5\.8/} (split "\n", $_[0]))},
         'check cmd_upgrade() success.');
 
 
@@ -179,8 +180,15 @@ subtest 'test cmd_upgrade_all() test-dist' => sub {
         }
     }
 
-    my $old_test_dist_path = make_test_dist('test-dist', '1.00', 't');
-    my $old_another_dist_path = make_test_dist('another-dist', '1.00', 't');
+    # Create a $temp_dir for make_test_dist() to use. I need to do this, so that
+    # both the old and new test dists can be in the same directory.
+    my $upgrade_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
+        CLEANUP => 1, TMPDIR => 1);
+
+diag("UPGRADETD[$upgrade_temp_dir]");
+
+    my $old_test_dist_path = make_test_dist('test-dist', '1.00', $upgrade_temp_dir);
+    my $old_another_dist_path = make_test_dist('another-dist', '1.00', $upgrade_temp_dir);
 
     my $old_test_dist_path_md5 = md5sum_file($old_test_dist_path);
     my $old_another_dist_path_md5 = md5sum_file($old_another_dist_path);
@@ -208,8 +216,8 @@ subtest 'test cmd_upgrade_all() test-dist' => sub {
 
 
     # Create new test fpkgs and md5s in same dir for cmd_upgrade_all() to work.
-    my $new_test_dist_path = make_test_dist('test-dist', '1.01', 't');
-    my $new_another_dist_path = make_test_dist('another-dist', '1.01', 't');
+    my $new_test_dist_path = make_test_dist('test-dist', '1.01', $upgrade_temp_dir);
+    my $new_another_dist_path = make_test_dist('another-dist', '1.01', $upgrade_temp_dir);
 
     my $new_test_dist_path_md5 = md5sum_file($new_test_dist_path);
     my $new_another_dist_path_md5 = md5sum_file($new_another_dist_path);
@@ -224,7 +232,7 @@ diag("UPGRADED_PACKAGES[@upgraded_packages]");
     }
 
     print_ok(sub {cmd_list()},
-        sub {grep({$_ =~ /(test|another)-dist-1\.01/} (split "\n", $stdout)},
+        sub {grep({$_ =~ /(test|another)-dist-1\.01/} (split "\n", $_[0]))},
         'check cmd_upgrade_all() success.');
 
 

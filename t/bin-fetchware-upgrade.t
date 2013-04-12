@@ -17,6 +17,7 @@ use Cwd 'cwd';
 use File::Copy 'cp';
 use File::Spec::Functions qw(catfile splitpath);
 use Path::Class;
+use File::Temp 'tempdir';
 
 
 # Set PATH to a known good value.
@@ -35,7 +36,7 @@ BEGIN {
     ok(defined $INC{$fetchware}, 'checked bin/fetchware loading and import')
 }
 
-subtest 'test cmd_upgrad() success' => sub {
+subtest 'test cmd_upgrade() success' => sub {
     skip_all_unless_release_testing();
 
     # Delete all existing httpd fetchware packages in fetchware_database_path(),
@@ -47,6 +48,18 @@ subtest 'test cmd_upgrad() success' => sub {
                 'checked cmd_upgrade() clean up fetchware database path')
                 if -e $fetchware_package
         }
+    }
+    # Also delete Apache 2.2.22 from $ENV{FETCHWARE_LOCAL_UPGRADE_PATH}
+    my $striped_upgrade_path = $ENV{FETCHWARE_LOCAL_UPGRADE_URL};
+    $striped_upgrade_path =~ s!^file://!!;
+    my $httpd_upgrade_path
+        = catfile($striped_upgrade_path, 'httpd-2.2.22.tar.bz2');
+    my $httpd_upgrade_asc
+        = catfile($striped_upgrade_path, 'httpd-2.2.22.tar.bz2.asc');
+    for ($httpd_upgrade_path, $httpd_upgrade_asc) {
+        ok(unlink($_),
+            'checked cmd_upgrade() cleanup $ENV{FETCHWARE_LOCAL_UPGRADE_URL}')
+            if -e $_;
     }
 
 my $fetchwarefile = <<EOF;
@@ -77,8 +90,6 @@ diag("$fetchwarefile");
     __clear_CONFIG();
     # Also copy over the latest version of httpd, so that I don't have to change
     # the lookup_url in the Fetchwarefile of the httpd fetchware package.
-    my $striped_upgrade_path = $ENV{FETCHWARE_LOCAL_UPGRADE_URL};
-    $striped_upgrade_path =~ s!^file://!!;
     my $parent_upgrade_path = dir($striped_upgrade_path)->parent();
     my $httpd_upgrade = catfile($parent_upgrade_path, 'httpd-2.2.22.tar.bz2');
     my $httpd_upgrade_asc = catfile($parent_upgrade_path,
@@ -96,7 +107,7 @@ diag("httpd_upgrade_asc[$httpd_upgrade_asc]");
     my $uninstalled_package_path = cmd_upgrade('httpd');
 
     print_ok(sub {cmd_list()},
-        sub {grep({$_ =~ /httpd-2\.2\.22/} (split "\n", $stdout)},
+        sub {grep({$_ =~ /httpd-2\.2\.22/} (split "\n", $_[0]))},
         'check cmd_upgrade() success.');
 
 
@@ -137,7 +148,15 @@ subtest 'test cmd_upgrade() test-dist' => sub {
         }
     }
 
-    my $old_test_dist_path = make_test_dist('test-dist', '1.00', 't');
+    # Create a $temp_dir for make_test_dist() to use. I need to do this, so that
+    # both the old and new test dists can be in the same directory.
+    my $upgrade_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
+        CLEANUP => 1, TMPDIR => 1);
+
+diag("UPGRADETD[$upgrade_temp_dir]");
+
+    my $old_test_dist_path = make_test_dist('test-dist', '1.00',
+        $upgrade_temp_dir);
     
     my $old_test_dist_path_md5 = md5sum_file($old_test_dist_path);
 
@@ -169,13 +188,19 @@ diag("INSTALLPATH[$old_test_dist_path]");
 
     # Sleep for 2 seconds to ensure that the new version is a least a couple of
     # seconds newer than the original version. Perl is pretty fast, so it can
-    # actually execute this whole friggin subtest on my decent desktop system.
+    # actually execute this whole friggin subtest in less than one second on my
+    # decent desktop system.
     sleep 2;
 
 
-    my $new_test_dist_path = make_test_dist('test-dist', '1.01', 't');
+    my $new_test_dist_path = make_test_dist('test-dist', '1.01',
+        $upgrade_temp_dir);
 
     my $new_test_dist_path_md5 = md5sum_file($new_test_dist_path);
+
+diag("upgradepath[");
+system('ls', '-lh', $upgrade_temp_dir);
+diag("]");
 
     # cmd_uninstall accepts a string that needs to be found in the fetchware
     # database. It does *not* take Fetchwarefiles or fetchware packages as
@@ -184,7 +209,7 @@ diag("INSTALLPATH[$old_test_dist_path]");
         'checked cmd_upgrade() success');
 
     print_ok(sub {cmd_list()},
-        sub {grep({$_ =~ /test-dist-1\.01/} (split "\n", $stdout)},
+        sub {grep({$_ =~ /test-dist-1\.01/} (split "\n", $_[0]))},
         'check cmd_upgrade() success.');
 
 
@@ -201,8 +226,6 @@ diag("INSTALLPATH[$old_test_dist_path]");
     ok(unlink($old_test_dist_path, $old_test_dist_path_md5,
             $new_test_dist_path, $new_test_dist_path_md5),
         'checked cmd_upgrade() delete temp upgrade files');
-
-
 };
 
 

@@ -8,13 +8,13 @@ use 5.010;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '5'; #Update if this changes.
+use Test::More;# 0.98 tests => '5'; #Update if this changes.
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
 use Cwd 'cwd';
 use File::Copy 'mv';
-use File::Spec::Functions qw(catfile splitpath);
+use File::Spec::Functions qw(catfile splitpath tmpdir);
 use Path::Class;
 
 
@@ -41,6 +41,8 @@ subtest 'test cmd_install(Fetchwarefile)' => sub {
 
 my $fetchwarefile = <<EOF;
 use App::Fetchware;
+
+stay_root 'On';
 
 program 'Apache 2.2';
 
@@ -74,35 +76,35 @@ subtest 'test cmd_install(*.fpkg)' => sub {
     # if I parse more than one Fetchwarefile in a running of fetchware.
     __clear_CONFIG();
     
-    # Copy existing fetchware package to cwd(), so that after I try installing
+    # Copy existing fetchware package to tmpdir(), so that after I try installing
     # it I can test if it was successful by seeing if it was copied back to the
     # fetchware database dir.
+    # It must be a dir with the sticky bit set or owned by the user running the
+    # program to pass safe_open()'s security tests.
     diag("FPP[$fetchware_package_path]");
-    mv($fetchware_package_path, cwd())
+    mv($fetchware_package_path, tmpdir())
         ? pass("checked cmd_install() *.fpkg move fpkg.")
         : fail("Failed to cp [$fetchware_package_path] to cwd os error [$!].");
 
     # Steal the *.fpkg that was created in the previous step!
     my $new_fetchware_package_path
         =
-        cmd_install( ( splitpath($fetchware_package_path) )[2] );
+        cmd_install(
+            catfile(tmpdir(), ( splitpath($fetchware_package_path) )[2] )
+        );
 
     is($new_fetchware_package_path, $fetchware_package_path,
         'checked cmd_install(*.fpkg) success.');
-
-    ok(unlink file($new_fetchware_package_path)->basename(),
-        'check cmd_install(*.fpkg) cleanup success.');
 };
 
 
 subtest 'test test-dist.fpkg cmd_install' => sub {
-    # Actually test during user install!!!
 
     # Clear App::Fetchware's internal configuration information, which I must do
     # if I parse more than one Fetchwarefile in a running of fetchware.
     __clear_CONFIG();
 
-    my $test_dist_path = make_test_dist('test-dist', '1.00', 't');
+    my $test_dist_path = make_test_dist('test-dist', '1.00');
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
     my $install_success = cmd_install($test_dist_path);
@@ -120,25 +122,25 @@ subtest 'test test-dist.fpkg cmd_install' => sub {
 };
 
 
-
-subtest 'test cmd_install(else)' => sub {
-    skip_all_unless_release_testing();
-
-    eval_ok(sub {cmd_install()}, <<EOE, 'checked cmd_install() no args');
-fetchware: You called fetchware install incorrectly. You must also specify
-either a Fetchwarefile or a fetchware package that ends with [.fpkg].
-EOE
-
-    eval_ok(sub {cmd_install('fetchware-test' . rand(3739929293))},
-        <<EOE, 'checked cmd_install() file existence');
-fetchware: You called fetchware install incorrectly. You must also specify
-either a Fetchwarefile or a fetchware package that ends with [.fpkg].
-EOE
-
-
-};
+##TEST##
+##TEST##subtest 'test cmd_install(else)' => sub {
+##TEST##    skip_all_unless_release_testing();
+##TEST##
+##TEST##    eval_ok(sub {cmd_install()}, <<EOE, 'checked cmd_install() no args');
+##TEST##fetchware: You called fetchware install incorrectly. You must also specify
+##TEST##either a Fetchwarefile or a fetchware package that ends with [.fpkg].
+##TEST##EOE
+##TEST##
+##TEST##    eval_ok(sub {cmd_install('fetchware-test' . rand(3739929293))},
+##TEST##        <<EOE, 'checked cmd_install() file existence');
+##TEST##fetchware: You called fetchware install incorrectly. You must also specify
+##TEST##either a Fetchwarefile or a fetchware package that ends with [.fpkg].
+##TEST##EOE
+##TEST##
+##TEST##
+##TEST##};
 
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-#done_testing();
+done_testing();

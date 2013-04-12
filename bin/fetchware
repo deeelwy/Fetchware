@@ -24,15 +24,16 @@ use Getopt::Long qw(:config bundling pass_through);
 ###BUGALERT### This breaks App::Fetchware's encapsulation, and screws up its API
 #fix this bug by extracting the fetchwarefile without relying on start() having
 #already created the temp directory!!!!!!
-use App::Fetchware qw(start get_directory_listing parse_directory_listing);
+use App::Fetchware qw(get_directory_listing parse_directory_listing);
 use App::Fetchware::Config qw(config __clear_CONFIG config_replace);
-use App::Fetchware::Util qw(msg vmsg run_prog safe_open);
+use App::Fetchware::Util qw(msg vmsg run_prog safe_open drop_privs
+    cleanup_tempdir pipe_write_newline pipe_read_newline);
 use Archive::Tar;
 use File::Copy qw(mv cp);
 use File::Spec::Functions qw(curdir catdir catfile catpath tmpdir splitpath
     splitdir rel2abs abs2rel updir file_name_is_absolute);
 use Cwd 'cwd';
-use File::Path 'make_path';
+use File::Path qw(make_path remove_tree);
 use Term::UI;
 use Term::ReadLine;
 use File::Temp 'tempfile';
@@ -40,10 +41,13 @@ use Perl::OSType 'is_os_type';
 use File::HomeDir;
 use File::Find 'find';
 use File::Temp qw(tempdir tempfile);
-use Fcntl qw(S_ISDIR S_ISREG);
+###BUGALERT### Am I using these macros/subs from Fcntl???
+use Fcntl qw(S_ISDIR S_ISREG SEEK_SET);
 use Path::Class;
 use Text::Wrap 'wrap';
 use Data::Dumper;
+use Fcntl ':flock';
+use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
 
 # Setup exports, which are only meant to ease testing.
 use Exporter 'import';
@@ -63,6 +67,7 @@ our %EXPORT_TAGS  = (
         cmd_upgrade
         cmd_upgrade_all
         cmd_new
+        cmd_clean
         name_program
         opening_message
         get_lookup_url
@@ -87,6 +92,16 @@ our $dry_run = 0;
 run() unless caller();
 
 sub run {
+    # Set up a %SIG handler for CTRL-C or CTRL-Z on Windows.
+    # And a %SIG handler for QUIT, which is CTRL-\
+    @SIG{qw(TERM QUIT)} = sub {
+        my $sig = shift;
+        msg <<EOM;
+Signal [$sig] received. Cleaning up Fetchware by deleting temporary directory.
+EOM
+        cleanup_tempdir();
+    };
+
     ###BUGALERT### Inside run() is where the %SIG signal handler stuff should go
     #SIGTERM & SIGINT for ctrl-c!!! A fetchware cleanup command in cause of
     #SIGKILL???
@@ -102,7 +117,7 @@ sub run {
         'verbose|v' => \$verbose,
         'quiet|q' => \$quiet,
         ###BUGALERT### dry-run functionality is *not* implemented!!!
-        'dry-run|d' => \$dry_run,
+        #'dry-run|d' => \$dry_run,
     );
 
 
@@ -137,6 +152,8 @@ sub run {
                 cmd_list(@ARGV);
             } when('look') {
                 cmd_look(@ARGV);
+            } when('clean') {
+                cmd_clean(@ARGV);
             } when('help') {
                 cmd_help(@ARGV);
             } default {
@@ -182,6 +199,9 @@ and install a new fetchware package.
 =cut
 
 sub cmd_install {
+    # These variables must be shared back to the parent from the child using
+    # pipe_{write,read}_newline().
+    my $P_build_path;
     ###BUGALERT### After verifying basic functionality of cmd_install wrap
     #subroutine contents in a for my $filename (pop @ARGV) loop to try to
     #install all given arguments that arn't command line options as parsed by
@@ -190,65 +210,118 @@ sub cmd_install {
     my $filename = shift;
 
     msg "Starting fetchware install to install [$filename]";
-
+    
+    my $output;
     if (defined($filename) and -e $filename) {
-        # Run the :FETCHWARE subroutines to do everything to install the
-        # program.
 
-        # Absolutize $filename so it can survive start() chdir()ing into a temp
-        # dir.
-        $filename = rel2abs($filename);
-
-###BUGALERT### Fix this massive bug that screws up App::Fetchware's API!!!
-# start() *must* be called after extract_fetchwarefile() and parse_fetchware()
-# that way the user can customize start()'s behavior if they need to! Other wise
-# start() cannot be overriden properly!!!!!!!!!!
-        my $temp_dir = start();
-
-        my $fetchwarefile_path;
-        if ($filename =~ /\.fpkg$/) {
-            $fetchwarefile_path = extract_fetchwarefile($filename, cwd());
-            vmsg <<EOM;
-Extracting out Fetchwarefile from [$filename] to [$fetchwarefile_path]
+    # If a fpkg extract out the Fetchwarefile into a scalar, and if not a
+    # fetchware package to go ahead and open for reading only the Fetchware
+    # right now while we're perhaps still root, so we can be sure we can
+    # still access it.
+    my $fetchwarefile;
+    if ($filename =~ /\.fpkg$/) {
+        $fetchwarefile = extract_fetchwarefile($filename);
+        vmsg <<EOM;
+Extracting out Fetchwarefile from [$filename] to [$fetchwarefile]
 EOM
-            parse_fetchwarefile($fetchwarefile_path);
-        } else {
-            parse_fetchwarefile($filename);
-            $fetchwarefile_path = $filename;
-        }
-        vmsg "Parsed Fetchwarefile [$fetchwarefile_path].";
+    } else {
+        my $fh = safe_open($filename, <<EOD);
+fetchware: Fetchware failed to open the filename you specified to fetchware
+install [$filename]. The OS error was [$!].
+EOD
+        vmsg "Opened file [$filename] for slurping.";
+        # Add a \ to turn the slurped scalar into a scalar ref for calling
+        # parse_fetchwarefile() properly.
+        $fetchwarefile = \do {local $/; <$fh>};
+        vmsg  "Slurped [$filename] into fetchware: [$fetchwarefile]";
+    }
 
-        ###BUGALERT### install installs no matter if the program is already
-        #installed!!! Change this to parse out the package from the download_url
-        #if possible, compare with the one in the fetchware package database,
-        #and call exit right here if the current version is already installed
-        #unless of course --force is used!!!
-        my $download_url = lookup();
-        diag("DUDUDUDUDUDUDU[$download_url]");
+    # Must parse the Fetchwarefile in the parent, so that the parent has access
+    # to the imported subroutines and modified fetchware configuration (%CONFIG)
+    # just as the child does.
+    parse_fetchwarefile($fetchwarefile);
+    vmsg "Parsed Fetchwarefile [$fetchwarefile].";
 
-        my $package_path = download($temp_dir, $download_url);
-        diag("PPPPPPPPPPP[$package_path]");
 
-        ###BUGALERT### Add support for caching the key files gpg creates to the
-        #fetchwarefile, and for actually using them later on inside the fpkg.
-        verify($download_url, $package_path);
+    # start() runs as root before the fork, because it uses
+    # App::Fetchware::Util's create_tempdir() to create a $temp_dir. This
+    # subroutine uses a variable to store an open filehandle to a
+    # "fetchware.sem" semaphore file. This filehandle must stay open and locked
+    # using flock, because otherwise a "fetchware clean" run could delete the
+    # temporary directory out from under fetchware. Therefore, the parent must
+    # open this semaphore, because the child if it runs start() will close this
+    # file handle when it exits causing cleanup_tempdir() to freak out when
+    # end() is called.
+    my $temp_dir = start();
 
-        my $build_path = unarchive($package_path);
+        # Drop privs, so only install() and  end() are called with root perms
+        $output = drop_privs(
+        sub {
+            my $write_pipe = shift;
 
-        build($build_path);
+            # Run the App::Fetchware API subroutines to do everything to install
+            # the program, but be mindful of drop_privs() requiring this coderef
+            # to use pipe_write_newline() to communicate needed changes back to
+            # the parent process, for example, $P_build_path--the parent needs to
+            # chdir() to that directory before it tries to execute install().
 
-        ###BUGALERT### Add support for no_install config file option and add a
-        #command line option that does the same thing. msg() if install is
-        #skipped.
-        # For no_install to work consider using KeepTempDir => 1 option to
-        # start() to keep the temp dir, and then skip package creation, and
-        # print location of temp dir instead.
-        install();
+            ###BUGALERT### install installs no matter if the program is already
+            #installed!!! Change this to parse out the package from the
+            #download_urlif possible, compare with the one in the fetchware
+            #package database, and call exit right here if the current version
+            #is already installed unless of course --force is used!!!
+            my $download_url = lookup();
+            diag("DUDUDUDUDUDUDU[$download_url]");
+
+diag("CHILDTEMPDIR[$temp_dir]");
+            my $package_path = download($temp_dir, $download_url);
+           diag("PPPPPPPPPPP[$package_path]");
+
+            ###BUGALERT### Add support for caching the key files gpg creates to
+            #the fetchwarefile, and for actually using them later on inside the
+            #fpkg.
+            verify($download_url, $package_path);
+
+            $P_build_path = unarchive($package_path);
+
+            build($P_build_path);
+
+            # Tell the parent, root, process the values of the variables the
+            # child calculated in this coderef, and write them across this pipe
+            # back to the parent
+            pipe_write_newline($write_pipe, $P_build_path);
+        }, config('user')
+        ); # End drop_privs().
+
+        # Read from the pipe the child, the drop_privs()ed process, writes to to
+        # read the necessary values that correspond to the variables that the
+        # child must communicate back to the parent, so the parent can continue
+        # processing as though no fork()ing or priv dropping took place.
+        ($P_build_path)
+            = pipe_read_newline($output);
+diag("PARENTTEMPDIR[$temp_dir]");
+use Cwd 'cwd';
+diag("CWD[@{[cwd()]}");
+
+        # If we forked, then the child already ran start(), and chdir()'d to
+        # $temp_dir; therefore, we must also chdir($temp_dir) here if we
+        # forked,so that the parent is also in the correct temporary directory.
+        # uninstall() is still responsible for chdir()ing to $P_build_path,
+        # though.
+        #unless ( dir(cwd())->dir_list(-1, 1) eq $temp_dir) {
+        unless (dir(cwd())->subsumes($temp_dir)) {
+            chdir($temp_dir) or die <<EOD;
+fetchware: fetchware failed to chdir to the build directory [$temp_dir]. It
+needs to chdir() to this directory, so that it can uninstall your program.
+EOD
+}
+
+        install($P_build_path);
 
         vmsg "Creating Fetchware package from [@{[cwd()]}].";
         my $fetchware_package_path
             =
-            create_fetchware_package($fetchwarefile_path, cwd());
+            create_fetchware_package($fetchwarefile, cwd());
         vmsg "Created fetchware package at [$fetchware_package_path].";
 
         vmsg 'Installing created fetchware package to fetchware database.';
@@ -286,7 +359,7 @@ specify the version number as well.
 =item LIMITATION
 cmd_uninstall() unlike cmd_install() does not accept Fetchwarefiles as an
 argument to uninstall a fetchware package! Instead, you must provide the name
-and perhaps the name and version number of the already installed software
+and perhaps the name and version number of an already installed software
 package. For a list of such package names just run C<fetchware list> to list all
 installed fetchware packages.
 
@@ -295,6 +368,10 @@ installed fetchware packages.
 =cut
 
 sub cmd_uninstall {
+    # These variables must be shared back to the parent from the child using
+    # pipe_{write,read}_newline().
+    my $P_build_path;
+
     my $uninstall_package_path = shift;
 
     msg "Uninstalling specified package [$uninstall_package_path]";
@@ -306,19 +383,15 @@ Determined the path of this package in the fetchware database to be
 [$fetchware_package_path].
 EOM
 
-    my $temp_dir = start();
-
-    # Parse out the Fetchwarefile from the fetchware package stored in the
-    # fetchware database directory.
-    my $fetchwarefile_path;
+    # Extract out the $fetchwarefile from the $fetchware_package_path.
+    my $fetchwarefile;
     if ($fetchware_package_path =~ /\.fpkg$/) {
-        $fetchwarefile_path
-            = extract_fetchwarefile($fetchware_package_path, cwd());            
+        $fetchwarefile
+            =
+            extract_fetchwarefile($fetchware_package_path, cwd());
         vmsg <<EOM;
-Extracted Fetchwarefile from installed package to [$fetchwarefile_path]
+Extracting out Fetchwarefile from [$fetchware_package_path] to [$fetchwarefile]
 EOM
-        parse_fetchwarefile($fetchwarefile_path);
-        vmsg 'Parsed Fetchwarefile from installed package.';
     } else {
         die <<EOD;
 fetchware: The option you provided to uninstall is not a currently installed
@@ -328,14 +401,67 @@ fetchware packages please try fetchware's list command: fetchware list
 EOD
     }
 
-    # "Download" the package using a local file:// URL.
-    my $fetchware_url = "file://$fetchware_package_path";
-    my $package_path = download($temp_dir, $fetchware_url);
-    vmsg "Copied installed package to temporary directory at [$package_path]";
+    # Must parse the Fetchwarefile in the parent, so that the parent has access
+    # to the imported subroutines and modified fetchware configuration (%CONFIG)
+    # just as the child does.
+    parse_fetchwarefile($fetchwarefile);
+    vmsg "Parsed Fetchwarefile [$fetchwarefile].";
 
-    my $build_path = unarchive($package_path);
+    # start() runs as root before the fork, because it uses
+    # App::Fetchware::Util's create_tempdir() to create a $temp_dir. This
+    # subroutine uses a variable to store an open filehandle to a
+    # "fetchware.sem" semaphore file. This filehandle must stay open and locked
+    # using flock, because otherwise a "fetchware clean" run could delete the
+    # temporary directory out from under fetchware. Therefore, the parent must
+    # open this semaphore, because the child if it runs start() will close this
+    # file handle when it exits causing cleanup_tempdir() to freak out when
+    # end() is called.
+    my $temp_dir = start();
 
-    uninstall($build_path);
+    # Drop privs, so only install() and end() is called with root permissions
+    my $output = drop_privs(
+    sub { 
+        my $write_pipe = shift;
+
+        # "Download" the package using a local file:// URL.
+        my $fetchware_url = "file://$fetchware_package_path";
+        my $package_path = download($temp_dir, $fetchware_url);
+        vmsg "Copied installed package to temporary directory at [$package_path]";
+
+        $P_build_path = unarchive($package_path);
+
+        # Tell the parent, root, process the values of the variables the
+        # child calculated in this coderef, and write them across this pipe
+        # back to the parent
+        pipe_write_newline($write_pipe, $P_build_path);
+        }, config('user')
+    ); # End drop_privs().
+
+    # Read from the pipe the child, the drop_privs()ed process, writes to to
+    # read the necessary values that correspond to the variables that the
+    # child must communicate back to the parent, so the parent can continue
+    # processing as though no fork()ing or priv dropping took place.
+    ($P_build_path) = pipe_read_newline($output);
+
+use Test::More;
+diag("p_BUILD_PATH[$P_build_path]");
+use Cwd 'cwd';
+diag("Cwd is @{[cwd()]}");
+
+
+    # If we forked, then the child already ran start(), and chdir()'d to
+    # $temp_dir; therefore, we must also chdir($temp_dir) here if we
+    # forked,so that the parent is also in the correct temporary directory.
+    # uninstall() is still responsible for chdir()ing to $P_build_path, though.
+    #unless ( dir(cwd())->dir_list(-1, 1) eq $temp_dir) {
+    unless (dir(cwd())->subsumes($temp_dir)) {
+        chdir($temp_dir) or die <<EOD;
+fetchware: fetchware failed to chdir to the build directory [$temp_dir]. It
+needs to chdir() to this directory, so that it can uninstall your program.
+EOD
+    }
+
+    uninstall($P_build_path);
 
     end();
 
@@ -343,8 +469,9 @@ EOD
     uninstall_fetchware_package_from_database($fetchware_package_path);
 
     msg "Uninstalled fetchware package [$uninstall_package_path].";
-    # Return the name of the uninstalled package.
-    return $uninstall_package_path;
+    # Return the name of the uninstalled package's full path fetchware's
+    # database.
+    return $fetchware_package_path;
 }
 
 
@@ -394,14 +521,22 @@ character based question and anwser wizard interface.
 =cut
 
 sub cmd_new {
-    my $program_name = shift;
 
-    my $term = Term::ReadLine->new('Fetchware new');
+    # These are the variables that the child must share back with the parent.
+    my $P_program_name = shift; # The child might change or define it again.
+    my $P_term;
+    my $P_fetchwarefile;
 
-    my $now = localtime;
-    ###BUGALERT### Only App::Fetchware based Fetchwarefile's are supported now,
-    #will have to add some ifs and code to support others.
-    my $fetchwarefile = <<EOF;
+    # Drop privs, so only install() is called with root permissions
+    my $output = drop_privs( sub {
+        my $write_pipe = shift;
+
+        $P_term = Term::ReadLine->new('Fetchware new');
+
+        my $now = localtime;
+        ###BUGALERT### Only App::Fetchware based Fetchwarefile's are supported now
+        #will have to add some ifs and code to support others.
+        $P_fetchwarefile = <<EOF;
 use App::Fetchware;
 # Auto generated $now by fetchware's new command.
 # However, feel free to edit this file if fetchware's new command's
@@ -410,76 +545,90 @@ use App::Fetchware;
 # Please look up fetchware's documentation of its configuration file syntax at
 # perldoc App::Fetchware, and only if its configuration file syntax is not
 # malleable enough for your application should you resort to customizing
-# fetchware's behavior with override. For extra flexible customization see
-# perldoc App::Fetchware.
+# fetchware's behavior. For extra flexible customization see perldoc
+# App::Fetchware.
 EOF
-    ###INSANEFEATUREENHANCEMENT### Prompt for name of program, and do a fuzzy 
-    #search on CPAN for that program under
-    #App::Fetchware::Fetchwarefile::UpCasedProgName. Consider using the meta
-    #CPAN API. And if it exists ask user if they wanna use that one instead of
-    #autogening one.
+        ###INSANEFEATUREENHANCEMENT### Prompt for name of program, and do a fuzzy 
+        #search on CPAN for that program under
+        #App::Fetchware::Fetchwarefile::UpCasedProgName. Consider using the meta
+        #CPAN API. And if it exists ask user if they wanna use that one instead of
+        #autogening one.
 
-    opening_message();
+        opening_message();
 
-    # Ask user for name of program unless the user provided one at command line
-    # such as fetchware new <programname>.
-    $program_name //= name_program($term);
-    vmsg "Determined name of your program to be [$program_name]";
+        # Ask user for name of program unless the user provided one at command
+        # line such as fetchware new <programname>.
+        $P_program_name //= name_program($P_term);
+        vmsg "DeP_termined name of your program to be [$P_program_name]";
 
-    append_options_to_fetchwarefile({program => $program_name},
-        \$fetchwarefile);
-    vmsg "Appended program [$program_name] configuration option to Fetchwarefile";
+        append_options_to_fetchwarefile({program => $P_program_name},
+            \$P_fetchwarefile);
+        vmsg "Appended program [$P_program_name] configuration option to Fetchwarefile";
 
-    my $lookup_url = get_lookup_url($term);
-    vmsg "Asked user for lookup_url [$lookup_url] from user.";
+        my $lookup_url = get_lookup_url($P_term);
+        vmsg "Asked user for lookup_url [$lookup_url] from user.";
 
-    # Add $lookup_url to $fetchwarefile.
-    append_options_to_fetchwarefile({lookup_url => $lookup_url},
-        \$fetchwarefile);
-    vmsg "Appended lookup_url [$lookup_url] configuration option to Fetchwarefile";
+        # Add $lookup_url to $P_fetchwarefile.
+        append_options_to_fetchwarefile({lookup_url => $lookup_url},
+            \$P_fetchwarefile);
+        vmsg "Appended lookup_url [$lookup_url] configuration option to Fetchwarefile";
 
-    vmsg "Downloaded lookup_url [$lookup_url]";
-    my $filename_listing = download_lookup_url($term, $lookup_url);
-    vmsg "Downloaded lookup_url's directory listing";
-    vmsg Dumper($filename_listing);
+        vmsg "Downloaded lookup_url [$lookup_url]";
+        my $filename_listing = download_lookup_url($P_term, $lookup_url);
+        vmsg "Downloaded lookup_url's directory listing";
+        vmsg Dumper($filename_listing);
 
-    my $filter = analyze_lookup_listing($term, $filename_listing);
-    vmsg <<EOM;
-Analyzed directory listing, and with the user's help determined the filter to
+        my $filter = analyze_lookup_listing($P_term, $filename_listing);
+        vmsg <<EOM;
+Analyzed directory listing, and with the user's help deP_termined the filter to
 be [$filter].
 EOM
 
-    # Append filter option to fetchwarefile if its needed.
-    if ($filter) {
-        append_options_to_fetchwarefile({filter => $filter}, \$fetchwarefile);
-        vmsg <<EOM;
+        # Append filter option to P_fetchwarefile if its needed.
+        if ($filter) {
+            append_options_to_fetchwarefile({filter => $filter}, \$P_fetchwarefile);
+            vmsg <<EOM;
 Appended filter [$filter] configuration option to Fetchwarefile";
 EOM
-    }
+        }
 
-    ###BUGALERT### Ask to parrallelize make with make_options???
-    ###BUGALERT### Verify prefix is writable by current user, who will
-    #presumably be the user who will install the package now and later.
-    vmsg 'Prompting for other options that may be needed.';
-    my %options = prompt_for_other_options($term);
-    vmsg 'User entered the following options.';
-    vmsg Dumper(\%options);
+        ###BUGALERT### Ask to parrallelize make with make_options???
+        ###BUGALERT### Verify prefix is writable by current user, who will
+        #presumably be the user who will install the package now and later.
+        vmsg 'Prompting for other options that may be needed.';
+        my %options = prompt_for_other_options($P_term);
+        vmsg 'User entered the following options.';
+        vmsg Dumper(\%options);
 
-    # Append all other options to fetchwarefile.
-    append_options_to_fetchwarefile(\%options, \$fetchwarefile);
-    vmsg 'Appended all other options listed above to Fetchwarefile.';
+        # Append all other options to P_fetchwarefile.
+        append_options_to_fetchwarefile(\%options, \$P_fetchwarefile);
+        vmsg 'Appended all other options listed above to Fetchwarefile.';
 
-    add_mirrors($term, \$fetchwarefile);
-    vmsg 'Added the mirrors the user specified to Fetchwarefile';
+        add_mirrors($P_term, \$P_fetchwarefile);
+        vmsg 'Added the mirrors the user specified to Fetchwarefile';
 
-    edit_manually($term, \$fetchwarefile);
-    vmsg <<EOM;
+        edit_manually($P_term, \$P_fetchwarefile);
+        vmsg <<EOM;
 Asked user if they would like to edit their generated Fetchwarefile manually.
 EOM
+    
+        # Tell the parent, root, process the values of the variables the
+        # child calculated in this coderef, and write them across this pipe
+        # back to the parent
+        pipe_write_newline($write_pipe, $P_program_name, $P_term, $P_fetchwarefile);
+    }, config('user')
+    ); # End drop_privs() back to root now!
+
+
+    # Read from the pipe the child, the drop_privs()ed process, writes to to
+    # read the necessary values that correspond to the variables that the
+    # child must communicate back to the parent, so the parent can continue
+    # processing as though no fork()ing or priv dropping took place.
+    ($P_program_name, $P_term, $P_fetchwarefile) = pipe_read_newline($output);
 
     my $fetchware_package_path =
-        ask_to_install_now_to_test_fetchwarefile($term, \$fetchwarefile,
-            $program_name);
+        ask_to_install_now_to_test_fetchwarefile($P_term, \$P_fetchwarefile,
+            $P_program_name);
 }
 
 
@@ -1476,6 +1625,12 @@ well.
 
 sub cmd_upgrade {
     my $upgrade_name = shift;
+
+    my ($P_file_listing_0_0,
+        $P_download_url_basename,
+        $P_upgrade_name_basename,
+        $P_build_path);
+
     ###BUGALERT### the or --force cmdline option will skip the checking of
     #version numbers, and the one lookup() says to download will be installed
     #regardless.
@@ -1486,18 +1641,13 @@ sub cmd_upgrade {
 Determined already installed fetchware package's path to be [$fetchware_package_path].
 EOM
 
-    my $temp_dir = start();
-
-
     # Parse out the Fetchwarefile from the fetchware package stored in the
     # fetchware database directory.
-    my $fetchwarefile_path;
+    my $fetchwarefile;
     if ($fetchware_package_path =~ /\.fpkg$/) {
-        $fetchwarefile_path
-            = extract_fetchwarefile($fetchware_package_path, cwd());            
-        vmsg "Extracted Fetchwarefile temporarily to [$fetchwarefile_path]";
-        parse_fetchwarefile($fetchwarefile_path);
-        vmsg 'Parsed Fetchwarefile.';
+        $fetchwarefile
+            = extract_fetchwarefile($fetchware_package_path);            
+        vmsg "Extracted Fetchwarefile temporarily into [$fetchwarefile]";
     } else {
         die <<EOD;
 fetchware: fetchware upgrade failed to extract the Fetchwarefile from the
@@ -1505,72 +1655,131 @@ fetchware package that should be stored in fetchware's database.
 EOD
     }
 
-    ###BUGALERT### Have lookup() replace the timestamp of what we should
-    #download too to make upgrade() be able to use the lookup_by_timestamp
-    #algorithm too, which is a better default anyway.
-    my $download_url = lookup();
+    # Must parse the Fetchwarefile in the parent, so that the parent has access
+    # to the imported subroutines and modified fetchware configuration (%CONFIG)
+    # just as the child does.
+    parse_fetchwarefile($fetchwarefile);
+    vmsg "Parsed Fetchwarefile [$fetchwarefile].";
 
-    my $download_url_basename = file($download_url)->basename();
-    my $upgrade_name_basename =
-        file( $fetchware_package_path)->basename();
-    vmsg <<EOM;
-Shortened the new download url [$download_url_basename] and the installed
-package's [$upgrade_name_basename] into just their basenames.
+    # start() runs as root before the fork, because it uses
+    # App::Fetchware::Util's create_tempdir() to create a $temp_dir. This
+    # subroutine uses a variable to store an open filehandle to a
+    # "fetchware.sem" semaphore file. This filehandle must stay open and locked
+    # using flock, because otherwise a "fetchware clean" run could delete the
+    # temporary directory out from under fetchware. Therefore, the parent must
+    # open this semaphore, because the child if it runs start() will close this
+    # file handle when it exits causing cleanup_tempdir() to freak out when
+    # end() is called.
+    my $temp_dir = start();
+
+    # Drop privs, so only install() is called with root permissions
+    my $output = drop_privs(
+    sub {
+        my $write_pipe = shift;
+
+        ###BUGALERT### Have lookup() replace the timestamp of what we should
+        #download too to make upgrade() be able to use the lookup_by_timestamp
+        #algorithm too, which is a better default anyway.
+        my $download_url = lookup();
+
+        my $P_download_url_basename = file($download_url)->basename();
+        my $P_upgrade_name_basename =
+            file( $fetchware_package_path)->basename();
+        vmsg <<EOM;
+Shortened the new download url [$P_download_url_basename] and the installed
+package's [$P_upgrade_name_basename] into just their basenames.
 EOM
-    # Strip trailing garbage to normalize their names, so that they can be
-    # compared to each other.
-    ###BUGALERT### This comparision is quite fragile. Figure out a better way to
-    #do this!!!
-    $upgrade_name_basename =~ s/\.fpkg$//;
-    $download_url_basename
-        =~ s/(\.(?:zip|tgz|tbz|txz|fpkg)|(?:\.tar\.(gz|bz2|xz|Z)?))$//;
-    vmsg <<EOM;
-Striped the new download url [$download_url_basename] and the installed
-package's [$upgrade_name_basename] of their file extensions.
+        # Strip trailing garbage to normalize their names, so that they can be
+        # compared to each other.
+        ###BUGALERT### This comparision is quite fragile. Figure out a better way to
+        #do this!!!
+        $P_upgrade_name_basename =~ s/\.fpkg$//;
+        $P_download_url_basename
+            =~ s/(\.(?:zip|tgz|tbz|txz|fpkg)|(?:\.tar\.(gz|bz2|xz|Z)?))$//;
+        vmsg <<EOM;
+Striped the new download url [$P_download_url_basename] and the installed
+package's [$P_upgrade_name_basename] of their file extensions.
 EOM
 
-    # Transform both competing filenames into a string of version numbers.
-    my @file_listing = map { [$_, (join '', split /\D+/, $_)] }
-        $download_url_basename, $upgrade_name_basename;
-    die <<EOD if grep { not defined $_->[1] } @file_listing;
-fetchware: Of the installed filename [$upgrade_name_basename] and the
-potential replacement filename [$download_url_basename] fetchware cannot tell
+        # Transform both competing filenames into a string of version numbers.
+        my @file_listing = map { [$_, (join '', split /\D+/, $_)] }
+            $P_download_url_basename, $P_upgrade_name_basename;
+        die <<EOD if grep { not defined $_->[1] } @file_listing;
+fetchware: Of the installed filename [$P_upgrade_name_basename] and the
+potential replacement filename [$P_download_url_basename] fetchware cannot tell
 which one is newer, and if a new package is available. Please report this as a
 bug, so I can make fetchware's upgrade functionality more robust.
 EOD
-    vmsg 'Transformed competing filenames into a string of version numbers.';
-    vmsg Dumper(\@file_listing);
-    @file_listing = sort { $b->[1] <=> $a->[1] } @file_listing;
+        vmsg 'Transformed competing filenames into a string of version numbers.';
+        vmsg Dumper(\@file_listing);
+        @file_listing = sort { $b->[1] <=> $a->[1] } @file_listing;
 diag("HERE!!!");
 diag(explain(@file_listing));
 diag("ENDHERE!!!");
-    # If the highest sorted, "latest version," filename is the same as the one
-    # lookup() lookedup, then a new version is available, and we should install
-    # it.
-    # Clean up 
-diag("fl00[$file_listing[0][0]");
-diag("dub[$download_url_basename] upb[$upgrade_name_basename]");
-    if ($file_listing[0][0] eq $download_url_basename
+        # If the highest sorted, "latest version," filename is the same as the one
+        # lookup() lookedup, then a new version is available, and we should install
+        # it.
+        # Clean up 
+        $P_file_listing_0_0 = $file_listing[0][0];
+diag("fl00[$P_file_listing_0_0");
+diag("dub[$P_download_url_basename] upb[$P_upgrade_name_basename]");
+        if ($P_file_listing_0_0 eq $P_download_url_basename
+            # Make cmd_upgrade() not upgrade when the ver
+            and $P_file_listing_0_0 ne $P_upgrade_name_basename) {
+            msg 'New version available upgrading now.';
+
+            my $package_path = download($temp_dir, $download_url);
+            diag("PPPPPPPPPPP[$package_path]");
+
+            ###BUGALERT### Add support for caching the key files gpg creates to the
+            #fetchwarefile, and for actually using them later on inside the fpkg.
+            verify($download_url, $package_path);
+
+            $P_build_path = unarchive($package_path);
+diag("PBUILDPATHIS[$P_build_path]");
+            build($P_build_path);
+        } # End If new version available.
+
+        # Tell the parent, root, process the values of the variables the
+        # child calculated in this coderef, and write them across this pipe
+        # back to the parent
+        #
+        # Note: how @file_listing is the last one pipe_{write,read}_newline() do
+        # *not* support arrays, but I'm faking it by using Perl's list
+        # semantics--you know how perl will read from an array until its end
+        # when you call a subroutine, and it will write a list to a array when
+        # you assign from a subroutine in list context.
+        pipe_write_newline($write_pipe,
+            $P_download_url_basename,
+            $P_upgrade_name_basename,
+            $P_file_listing_0_0,
+            $P_build_path);
+    }, config('user')
+    ); # End drop_privs()
+
+
+    # Read from the pipe the child, the drop_privs()ed process, writes to to
+    # read the necessary values that correspond to the variables that the
+    # child must communicate back to the parent, so the parent can continue
+    # processing as though no fork()ing or priv dropping took place.
+    #
+    # Uses and abuses Perl's list calling and and returning semantics to
+    # fakes support for writting an array (@file_listing)
+    ($P_download_url_basename,
+    $P_upgrade_name_basename,
+    $P_file_listing_0_0,
+    $P_build_path) = pipe_read_newline($output);
+
+    # Test if a new version is available again due to drop_priv() ending
+    # half way through this if statement.
+    if ($P_file_listing_0_0 eq $P_download_url_basename
         # Make cmd_upgrade() not upgrade when the ver
-        and $file_listing[0][0] ne $upgrade_name_basename) {
-        msg 'New version available upgrading now.';
-
-        my $package_path = download($temp_dir, $download_url);
-        diag("PPPPPPPPPPP[$package_path]");
-
-        ###BUGALERT### Add support for caching the key files gpg creates to the
-        #fetchwarefile, and for actually using them later on inside the fpkg.
-        verify($download_url, $package_path);
-
-        my $build_path = unarchive($package_path);
-
-        build($build_path);
-
-        install();
+        and $P_file_listing_0_0 ne $P_upgrade_name_basename) {
+        install($P_build_path);
 
         my $updated_fetchware_package_path
             =
-            create_fetchware_package($fetchwarefile_path, cwd());
+            create_fetchware_package($fetchwarefile, cwd());
         vmsg <<EOM;
 Created a new fetchware package for the newly installed upgraded fetchware
 package [$updated_fetchware_package_path].
@@ -1599,8 +1808,8 @@ EOM
         return $installed_fetchware_package_path;
     } else {
         msg <<EOM;
-The latest version [$download_url_basename] is the same as the currently
-installed version [$upgrade_name_basename]. So no upgrade is needed. 
+The latest version [$P_download_url_basename] is the same as the currently
+installed version [$P_upgrade_name_basename]. So no upgrade is needed. 
 EOM
         # Clean up temp dir.
         end();
@@ -1627,6 +1836,10 @@ Returns a list of the packages that were upgraded or the string
 =cut
 
 sub cmd_upgrade_all {
+    # Does *not* drop_privs(), because it calls cmd_upgrade(), which does, and
+    # it does not make any real sense to do it in cmd_upgrade_all(), because all
+    # it does is glob the fetchware_database_path(), and pass each element
+    # of that list to cmd_upgrade() to do the actual upgrading.
     die <<EOD if @_;
 fetchware: fetchware's upgrade-all command takes no arguments. Instead, it
 simply loops through fetchware's package database, and upgrades all already
@@ -1652,8 +1865,6 @@ EOD
         # up from its database.
         $fetchware_package = file($fetchware_package)->basename();
         $fetchware_package =~ s/\.fpkg$//;
-##TEST##
-#$fetchware_package =~ s/^([a-zA-Z0-9])-.*/$1/;
         ###BUGALERT### Spit out a warning for anything in
         #fetchware_database_path() that does not end .fpkg, which should be
         #here.
@@ -1706,67 +1917,111 @@ fetchware clean when you are finished working with it.
 =back
 
 =cut
-###BUGALERT### Implement & test fetchware clean commmand to delete fetchware's
-#temporary directories and files.
 
 sub cmd_look {
     my $filename = shift;
 
-    msg 'Downloading and unarchiving specified distribution.';
+    my $P_look_path;
 
-    ###BUGALERT### Fails to support looking up installed packages in fetchware
-    #database. This test will prevent them from running.
-    if (defined($filename) and -e $filename) {
-
-        # Absolutize $filename so it can survive start() chdir()ing into a temp
-        # dir.
-        $filename = rel2abs($filename);
-
-        # Call start() with an option to have it keep the temp dir, and not have
-        # File::Temp clean it up with an END handler.
-        my $temp_dir = start(KeepTempDir => 1);
-
-        my $fetchwarefile_path;
-        if ($filename =~ /\.fpkg$/) {
-            $fetchwarefile_path = extract_fetchwarefile($filename, cwd());
-            vmsg "Extracted out Fetchwarefile from [$fetchwarefile_path].";
-            parse_fetchwarefile($fetchwarefile_path);
-            vmsg "Parsed Fetchwarefile from path [$fetchwarefile_path]";
-        } else {
-            parse_fetchwarefile($filename);
-            $fetchwarefile_path = $filename;
-            vmsg "Parsed Fetchwarefile from path [$fetchwarefile_path]";
-        }
-
-        my $download_url = lookup();
-        diag("DUDUDUDUDUDUDU[$download_url]");
-
-        my $package_path = download(cwd(), $download_url);
-        diag("PPPPPPPPPPP[$package_path]");
-
-        ###BUGALERT### Add support for caching the key files gpg creates to the
-        #fetchwarefile, and for actually using them later on inside the fpkg.
-        verify($download_url, $package_path);
-
-        my $build_path = unarchive($package_path);
-
-        # end() is *not* run, because the point of look is to lookup, download,
-        # and unarchive, and then actually "look" at the files, and running
-        # end() would delete them.
-
-        my $look_path =  catfile($temp_dir, $build_path);
-        msg <<EOM;
-Your package's contents are at [$look_path]. Please run [fetchware clean] to
-delete these files and any other files fetchware may have left behind.
+    my $fetchwarefile;
+    if ($filename =~ /\.fpkg$/) {
+        $fetchwarefile = extract_fetchwarefile($filename);
+        vmsg <<EOM;
+Extracting out Fetchwarefile from [$filename] to [$fetchwarefile]
 EOM
-        return $look_path;
     } else {
-        ###BUGALERT### Replace with warn for proposed for loop above to work???
-        die <<EOD;
+        my $fh = safe_open($filename, <<EOD);
+fetchware: Fetchware failed to open the filename you specified to fetchware
+install [$filename]. The OS error was [$!].
+EOD
+        vmsg "Opened file [$filename] for slurping.";
+        # Add a \ to turn the slurped scalar into a scalar ref for calling
+        # parse_fetchwarefile() properly.
+        $fetchwarefile = \do {local $/; <$fh>};
+        vmsg  "Slurped [$filename] into fetchware: [$fetchwarefile]";
+    }
+
+    # Must parse the Fetchwarefile in the parent, so that the parent has access
+    # to the imported subroutines and modified fetchware configuration (%CONFIG)
+    # just as the child does.
+    parse_fetchwarefile($fetchwarefile);
+    vmsg "Parsed Fetchwarefile [$fetchwarefile].";
+
+    # start() runs as root before the fork, because it uses
+    # App::Fetchware::Util's create_tempdir() to create a $temp_dir. This
+    # subroutine uses a variable to store an open filehandle to a
+    # "fetchware.sem" semaphore file. This filehandle must stay open and locked
+    # using flock, because otherwise a "fetchware clean" run could delete the
+    # temporary directory out from under fetchware. Therefore, the parent must
+    # open this semaphore, because the child if it runs start() will close this
+    # file handle when it exits causing cleanup_tempdir() to freak out when
+    # end() is called.
+    #
+    # Call start() with an option to have it keep the temp dir, and not
+    # have File::Temp clean it up with an END handler.
+    my $temp_dir = start(KeepTempDir => 1);
+
+    # Drop privs to match up with cmd_install()'s behavior.
+    my $output = drop_privs(
+    sub {
+        my $write_pipe = shift;
+
+        msg 'Downloading and unarchiving specified distribution.';
+
+        ###BUGALERT### Fails to support looking up installed packages in fetchware
+        #database. This test will prevent them from running.
+        if (defined($filename) and -e $filename) {
+
+            my $download_url = lookup();
+            diag("DUDUDUDUDUDUDU[$download_url]");
+
+            my $package_path = download(cwd(), $download_url);
+            diag("PPPPPPPPPPP[$package_path]");
+
+            ###BUGALERT### Add support for caching the key files gpg creates to
+            #the fetchwarefile, and for actually using them later on inside the
+            #fpkg.
+            verify($download_url, $package_path);
+
+            my $build_path = unarchive($package_path);
+
+            # end() is *not* run, because the point of look is to lookup,
+            # download, and unarchive, and then actually "look" at the files,
+            # and running end() would delete them.
+
+            $P_look_path =  catfile($temp_dir, $build_path);
+            msg <<EOM;
+Your package's contents are at [$P_look_path]. Please run [fetchware clean] to
+delete these files and any other files fetchware may have left behind when you
+are finished looking inside this package.
+EOM
+
+            # Tell the parent, root, process the values of the variables the
+            # child calculated in this coderef, and write them across this pipe
+            # back to the parent
+            pipe_write_newline($write_pipe, $P_look_path);
+        } else {
+            ###BUGALERT### Replace with warn for proposed for loop above to work?
+            die <<EOD;
 fetchware: You called fetchware look incorrectly. You must specify
 either a Fetchwarefile or a fetchware package that ends with [.fpkg].
 EOD
-    }
+        }
+
+        # Does not need to execute anything as root, because cmd_look() does not
+        # install anything or even call end(), because the suer is supposed to
+        # look at its output in the tempdir it prints out.
+    }, config('user')
+    ); # End drop_privs()
+
+    # Read from the pipe the child, the drop_privs()ed process, writes to to
+    # read the necessary values that correspond to the variables that the
+    # child must communicate back to the parent, so the parent can continue
+    # processing as though no fork()ing or priv dropping took place.
+    ($P_look_path)
+        = pipe_read_newline($output);
+
+    return $P_look_path;
 }
 
 
@@ -1790,8 +2045,15 @@ ramifications. So for now, I'll hold out until I study what ack does.
 =cut
 
 sub cmd_list {
+    my @installed_packages = glob catfile(fetchware_database_path(), '*');
+    
+    if (@installed_packages == 0) {
+        msg 'No fetchware packages are currently installed.';
+        return;
+    }
+
     msg 'Listing all currently installed packages:';
-    for my $fetchware_package (glob catfile(fetchware_database_path(), '*')) {
+    for my $fetchware_package (@installed_packages) {
         # Clean up $fetchware_package.
         $fetchware_package = file($fetchware_package)->basename();
         $fetchware_package =~ s/\.fpkg$//;
@@ -1962,7 +2224,6 @@ And then C<exit()> with an exit status of 1.
 
 =cut
 
-
 sub cmd_help {
 	print <<'HELP';
 
@@ -2018,36 +2279,47 @@ on.
 
 =head2 parse_fetchwarefile()
 
-    'Evaled config file successfully' = parse_fetchwarefile($fetchwarefile_path);
+    'Evaled config file successfully' = parse_fetchwarefile(\$fetchwarefile;
 
-Eval's the $fetchwarefile_path to effectively "parse" it.
+Eval's the \$fetchwarefile to effectively "parse" it.
+
+The only checking for the $fetchwarefile it does is that it is a scalar ref, and
+that it has at least one line beginning with C<use App::Fetchware>.
 
 Returns true on success and dies with an error message if it fails.
 
 =cut
 
 sub parse_fetchwarefile {
-    my $fetchwarefile_path = shift;
+    my $fetchwarefile = shift;
 
-    my $fh = safe_open($fetchwarefile_path, <<EOD);
-fetchware: run-time error. fetchware failed to open the Fetchwarefile you
-specified on the command line [$fetchwarefile_path]. Please check permissions
-and try again. See perldoc App::Fetchware. The system error was [$!].
+    # Arg $fetchwarefile must be a SCALAR ref.
+    die <<EOD unless ref($fetchwarefile) eq 'SCALAR';
+fetchware: parse_fetchwarefile() was called with the wrong arguments. It only
+accepts and scalar references of the text of your fetchwarefile.
 EOD
 
-    my $fetchwarefile;
-    {
-        local $/;
-        undef $/;
-        $fetchwarefile = <$fh>;
-    }
+    # Ensure the $fetchwarefile has a use App::Fetchware somewhere in it. And be
+    # sure to support fetchware extensions such as App::Fetchware::HTMLPageSync.
+    die <<EOD unless $$fetchwarefile =~/^\s*use\s+App::Fetchware/m;
+fetchware: The fetchwarefile you provided did not have a [use App::Fetchware]
+line in it. This line is required, because it is an important part of how
+fetchware uses Perl for its configuration file. Your fetchware file was.
+[$$fetchwarefile]
+EOD
 
-    ###BUGALERT### Ensure $fetchwarefile has a 'use App::Fetchware...;' line!!!!
+    # Do the potentially evil eval. No Safe compartment or use ops is used. This
+    # is one gigantic security hole; however, it is also how fetchware works :)
+    #
+    # safe_open() is used to ensure that the file the user provides is "safe" to
+    # use, and is the limit of fetchware's safty features.
+    #Can Archvie::Tar take a $fh instead of a filename???
+    # Yep, read() can take a $fh too!!!!!!!
+    eval $$fetchwarefile;
 
-    eval $fetchwarefile;
     die <<EOD if $@;
 fetchware: run-time error. fetchware failed to execute the Fetchwarefile
-[$fetchwarefile_path] you provieded on the command line or that was packaged
+[$$fetchwarefile] you provieded on the command line or that was packaged
 with your Fetchware package (*.fpkg). The error was [$@].
 EOD
 
@@ -2057,23 +2329,35 @@ EOD
 
 =head2 create_fetchware_package()
 
-    my $fetchware_package_full_path = create_fetchware_package($fetchwarefile_path, $unarchived_package_path);
+    # Most uses should just use this.
+    my $fetchware_package_full_path
+        =
+        create_fetchware_package($fetchwarefile, $unarchived_package_path);
+
+
+    # But some uses in test suites thanks to safe_open() need to be able to
+    # specify where they should write the new fetchware package's path to.
+    my $fetchware_package_full_path
+        =
+        create_fetchware_package($fetchwarefile,
+            $unarchived_package_path
+            $path_to_new_fpkg);
 
 Creates a fetchware package, ending in .fpkg, using $unarchived_package_path, as
-the directory to archive. Also, adds the C<Fetchwarefile> indicated by the
-$fetchwarefile_path argument to the fethware package that is created.
+the directory to archive. Also, adds the C<Fetchwarefile> stored in the
+scalar $fetchwarefile argument to the fethware package that is created.
+
+You can specify an optional $dir_for_new_fpkg, which will be a directory where
+create_fetchware_package() will write the new fetchware package to.
 
 Returns the full pathname to the fetchware package that was created.
-
-Note: I must chdir to the parent directory of the current cwd(), because I
-changed create_fetchware_package() to assume that it is already in the
-correct directory, which is fair, because it's meant to be run *after*
-start() and the other main fetchware subroutines have been run.
 
 =cut
 
 sub create_fetchware_package {
-    my ($fetchwarefile_path, $unarchived_package_path) = @_;
+    my ($fetchwarefile,
+        $unarchived_package_path,
+        $dir_for_new_fpkg) = @_;
 
     # chdir() to my cwd's parent directory, because my cwd is currently on linux
     # /tmp/fetchware-kd883ejfe/program-1.2, and I need the program-1.2 part to
@@ -2085,32 +2369,6 @@ fetchware: run-time error. Fetchware failed to change it's working directory to
 [$new_dir] from [$previous_cwd]. The os error was [$!].
 EOD
 
-    diag("FWF!it exists") if -e $fetchwarefile_path;
-    diag("FWF!it DOES NOT exist!!!") unless -e $fetchwarefile_path;
-    diag("it exists") if -e $unarchived_package_path;
-    diag("CWD[@{[cwd()]}]");
-    diag("it DOES NOT exist!!!") unless -e $unarchived_package_path;
-my $FFP = catfile($unarchived_package_path, 'Fetchwarefile');
-diag("FFP[$FFP]");
-    # Only copy the Fetchwarefile if one in the right directory doesn't already
-    # exist, because fetchware package's will already have a Fetchwarefile in
-    # the right place.
-    unless (-e catfile(cwd(), 'Fetchwarefile')) {
-        # Support $fetchwarefile_path's that don't end with a filename of
-        # 'Fetchwarefile'.
-        my $fetchwarefile_filename = ( splitpath($fetchwarefile_path) )[2];
-        unless ($fetchwarefile_filename eq 'Fetchwarefile') {
-            my $renamed_cwd
-                =
-                catfile(cwd(), 'Fetchwarefile');
-            cp($fetchwarefile_path, $renamed_cwd)
-                or goto CPERR;
-        } else {
-            cp($fetchwarefile_path, cwd())
-                or goto CPERR;
-        }
-    }
-
 
     # Turn something like /tmp/fetchware-djdjkd8382/package-1.2/Fetchware (with
     # the "Fetchwarefile" filename only sometimes being there) into just
@@ -2119,8 +2377,14 @@ diag("FFP[$FFP]");
     my $last_dir = $pc->dir_list(-1, 1);
     diag("LASTLASTDIR[$last_dir]");
     my $fetchware_package_name = "$last_dir.fpkg";
+
+    # The dir the new fpkg goes in is the current working directory, or a user
+    # provided alternate path to store it in.
+    $dir_for_new_fpkg //= cwd();
     # Calculate the full absolute path of the fetchware package I create below.
-    my $fetchware_package_full_path = catfile(cwd(), $fetchware_package_name);
+    my $fetchware_package_full_path
+        =
+        catfile($dir_for_new_fpkg, $fetchware_package_name);
 
     # Determine @file_list, because Archive::Tar does not just automatically
     # include *all* files like bin/tar does.
@@ -2131,22 +2395,44 @@ diag("FFP[$FFP]");
 
     # Convert absolute filenames into relative filenames, because Archive::Tar
     # will use the exact filenames that you provide, so I need to remove the
-    # unnneeded machine specific paths from the paths that will be stored in the
+    # unneeded machine specific paths from the paths that will be stored in the
     # fetchware package.
     $_ = abs2rel($_) for @file_list;
 diag("CWDCWD[@{[cwd()]}]");
 
-    # Add Fetchwarefile to file list.
-    ###BUGALERT### Add the gpg stuff to to cache lookups for keys.
-    unshift @file_list, './Fetchwarefile';
-    use Test::More;
-    #diag('FILELIST!!!');
-    #diag explain \@file_list;
-    Archive::Tar->create_archive($fetchware_package_full_path, COMPRESS_GZIP, @file_list)
-        or die <<EOD;
-fetchware: run-time error. fetchware failed to create the fetchwarefile package
-it was supposed to create at [$fetchware_package_name]. The Archive::Tar error
-was [@{[Archive::Tar::error()]}]. Please see perldoc fetchware.
+    my $tar = Archive::Tar->new();
+
+    # Add the $fetchwarefile to the new fetchware package.
+    # 
+    # Create a Archive::Tar::File object to represent the Fetchwarefile without
+    # bothering to write it to disk, or use the Fetchwarefile, which may or may
+    # not already be on the disk.
+    #
+    # Be sure to deref $fetchwarefile, becauses it's passed in as a ref.
+    my $tar_fetchwarefile
+        =
+        Archive::Tar::File->new(data => './Fetchwarefile', $$fetchwarefile)
+            or die <<EOD;
+fetchware: Failed to create a Archive::Tar::File object to represent your
+Fetchwarefile
+[$fetchwarefile] 
+Archive::Tar error [@{[Archive::Tar->error()]}].
+EOD
+
+    $tar->add_files($tar_fetchwarefile) or die <<EOD;
+fetchware: Failed to add your Fetchwarefile to fetchware's internal Archive::Tar
+object. Archive::Tar error [@{[Archive::Tar->error()]}].
+EOD
+
+    # Add all of the other files to the Fetchware package.
+    $tar->add_files(@file_list) or die <<EOD;
+fetchware: Failed to add all of your program's files to fetchware's internal
+Archvie::Tar object. Archive::Tar error [@{[Archive::Tar->error()]}].
+EOD
+
+    $tar->write($fetchware_package_full_path, COMPRESS_GZIP) or die <<EOD;
+fetchware: Failed to write Archive::Tar's in-memeory tar file to disk.
+Archive::Tar error [@{[Archive::Tar->error()]}].
 EOD
 
 
@@ -2158,16 +2444,6 @@ EOD
 
     # Return a fullpath version of $fetchware_package_name.
     return $fetchware_package_full_path;
-
-
-    # Use old school C-style Linux Kernel error handling to avoid copying and
-    # pasting this error message.
-    CPERR: die <<EOD;
-fetchware: run-time error. Fetchware failed to copy the Fetchwarefile you
-specified [$fetchwarefile_path] on the command line or was contained in the
-fetchware package you specified to the newly created fetchware package. Please
-see perldoc App::Fetchware. OS error [$!].
-EOD
 }
 
 
@@ -2296,62 +2572,59 @@ EOD
 
 =head2 extract_fetchwarefile()
 
-    my $fetchwarefile_path = extract_fetchwarefile($fetchware_package_path, $extract_it_here);
+    my $fetchwarefile = extract_fetchwarefile($fetchware_package_path);
 
 Extracts out the Fetchwarefile of the provided fetchware package as specified by
-$fetchware_package_path, and returns the path of the file. Throws an exceptionif it fails.
-
-Returns $fetchwarefile_path.
+$fetchware_package_path, and returns the content of the Fetchwarefile as a
+scalar reference. Throws an exception if it it fails.
 
 =cut
 
 sub extract_fetchwarefile {
-    my ($fetchware_package_path, $extract_it_here) = @_;
+    my ($fetchware_package_path) = @_;
 
-    # Rename fetchwarefile package (.fpkg) to a regular old .tar.gz to avoid
-    # confusing Archive::Tar.
-    my $fetchware_tar_gz_path = $fetchware_package_path;
-##TEST##    if ($fetchware_package_path =~ /\.fpkg$/) {
-##TEST##        $fetchware_tar_gz_path =~ s/\.fpkg$/.tar.gz/;
-##TEST##        mv($fetchware_package_path, $fetchware_tar_gz_path) or die <<EOD;
-##TEST##fetchware: run-time error. An internal move operation failed when
-##TEST##extract_fetchwarefile() attempted to rename the [$fetchware_package_path] from
-##TEST##*.fpkg to *.tar.gz, so that Archive::Tar can unarchive the archive. The OS error
-##TEST##was [$!].
-##TEST##EOD
-##TEST##
-##TEST##        # Overwrite $fetchware_package_path, because Archive::Tar demands a
-##TEST##        # .tar.gz or tgz extenstion .fpkg won't work.
-##TEST##        $fetchware_package_path =~ s/\.fpkg$/.tar.gz/
-##TEST##    }
+    # safe_open() the fetchware package path, which ends with .fpkg, but it
+    # actually a .tar.gz.
+    my $fh = safe_open($fetchware_package_path, <<EOD);
+fetchware: run-time error. fetchware failed to open the Fetchwarefile you
+specified on the command line [$fetchware_package_path]. Please check
+permissions and try again. See perldoc App::Fetchware. OS error [$!].
+EOD
+
+    # Create a temporary file to write the ungzipped file to.
+    my ($output_fh, $gunzipped_path) = tempfile("fetchware-$$-XXXXXXXXXXX",
+        TMPDIR => 1, UNLINK => 1); 
+
+    gunzip($fh => $output_fh) or die <<EOD;
+fetchware: IO::Uncompress::Gunzip::gunzip failed to un gzip
+[$fetchware_package_path]. Gunzip's error [$GunzipError].
+EOD
 
     my $tar = Archive::Tar->new();
 
-    use Test::More;
-    diag("FPP[$fetchware_package_path]");
-    $tar->read($fetchware_package_path);
+    # seek the $output_fh back to its beginning, so tar can reuse it.
+    seek $output_fh, 0, SEEK_SET;
 
-    my $fetchwarefile_path = catfile($extract_it_here, 'Fetchwarefile');
+    # read in the same output filehandle that gunzip() wrote the uncompressed tar
+    # file to. This prevents any race conditions, and other users from messing
+    # with our version of the open file.
+    $tar->read($output_fh) or die <<EOD;
+fetchware: Archive::Tar failed to read in the gunziped file [$gunzipped_path]
+that was previously gziped as [$fetchware_package_path].
+Archive::Tar error [@{[Archive::Tar->error()]}].
+EOD
 
-    diag("WTFIS[$fetchwarefile_path]");
-    $tar->extract('./Fetchwarefile')
+    my $fetchwarefile = $tar->get_content('./Fetchwarefile')
         or die <<EOD;
 fetchware: run-time error. fetchware failed to extract your fetchware package's
 Fetchwarefile from the argument you specified on the command line [@ARGV].
 Archive::Tar error [@{[$tar->error()]}]. Please see perldoc App::Fetchware.
 EOD
 
-    # Stay tidy by renaming $fetchware_package_path back to a fetchware package
-    # ending in .fpkg.
-    $tar->clear();
-    mv($fetchware_tar_gz_path, $fetchware_package_path) or die <<EOD;
-fetchware: run-time error. An internal move operation failed when
-extract_fetchwarefile() attempted to rename the [$fetchware_package_path] from
-*.tar.gz back to *.fpkg, so that Archive::Tar can unarchive the archive. The OS
-error was [$!].
-EOD
 
-    return $fetchwarefile_path;
+    # Return a scalar ref of the $fetchwarefile that makes up the Fetchwarefile.
+    # Do not
+    return \$fetchwarefile;
 }
 
 
@@ -2440,18 +2713,30 @@ sub create_test_fetchwarefile {
     my $fetchwarefile_content = shift;
 
     # Use a temp dir outside of the installation directory 
-    my ($fh, $fetchwarefile_path) = tempfile('fetchware-XXXXXXXXXXX', TMPDIR => 1,);
+    my ($fh, $fetchwarefile_path)
+        =
+        tempfile("fetchware-$$-XXXXXXXXXXXXXX", TMPDIR => 1, UNLINK => 1);
 
-    # Create a fake Fetchwarefile for our fake fetchware package.
-    my $write_fh = safe_open($fetchwarefile_path, <<EOD, WRITE => 1);
-fetchware: run-time error. Failed to open the file [$fetchwarefile_path] for
-writing. Os error [$!]. Please see perldoc fetchware.
+    # Chmod 644 to ensure a possibly dropped priv child can still at least read
+    # the file. It doesn't need write access just read.
+    unless (chmod 0644, $fetchwarefile_path
+        and
+        # Only Unix drops privs. Nonunix does not.
+        is_os_type('Unix')
+    ) {
+        die <<EOD;
+fetchware: Failed to chmod 0644, [$fetchwarefile_path]! This is a fatal error,
+because if the file is not chmod()ed, then fetchware cannot access the file if
+it was created by root, and then tried to read it, but root on Unix dropped
+privs. OS error [$!].
 EOD
+    }
+
     # Put test stuff in Fetchwarefile.
-    print $write_fh "$fetchwarefile_content";
+    print $fh "$fetchwarefile_content";
 
     # Close the file in case it bothers Archive::Tar reading it.
-    close $write_fh;
+    close $fh;
 
     return $fetchwarefile_path;
 }

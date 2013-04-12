@@ -16,6 +16,7 @@ use Cwd 'cwd';
 use File::Copy 'mv';
 use File::Spec::Functions qw(catfile splitpath);
 use Path::Class;
+use File::Temp 'tempdir';
 
 
 # Set PATH to a known good value.
@@ -162,11 +163,8 @@ EOE
 ###EOE
 
     eval_ok(sub{cmd_uninstall('fetchware-test')},
-        <<EOE, 'checked cmd_uninstall() failed to extract fetchwarefile');
-fetchware: run-time error. fetchware failed to extract your fetchware package's
-Fetchwarefile from the argument you specified on the command line [].
-Archive::Tar error [Could not find './Fetchwarefile' in archive]. Please see perldoc App::Fetchware.
-EOE
+        qr/fetchware: Archive::Tar failed to read in the gunziped file \[/,
+        'checked cmd_uninstall() failed to extract fetchwarefile');
 
     # Delete garbage test files for test case above.
     ok(unlink($another_tf),
@@ -182,7 +180,14 @@ EOE
 __clear_CONFIG();
 
 subtest 'test cmd_uninstall() with test-dist.fpkg' => sub {
-    my $test_dist_path = make_test_dist('test-dist', '1.00', 't');
+    # Create a $temp_dir for make_test_dist() to use. I need to do this, so that
+    # both the old and new test dists can be in the same directory.
+    my $upgrade_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
+        CLEANUP => 1, TMPDIR => 1);
+
+diag("UPGRADETD[$upgrade_temp_dir]");
+
+    my $test_dist_path = make_test_dist('test-dist', '1.00', $upgrade_temp_dir);
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
     # I obviously must install apache before I can test uninstalling it :)

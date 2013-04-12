@@ -20,6 +20,7 @@ use File::stat;
 use Fcntl qw(S_ISDIR :flock);
 # Privileges::Drop only works on Unix, so only load it on Unix.
 use if is_os_type('Unix'), 'Privileges::Drop';
+use POSIX '_exit';
 
 # Enable Perl 6 knockoffs.
 use 5.010;
@@ -1254,7 +1255,13 @@ EOD
                 # Exit success, because failure is only indicated by a thrown
                 # exception that bin/fetchware's main eval {} will catch, print,
                 # and exit non-zero indicating failure.
-                exit 0;
+                # Use POSIX's _exit() to avoid calling END{} blocks. This *must*
+                # be done to prevent File::Temp's END{} block from attempting to
+                # delete the temp directory that the parent still needs to
+                # finish installing or uninstalling. The parent's END{} block's
+                # will still be called, so this just turns of the child deleting
+                # the temp dir not the parent.
+                _exit 0;
 
                 ###BUGALERT### Should I setup a pipe to communicate changes to
                 #%CONFIG and $child_code's return value back to caller??? It
@@ -1305,7 +1312,7 @@ EOD
                     # screen, and exit()ed non-zero for failure. And since the
                     # child failed ($? >> 8 != 0), the parent should fail too.
                     exit 1;
-                # If successful, return child's a ref of @output to caller.
+                # If successful, return to the child a ref of @output to caller.
                 } else {
                     return \$output;
                 }
@@ -1350,7 +1357,7 @@ sub pipe_write_newline {
     my $write_pipe = shift;
 
     for my $a_var (@_) {
-        die <<EOD if not defined $a_var;
+        warn <<EOD if $a_var =~ /\n/;
 fetchware: Huh? [$a_var] has a newline in it? This shouldn't happen, and messes up
 fetchware's simple IPC. If you actually have a newline in a file name, just
 change it to something else.
@@ -1393,8 +1400,24 @@ fetchware: Huh? The child failed to write the proper variable back to the
 parent! The variable is [$variable]. This should be defined but it is 
 not!
 EOD
+        # Clear possibly tainted variables. It's a weird bug that makes no
+        # sense. I don't turn -t or -T on, so what gives??? If you're curious
+        # try commenting out the taint clearing code below, and running the
+        # t/bin-fetchware-install.t test file (Or any other ones that call
+        # drop_privs().).
+        my $untainted;
+        if ($variable =~ /(.*)/) {
+            $untainted = $1;
+        } else {
+            die <<EOD;
+App::Fetchware::Util: Untaint failed! Huh! This just shouldn't happen! It's
+probably a bug. 
+EOD
+        }
 
-        push @variables, $variable;
+        # Push $untainted instead of just $variable, because I want to return
+        # untatined data instead of potentially tainted data.
+        push @variables, $untainted;
     }
 
     return @variables;
@@ -1448,8 +1471,8 @@ sub do_nothing {
 These subroutines manage the creation of a temporary directory for you. They
 also implement the original_cwd() getter subroutine that returns the current
 working directory fetchware was at before create_tempdir() chdir()'d to the
-temporary directory you specify. File::Temp's temp_dir() is used, and
-cleanup_tempdir() manually calls File::Temp::cleanup() for you.
+temporary directory you specify. File::Temp's tempdir() is used, and
+cleanup_tempdir() manages the C<fetchware.sem> fetchware semaphore file.
 
 =over
 =item NOTICE
@@ -1496,6 +1519,9 @@ Also, accepts C<TempDir =E<gt> '/tmp'> to specify what temporary directory to
 use. The default with out this argument is to use tempdir()'s default, which is
 whatever File::Spec's tmpdir() says to use.
 
+The C<NoChown =E<gt> 1> option causes create_tempdir() to B<not> chown to
+config('user').
+
 
 =head3 Locking Fetchware's temp directories with a semaphore file.
 
@@ -1519,6 +1545,10 @@ handling, because flock will do them for us!
 
 sub create_tempdir {
     my %opts = @_;
+
+diag("OPTS!!![");
+diag explain \%opts;
+diag("]");
 
     msg 'Creating temp dir to use to install your package.';
 
@@ -1545,8 +1575,30 @@ sub create_tempdir {
 note("ARGS[@args]");
         $temp_dir = tempdir(@args);
 
-        # Must chown 700 so gpg's localized keyfiles are good.
-        chown 0700, $temp_dir;
+        # Must chmod 700 so gpg's localized keyfiles are good.
+        chmod 0700, $temp_dir;
+
+        # And if run as root, I must chown the directory to the same user that
+        # fetchware will drop_privs() too, but only on *nix, because only *nix
+        # will drop_privs(). Avoid chown()ing when run stay_root is in effect,
+        # because that setting will keep drop_privs() from dropping privs.
+        if (not config('stay_root')) {
+            if (not defined $opts{NoChown}
+                and is_os_type('Unix') and ($< == 0 or $> == 0)
+            ) {
+    diag("GOTHERE!!!11");
+                # Determine /etc/passwd entry for the "effective" uid of the
+                # current fetchware process. I should use the "effective" uid
+                # instead of the "real" uid, because effective uid is used to
+                # determine what each uid can do, and the real uid is only
+                # really used to track who the original user was in a setuid
+                # program.
+                my ($name, $useless, $uid, $gid, $quota, $comment, $gcos, $dir,
+                    $shell, $expire)
+                    = getpwnam(config('user') // 'nobody');
+                chown($uid, $gid, $temp_dir);
+            }
+        }
 
         use Test::More;
         diag("tempdir[$temp_dir]");
@@ -1657,15 +1709,30 @@ App-Fetchware: run-time error. Fetchware failed to chdir() to
 [@{[original_cwd()]}]. See perldoc App::Fetchware.
 EOD
 
-    # Call File::Temp's cleanup subrouttine to delete fetchware's temp
-    # directory.
-    vmsg 'Cleaning up temporary directory.';
-    File::Temp::cleanup();
+    # cleanup_tempdir() used to actually delete the temporary directory by using
+    # File::Temp's cleanup() subroutine, but that subroutine deletes *all*
+    # temporary directories that File::Temp has created and marked for deletion,
+    # which might include directories created before this call to
+    # cleanup_tempdir(), but are needed after. Therefore, cleanup_tempdir() no
+    # longer actually deletes anything; instead, File::Temp can do it in its END
+    # handler.
+    #
+    # The code below is left here on purpose, to remind everyone *not* to call
+    # File::Temp's cleanup() here!! Do not do it!
+    ###DONOTDO#### Call File::Temp's cleanup subrouttine to delete fetchware's temp
+    ###DONOTDO#### directory.
+    ###DONOTDO###vmsg 'Cleaning up temporary directory.';
+    ###DONOTDO###File::Temp::cleanup();
+
+    vmsg "Leaving tempdir alone. File::Temp's END handler will delete it.";
 
     vmsg 'Clearing internal %CONFIG variable that hold your parsed Fetchwarefile.';
     __clear_CONFIG();
 
     msg 'Cleaned up temporary directory.';
+
+    # Return true.
+    return 'Cleaned up tempdir';
 }
 
 

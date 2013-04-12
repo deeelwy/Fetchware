@@ -14,7 +14,7 @@ use Test::More 0.98 tests => '7'; #Update if this changes.
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
 use Cwd 'cwd';
-use File::Spec::Functions qw(catfile splitpath splitdir catdir catpath);
+use File::Spec::Functions qw(catfile splitpath splitdir catdir catpath tmpdir);
 use Path::Class;
 use Perl::OSType 'is_os_type';
 
@@ -52,29 +52,37 @@ EOF
 
     # Use a scalar ref instead of a real file to avoid having to write and read
     # files unnecessarily.
-    ok(parse_fetchwarefile(\ $correct_fetchwarefile),
+    ok(parse_fetchwarefile(\$correct_fetchwarefile),
         'checked parse_fetchwarefile() success');
 
     test_config({program => 'who cares',
             lookup_url => 'http://doesnt.exist/anywhere'},
         'checked parse_fetchwarefile() success CONFIG');
-    
-    eval_ok(sub {parse_fetchwarefile('doesntexist.ever-anywhere')},
-        <<EOE, 'checked parse_fetchwarefile() failed open');
-fetchware: run-time error. fetchware failed to open the Fetchwarefile you
-specified on the command line [doesntexist.ever-anywhere]. Please check permissions
-and try again. See perldoc App::Fetchware. The system error was [No such file or directory].
-EOE
 
-    ###BUGALERT### How do I test the unlink()ing of the provided filename? Give
-    #a filename that has read perms, but no delete perms?
+    my $no_use_fetchware = <<EOS;
+program 'who cares';
+
+lookup_url 'http://doesnt.exist/anywhere';
+EOS
+    eval_ok(sub {parse_fetchwarefile(\$no_use_fetchware)},
+        <<EOE, 'checked parse_fetchwarefile() no use fetchware');
+fetchware: The fetchwarefile you provided did not have a [use App::Fetchware]
+line in it. This line is required, because it is an important part of how
+fetchware uses Perl for its configuration file. Your fetchware file was.
+[program 'who cares';
+
+lookup_url 'http://doesnt.exist/anywhere';
+]
+EOE
 
     my $syntax_errors = <<EOS;
 # J Random syntax error.
+# Test for syntax error other than forgetting to use App::Fetchware;
+use App::Fetchware;
 for {
 EOS
 
-    eval_ok(sub {parse_fetchwarefile(\ $syntax_errors)},
+    eval_ok(sub {parse_fetchwarefile(\$syntax_errors)},
         qr/fetchware failed to execute the Fetchwarefile/,
         'checked parse_fetchwarefile() failed to execute Fetchwarefile');
 
@@ -87,16 +95,20 @@ subtest 'test create_fetchware_package()' => sub {
     #Also, I must actually add code for this in bin/fetchware.
     skip_all_unless_release_testing();
 
-    my $fetchwarefile_path = create_test_fetchwarefile('# Fake Fetchwarefile for testing');
+    my $fetchwarefile = '# Fake Fetchwarefile for testing';
+note("CFPsFPPFPPFPPFPP[$fetchwarefile]");
 
     # Create a hopefully successful fetchware package using the current working
     # directory (my Fetchware git checkout) and the fake Fetchwarefile I created
     # above.
     my $cwd = dir(cwd());
     my $cwd_parent = $cwd->parent();
-    is(create_fetchware_package($fetchwarefile_path, cwd()),
+    is(create_fetchware_package(\$fetchwarefile, cwd()),
         catfile($cwd_parent, 'App-Fetchware.fpkg'),
         'checked create_fetchware_package() success');
+
+    is(cwd(), $cwd,
+        'checked create_fetchware_package() chdir back to base directory');
 
     # Delete generated files.
     ok(unlink(catfile($cwd_parent,'App-Fetchware.fpkg')) == 1,
@@ -195,43 +207,35 @@ EOE
 subtest 'check extract_fetchwarefile()' => sub {
     skip_all_unless_release_testing();
 
-    my $test_string = '# Fake Fetchwarefile just for testing';
-    my $fetchwarefile_path = create_test_fetchwarefile($test_string);
+    my $fetchwarefile = '# WTF!!!!!!!!!!!!!!!!1   ';
+note("CEFsFPPFPPFPPFPPFPP[$fetchwarefile]");
 
     my $pc = dir(cwd());
     my $last_dir = $pc->dir_list(-1, 1);
     diag("LASTDIR[$last_dir]");
 
     diag("CWD[@{[cwd()]}]");
-    
 
 
     # Create a test fetchware package to text extract_fetchwarefile().
-    my $fetchware_package_path = create_fetchware_package($fetchwarefile_path, $last_dir);
+    # Use a third arg to have the fpkg created in /tmp instead of cwd().
+    my $fetchware_package_path
+        =
+        create_fetchware_package(\$fetchwarefile, $last_dir, tmpdir());
 
     diag("TFPP[$fetchware_package_path]");
 
-    is( ( splitpath(extract_fetchwarefile($fetchware_package_path, cwd())) )[2],
-        'Fetchwarefile', 'checked extract_fetchwarefile() success');
-    my $fh;
-    ok(open($fh, '<', $fetchwarefile_path),
-        "checked extract_fetchwarefile() success open [$fetchwarefile_path]");
-    my $got_fetchwarefile;
-    {
-        local $/;
-        undef $/;
-        $got_fetchwarefile = <$fh>;
-    }
-    diag("GF[$got_fetchwarefile]");
-    is($got_fetchwarefile, $test_string,
-        q{checked extract_fetchwarefile() success Fetchwarefile's match});
+    is(${extract_fetchwarefile($fetchware_package_path)},
+        $fetchwarefile, 'checked extract_fetchwarefile() success');
+
+    my $temp_fpkg = catfile(tmpdir(), 'App-Fetchware.fpkg');
 
     # Test existence of generated files.
-    ok(-e '../App-Fetchware.fpkg' && -e './Fetchwarefile',
+    ok(-e $temp_fpkg,
         'checked extract_fetchwarefile() existence of generated files');
     
     # Delete generated files.
-    ok(unlink('../App-Fetchware.fpkg', './Fetchwarefile') == 2,
+    ok(unlink($temp_fpkg),
         'checked extract_fetchwarefile() delete generated files');
 };
 
@@ -241,9 +245,8 @@ subtest 'check copy_fpkg_to_fpkg_database()' => sub {
     skip_all_unless_release_testing();
 
     # Build a fetchwarefile package needed, so I can test installing it.
-    my $test_string = '# Fake Fetchwarefile just for testing';
-    my $fetchwarefile_path = create_test_fetchwarefile($test_string);
-    my $fetchware_package_path = create_fetchware_package($fetchwarefile_path, cwd());
+    my $fetchwarefile = '# Fake Fetchwarefile just for testing';
+    my $fetchware_package_path = create_fetchware_package(\$fetchwarefile, cwd());
 
     copy_fpkg_to_fpkg_database($fetchware_package_path);
 

@@ -57,12 +57,16 @@ subtest 'test cmd_clean() success' => sub {
     ok(! -e $tempdir, 'checked cmd_clean() delete success.');
 
     # Test cmd_clean()'s ability to test user specfied directories.
-    my $tempdir = tempdir("fetchware-$$-XXXXXX", DIR => cwd(),
+    my $tempdir = tempdir("fetchware-$$-XXXXXX", TMPDIR => 1,
         CLEANUP => 1);
+    my $extra_tempdir = tempdir("fetchware-$$-XXXXXX", TMPDIR => 1,
+        DIR => $tempdir);
+
     ok(-e $tempdir, 'checked creating a temporary directory.');
+    ok(-e $extra_tempdir, 'checked creating an extra temporary directory.');
 
     # Delete the newly created tempdir.
-    cmd_clean(cwd());
+    cmd_clean($extra_tempdir);
 
     ok(! -e $tempdir, 'checked cmd_clean() delete success.');
 };
