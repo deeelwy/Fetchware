@@ -111,8 +111,6 @@ our %EXPORT_TAGS = (
         lookup_determine_downloadurl
     )],
     OVERRIDE_DOWNLOAD => [qw(
-        download_ftp_url
-        download_http_url
         determine_package_path
     )],
     OVERRIDE_VERIFY => [qw(
@@ -123,14 +121,20 @@ our %EXPORT_TAGS = (
     )],
     OVERRIDE_UNARCHIVE => [qw(
         check_archive_files    
+        list_files
         list_files_tar
         list_files_zip
+        unarchive_package
         unarchive_tar
         unarchive_zip
     )],
-###BUGALERT### Break these subs up into their component parts like the others.
-    OVERRIDE_BUILD => [qw()],
-    OVERRIDE_INSTALL => [qw()],
+    OVERRIDE_BUILD => [qw(
+        run_star_commands
+        run_configure
+    )],
+    OVERRIDE_INSTALL => [qw(
+        chdir_unless_already_at_path
+    )],
     OVERRIDE_UNINSTALL => [qw()],
 );
 # OVERRIDE_ALL is simply all other tags combined.
@@ -1989,6 +1993,59 @@ EOD
 
     diag("PP[$package_path]");
 
+    my ($format, $files) = list_files($package_path);
+    
+    { # Encloseing block for $", which prints a \n between each array element.
+    local $" = "\n";
+    vmsg <<EOM;
+Files are: 
+[
+@$files
+]
+EOM
+    } # Enclosing block for $"
+
+    # Ensure no files starting with an absolute path get extracted
+    # And determine $build_path.
+    my $build_path = check_archive_files($files);
+
+    vmsg "Unarchiving $format archive [$package_path].";
+    unarchive_package($format, $package_path);
+    
+    msg "Determined build path to be [$build_path]";
+    return $build_path;
+}
+
+
+=head2 unarchive() API REFERENCE
+
+The subroutine below are used by unarchive() to provide the unarchive
+functionality for fetchware. If you have overridden the unarchive() handler, you
+may want to use some of these subroutines so that you don't have to copy and
+paste anything from unarchive().
+
+App::Fetchware is B<not> object-oriented; therefore, you B<can not> subclass
+App::Fetchware to extend it! 
+
+=cut
+
+
+
+=head3 list_files()
+
+    # Remember $files is a array ref not a regular old scalar.
+    my $files = list_files($package_path;
+
+list_files() takes $package_path as an argument to a tar'ed and compressed
+package or to a zip package, and calls C<list_files_{tar,zip}()> accordingly.
+C<list_files_{tar,zip}()> in turn uses either Archive::Tar or Archive::Zip to
+list all of the files in the archive and return a arrayref to that list.
+
+=cut
+
+sub list_files {
+    my $package_path = shift;
+
     # List files based on archive format.
     my @files;
     my $format;
@@ -2013,42 +2070,12 @@ format archives.
 EOD
         }
     }
-    
-    { # Encloseing block for $"
-    local $" = "\n";
-    vmsg <<EOM;
-Files are: 
-[
-@files
-]
-EOM
-    } # Enclosing block for $"
 
-    # Ensure no files starting with an absolute path get extracted
-    # And determine $build_path.
-    my $build_path = check_archive_files(\@files);
-
-    vmsg "Unarchiving $format archive [$package_path].";
-    unarchive_tar($package_path) if $format eq 'tar';
-    unarchive_zip($package_path) if $format eq 'zip';
-    
-    msg "Determined build path to be [$build_path]";
-    return $build_path;
+    # return a reference, because @files could perhaps be a few thousand
+    # elements long.
+    # unarchive_package() needs $format, so return that too.
+    return $format, \@files;
 }
-
-
-=head2 unarchive() API REFERENCE
-
-The subroutine below are used by unarchive() to provide the unarchive
-functionality for fetchware. If you have overridden the unarchive() handler, you
-may want to use some of these subroutines so that you don't have to copy and
-paste anything from unarchive().
-
-App::Fetchware is B<not> object-oriented; therefore, you B<can not> subclass
-App::Fetchware to extend it! 
-
-=cut
-
 
 
 =head3 list_files_tar()
@@ -2124,6 +2151,26 @@ EOD
 
     # Return list of "external" filenames.
     return @external_filenames;
+}
+
+
+=head3 unarchive_package($format, $package_path)
+
+    unarchive_package($format, $package_path)
+
+unarchive_package() unarchive's the $package_path based on the type of $format
+the package is. $format is determined and returned by list_archive(). The
+currently supported types are C<tar> and C<zip>. Nothing is returned, but
+C<unarchive_{tar,zip}()> is used to to use Archive::Tar or Archive::Zip to
+unarchive the specified $package_path.
+
+=cut
+
+sub unarchive_package {
+    my ($format, $package_path) = @_;
+
+    unarchive_tar($package_path) if $format eq 'tar';
+    unarchive_zip($package_path) if $format eq 'zip';
 }
 
 
@@ -2370,24 +2417,7 @@ EOD
     # If build_commands is set, then all other build config options are ignored.
     if (defined config('build_commands')) {
         vmsg 'Building your package using user specified build_commands.';
-        # Support multiple options like build_command './configure', 'make';
-        # config('build_commands') returns a list of *all* build_commands.
-        for my $build_command (config('build_commands')) {
-            # If a /,\s+/ is present in a $build_command
-            # To support: build_commands './configure, make';
-            if ($build_command =~ /,\s*/) {
-                # split on it, and run each resulting command.
-                my @build_commands = split /,\s*/, $build_command;
-                for my $split_build_command (@build_commands) {
-                    my ($cmd, @options) = split ' ', $split_build_command;
-                    run_prog($cmd, @options);
-                }
-            # Or just run the one command.
-            } else {
-                my ($cmd, @options) = split ' ', $build_command;
-                run_prog($cmd, @options);
-            }
-        }
+        run_star_commands(config('build_commands'));
     # Otherwise handle the other options properly.
     } elsif (
         defined config('configure_options')
@@ -2434,6 +2464,46 @@ recreate the paths to get rid of the errors.
 =cut
 
 
+=head3 run_star_commands(config('*_commands'));
+
+    run_star_commands(config('*_commands'));
+
+run_star_commands() exists to remove some crazy line for line copy and pasting
+from build(), install(), and uninstall(). They all loop over the list accessing
+a C<ONEARRREF> type of make_config_sub() such as C<config('build_commands')>, and
+then determine what the individual star_commands are, and then run them with
+run_prog().
+
+The I<"star"> simply refers to shell globbing with the I<"star"> character C<*>
+meaning "any"--it runs any make_config_sub()s that are C<ONEARRREF>s.
+
+=cut
+
+sub run_star_commands {
+    my @star_commands = @_;
+
+    # Support multiple options like star_command './configure', 'make';
+    # Should be called like run_star_commands(config'*_commands')), and
+    # config('star_commands') returns a list of *all* star_commands.
+    for my $star_command (@star_commands) {
+        # If a /,\s+/ is present in a $star_command
+        # To support: star_commands './configure, make';
+        if ($star_command =~ /,\s*/) {
+            # split on it, and run each resulting command.
+            my @star_commands = split /,\s*/, $star_command;
+            for my $split_star_command (@star_commands) {
+                my ($cmd, @options) = split ' ', $split_star_command;
+                run_prog($cmd, @options);
+            }
+        # Or just run the one command.
+        } else {
+            my ($cmd, @options) = split ' ', $star_command;
+            run_prog($cmd, @options);
+        }
+    }
+}
+
+
 =head3 run_configure()
 
     run_configure();
@@ -2456,6 +2526,8 @@ Apache are pasted below.
 
 Why arn't relative paths good enough for Autotools?
 
+###BUGALERT### Add an uninstall() option to instead edit the AutoTools paths
+#into relative ones.
 =back
 
 =cut
@@ -2468,7 +2540,9 @@ sub run_configure {
             $configure .= " $configure_option";
             diag("configureopts[$configure]");
         }
-    } elsif (config('prefix')) {
+    }
+    
+    if (config('prefix')) {
         if ($configure =~ /--prefix/) {
             die <<EOD;
 App-Fetchware: run-time error. You specified both the --prefix option twice.
@@ -2583,38 +2657,11 @@ EOM
 
     msg 'Installing your software package.';
 
-    # chdir() to $build_path unless its already our cwd.
-    # Needed, because we'll inherit the "child's" chdir if stay_root is
-    # turned on, because stay_root does *not* fork and drop privs, which
-    # typicially causes the child's chdir to be "inherited" by the parent,
-    # because there is not parent and there is not child due to *not* forking.
-    unless ( dir(cwd())->dir_list(-1, 1) eq $build_path ) {
-        chdir($build_path) or die <<EOD;
-fetchware: fetchware failed to chdir to the build directory [$build_path]. It
-needs to chdir() to this directory, so that it can install your program.
-EOD
-    }
-    vmsg "chdir()'d to the build path [$build_path].";
+    chdir_unless_already_at_path($build_path);
 
     if (defined config('install_commands')) {
         vmsg 'Installing your package using user specified commands.';
-        # Support multiple options like install_commands 'make', 'install';
-        for my $install_command (config('install_commands')) {
-            # If a /,\s+/ is present in a $install_command
-            # To support: build_commands './configure, make';
-            if ($install_command =~ /,\s*/) {
-                # split on it, and run each resulting command.
-                my @install_commands = split /,\s*/, $install_command;
-                for my $split_install_command (@install_commands) {
-                    my ($cmd, @options) = split ' ', $split_install_command;
-                    run_prog($cmd, @options);
-                }
-            # Or just run the one command.
-            } else {
-                my ($cmd, @options) = split ' ', $install_command;
-                run_prog($cmd, @options);
-            }
-        }
+        run_star_commands(config('install_commands'));
     } else {
         if (defined config('make_options')) {
             vmsg <<EOM;
@@ -2632,6 +2679,44 @@ EOM
     msg 'Installation succeeded';
     # Return success.
     return 'install succeeded';
+}
+
+
+=head2 install() API REFERENCE
+
+Below are the subroutines that install() exports with its C<INSTALL_OVERRIDE>
+export tag. fillmein!!!!!!!!  
+
+=cut
+
+
+=head3 chdir_unless_already_at_path()
+
+chdir_unless_already_at_path() takes a $path as its argument, and determines if
+that path is currently part of the current processes current working directory.
+If it is, then it does nothing. Buf if the given $path is not in the current
+working directory, then it is chdir()'d to.
+
+If the chdir() fails, an exception is thrown.
+
+=cut
+
+sub chdir_unless_already_at_path {
+    my $path = shift;
+
+    # chdir() to $path unless its already our cwd.
+    # This is needed, because we'll inherit the "child's" chdir if stay_root is
+    # turned on, because stay_root does *not* fork and drop privs, which
+    # typicially causes the child's chdir to be "inherited" by the parent,
+    # because there is no parent and there is no child due to *not* forking.
+    unless ( dir(cwd())->dir_list(-1, 1) eq $path ) {
+        chdir($path) or die <<EOD;
+fetchware: fetchware failed to chdir to the build directory [$path]. It
+needs to chdir() to this directory, so that it can finish your fetchware
+command.
+EOD
+    vmsg "chdir()'d to the necessary path [$path].";
+    }
 }
 
 
@@ -2724,38 +2809,11 @@ EOD
 
     msg "Uninstalling package unarchived at path [$build_path]";
 
-    # chdir() to $build_path unless its already our cwd.
-    # This is needed, because we'll inherit the "child's" chdir if stay_root is
-    # turned on, because stay_root does *not* fork and drop privs, which
-    # typicially causes the child's chdir to be "inherited" by the parent,
-    # because there is not parent and there is not child due to *not* forking.
-    unless ( dir(cwd())->dir_list(-1, 1) eq $build_path ) {
-        chdir($build_path) or die <<EOD;
-fetchware: fetchware failed to chdir to the build directory [$build_path]. It
-needs to chdir() to this directory, so that it can uninstall your program.
-EOD
-    }
-    vmsg "chdir()'d to the build path [$build_path].";
+    chdir_unless_already_at_path($build_path);
 
     if (defined config('uninstall_commands')) {
         vmsg 'Uninstalling using user specified uninstall commands.';
-        # Support multiple options like install_commands 'make', 'install';
-        for my $uninstall_command (config('uninstall_commands')) {
-            # If a /,\s+/ is present in a $uninstall_command
-            # To support: build_commands './configure, make';
-            if ($uninstall_command =~ /,\s*/) {
-                # split on it, and run each resulting command.
-                my @uninstall_commands = split /,\s*/, $uninstall_command;
-                for my $split_uninstall_command (@uninstall_commands) {
-                    my ($cmd, @options) = split ' ', $split_uninstall_command;
-                    run_prog($cmd, @options);
-                }
-            # Or just run the one command.
-            } else {
-                my ($cmd, @options) = split ' ', $uninstall_command;
-                run_prog($cmd, @options);
-            }
-        }
+        run_star_commands(config('uninstall_commands'));
     } else {
         # Set up configure_options and prefix, and then run ./configure, because
         # Autotools uses full paths that ./configure sets up, and these paths
@@ -3604,16 +3662,25 @@ will try to get whatever it wants to download at that alternate path as well.
 #extension section???
 
 =head2 start
+
 =head2 lookup
+
 =head2 download
+
 =head2 verify
+
 =head2 unarchive
+
 =head2 build
+
 =head2 install
+
 =head2 end
+
 =head2 uninstall
 
 =head2 config
+
 =head2 make_config_sub
 
 =cut
@@ -3733,15 +3800,15 @@ L<FETCHWAREFILE API SUBROUTINES>.
 
 =item B<OVERRIDE_LOOKUP> - check_lookup_config, get_directory_listing, parse_directory_listing, determine_download_url, ftp_parse_filelist, http_parse_filelist, file_parse_filelist, lookup_by_timestamp, lookup_by_versionstring, lookup_determine_downloadurl
 
-=item B<OVERRIDE_DOWNLOAD> - download_ftp_url, download_http_url, determine_package_path
+=item B<OVERRIDE_DOWNLOAD> - determine_package_path
 
 =item B<OVERRIDE_VERIFY> - gpg_verify, sha1_verify, md5_verify, digest_verify
 
-=item B<OVERRIDE_UNARCHIVE> - check_archive_files    
+=item B<OVERRIDE_UNARCHIVE> - check_archive_files, list_files, list_files_tar, list_files_zip, unarchive_package, unarchive_tar, unarchive_zip
 
-=item B<OVERRIDE_BUILD> -  none.
+=item B<OVERRIDE_BUILD> - run_star_commands and run_configure.
 
-=item B<OVERRIDE_INSTALL> - none.
+=item B<OVERRIDE_INSTALL> - chdir_unless_already_at_path.
 
 =item B<OVERRIDE_UNINSTALL> - none.
 
@@ -3804,7 +3871,7 @@ This API can be overridden inside a user created Fetchwarefile by supplying a
 C<CODEREF> to any of the API subroutines that I mentioned above. This C<CODEREF>
 simply replaces the default App::Fetchware API subroutine of that name's
 behavior. This C<CODEREF>  is expected to take the same parameters, and return
-the same thing th main API subroutine does.
+the same thing the main API subroutine does.
 
 For more extensive changes you can create a App::Fetchware module that
 I<"subclasses"> App::Fetchware. Now App::Fetchware is not an object-oriented
@@ -3834,7 +3901,7 @@ the concepts are nearly the same they're simply implemented differently.
 These are the subroutines that App::Fetchware implements, and that fetchware
 uses to implement its desired behavior. They are start(), lookup(), download(),
 verify(), unarchive(), build(), install(), uninstall(), and end(). All must be
-implemnted in a App::Fetchware L<subclass>.
+implemented in a App::Fetchware L<subclass>.
 
 =head3 override
 
@@ -3852,14 +3919,14 @@ Means the same thing it does in object-oriented programming. Taking one class
 and replacing it with another class. Only since App::Fetchware is not
 object-oriented, it is implemented differently. You simply import from
 App::Fetchware the L<API subroutines> that you are B<not> going to override, and
-then actually implement the remaining subroutines, so that you App::Fetchware
+then actually implement the remaining subroutines, so that your App::Fetchware
 I<subclass> has the same interface that App::Fetchware does.
 
 To create a fetchware extension you must understand how they work:
 
 =over
 
-=item 1. First a Fetchwarefile is created, and what module implements App:Fetchware's API is declared with with a C<use App::Fetchware...;> line. This line is C<use App::Fetchware> for default Fetchwarefiles that use App::Fetchware to provide C<fetchware> with the API it needs to work properly.
+=item 1. First a Fetchwarefile is created, and what module implements App:Fetchware's API is declared with a C<use App::Fetchware...;> line. This line is C<use App::Fetchware> for default Fetchwarefiles that use App::Fetchware to provide C<fetchware> with the API it needs to work properly.
 
 =item 2. To use a fetchware extension, you simply specify the fetchware
 extension you want to use with a C<use App::Fetchware...;> instead of specifying
@@ -3989,6 +4056,198 @@ specifics needed for you fetchware extension.
 #override or avoid overriding, and then it will create the skelton with stubs
 #for those API sub already having some empty POD crap and the correct
 #prototypes.
+
+=head3 Use Fetchware's Own Libraries to Save Developement Time.
+
+Fetchware includes many libraries to save development time. These libraries are
+well tested by Fetchware's own test suite, so yout too can use them to save
+development time in your own App::Fetchware extensions.
+
+These libraries are:
+
+=over
+
+=item App::Fetchware::Util
+
+=over
+
+=item * Logging subroutines - msg(), vmsg(), and run_prog().
+
+=over
+
+=item * These subroutines support fetchware's command line options such as -v
+(--verbose) and -q (--quiet).
+
+=item * msg() should be used to print a message to the screen that should always
+be printed, while vmsg() should only be used to print messages to the screen
+when the -v (--verbose) command line option is turned on.
+
+=item * run_prog() is a system() wrapper that also supports -v and -q options,
+and should be used to run any external commands that your App::Fetchware
+extension needs to run.
+
+=back
+
+
+=item * Downloading subroutines - download_file() and download_dirlist().
+
+=over
+
+=item * download_file() should be used to download files. It supports the
+following schemes ftp://, http://, or file://. It simply downloads the file
+using Net::Ftp or HTTP::Tiny to the current working directory.  
+
+=item * download_dirlist() should be used to download FTP, HTTP, or local
+directory listings. It is mostly just used by lookup() to determine if a new
+version is available based on the information it parses from the directory
+listing.
+
+=back
+
+
+=item * Security subroutines - safe_open() and drop_privs().
+
+=over
+
+=item * safe_open() opens the file and then runs a bunch of file and directory
+tests to ensure the relative safety of depending on the contents of the file
+being sure to avoid race conditions as much as possible.
+
+=item * drop_privs() forks and drops privileges. It's used by fetchware to drop
+privs to avoid downloading and compiling software as root. It most likely should
+not be called by App::Fetchware extensions, but it is there if you need it.
+
+=back
+
+
+=item * Temporary Directory subroutines - create_tempdir(), original_cwd(), and
+cleanup_tempdir()
+
+=over
+
+=item * create_tempdir() creates and chdir()'s into a temporary directory using
+File::Temp's tempdir() function. It also deals with creating a Fetchware
+semaphore file to keep C<fetchware clean> from deleting any still needed
+temporary directories.
+
+=item * original_cwd() simply returns what fetchware's current working directory
+was before create_tempdir() created and chdir()'d into the temporary directory.
+
+=item * cleanup_tempdir() deals with closing the fetchware semaphore file.
+
+=back
+
+
+=back
+
+
+=item Test::Fetchware
+
+=over
+
+=item * eval_ok() - A poor man's Test::Exception in one simple subroutine. Why
+require every user to install a dependency only used for testing when one simple
+subroutine does the trick.
+
+=item * print_ok() - A poor man's Test::Output in one simple subroutine.
+
+=item * skip_all_unless_release_testing() - Does just what it's name says. If
+fetchware's internal release/author only environment variables are set, only
+then will any Test::More subtests that call this subroutine skip the entire
+subtest. This is used to skip running tests that install real programs on the
+testing computer's system. Many of Fetchware's tests actually install a real
+program such as Apache, and I doubt every Fetchware user is going to also have
+Apache installed and uninstalled a bagillion times when they install Fetchware.
+Use this subroutine in your own App::Fetchware extension's to keep that from
+happening.
+
+=item * make_clean() - Just run_prog('make', 'clean') in the current working
+directory just as its name suggests.
+
+=item * make_test_dist() - Use this subroutine or craft your own similar
+subroutine, if you need more flexibility, to test actually installing a program
+on user's systems that just happens to execute all of the proper installation
+commands, but supplies installation commands that don't actually install
+anything. It's used to test actually installing software without actually
+installing any software.
+
+=item * md5sum_file() - Used to provide a md5sum file for make_test_dist() create
+software packages in order to pass fetchware's verify checks.
+
+=item * verbose_on() - Make's all vmsg()'s actually print to the screen even if
+-v or --verbose was not actually provided on the command line. Used to aid
+debugging.
+
+=back
+
+
+=item App::Fetchware's OVERRIDE_* export tags.
+
+App::Fetchware's main API subroutines, especially the crazy complicated ones
+such as lookup(), are created by calling and passing data among many component
+subroutines. This is done to make testing much much easier, and to allow
+App::Fetchware extensions to also used some or most of these component
+subroutines when they override a App::Fetchware API subroutine.
+
+=over
+
+=item lookup()'s OVERRIDE_LOOKUP export tag.
+
+This export tag is the largest, and perhaps the most important, because it
+implements fetchware's ability to determine if a new version of your software
+package is available. Its default is just a clever use of HTTP and FTP directory
+listings.
+
+See the section L<lookup() API REFERENCE> for more details on how to use these
+subroutines to determine if new versions of your software is available
+automatically.
+
+=item download()'s OVERRIDE_DOWNLOAD export tag.
+
+Only exports the subroutine determine_package_path(), which simply comcatenates
+a $tempdir with a $filename to return a properl $package_path, which unarchive
+later uses. This is mostly its own subroutine to better document how this is
+done, and to allow easier code reuse.
+
+=item verify()'s OVERRIDE_VERIFY export tag.
+
+Exports a family of subroutines to verify via MD5, SHA1, or GPG the integrity of
+your downloaded package. MD5 and SHA1 are supported for legacy reasons. All
+software packages should be GPG signed for much much much better security. GPG
+signatures when verified actually prove that the software package you downloaded
+is exactly what the author of that software package created, whereas MD5 and
+SHA1 sums just verify that you downloaded the bunch of bits in the same order
+that they are stored on the server.
+
+digest_verify() an be used to add support for any other Digest::* modules that
+CPAN has a Digest based module for that correctly follow Digest's API.
+
+=item build()'s OVERRIDE_BUILD export tag.
+
+Provides run_star_commands(), which is mean to execute common override commands
+that fetchware provides with the C<build_commands>, C<install_commands>, and
+C<uninstall_commands> configuration file directives. These directives are of
+type C<ONEARRREF> where they can only be called once, but you can supply a comma
+separated list of commands that fetchware will install instead of the standard
+commands default AutoTools commands (build() => ./configure, make; install() =>
+make install; uninstall() => ./configure, make uninstall). See its
+L<documentation|run_star_commands(config('*_commands'));> for more details.
+
+=item install()'s OVERRIDE_INSTALL export tag.
+
+install() only exports chdir_unless_already_at_path(), which is of limited use.
+install() also uses build()'s run_star_commands().
+
+=item uninstall()'s OVERRDIE_UNINSTALL export tag.
+
+uninstall() actually has no exports of its own, but it does make use of
+build()'s and install()'s exports.
+
+
+=back
+
+=back
+
 
 =over
 

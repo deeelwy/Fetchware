@@ -507,8 +507,8 @@ EOC
 
     verbose_on();
 
-Just turns C<$fetchware::vebose> on, by setting it to 1. It does no do anything
-else. There is no corresponding verbose_off(). Just an vebose_on().
+Just turns C<$fetchware::vebose> on, by setting it to 1. It does not do anything
+else. There is no corresponding verbose_off(). Just a vebose_on().
 
 Meant to be used in test suites, so that you can see any vmsg()s that print
 during testing.

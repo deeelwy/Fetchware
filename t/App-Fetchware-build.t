@@ -10,8 +10,11 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '8'; #Update if this changes.
+use Test::More 0.98 tests => '10'; #Update if this changes.
 use File::Copy 'cp';
+use Path::Class;
+use File::Spec::Functions 'rel2abs';
+use Cwd 'cwd';
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
@@ -24,7 +27,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 
 # Test if I can load the module "inside a BEGIN block so its functions are exported
 # and compile-time, and prototypes are properly honored."
-BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_BUILD)); }
+BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_BUILD run_star_commands)); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
 diag(qq{App::Fetchwares default imports [@App::Fetchware::EXPORT]});
@@ -33,6 +36,8 @@ diag(qq{App::Fetchwares default imports [@App::Fetchware::EXPORT]});
 
 subtest 'OVERRIDE_BUILD exports what it should' => sub {
     my @expected_overide_build_exports = qw(
+        run_star_commands
+        run_configure
     );
     # sort them to make the testing their equality very easy.
     @expected_overide_build_exports = sort @expected_overide_build_exports;
@@ -40,6 +45,34 @@ subtest 'OVERRIDE_BUILD exports what it should' => sub {
     ok(@expected_overide_build_exports ~~ @sorted_build_tag, 
         'checked for correct OVERRIDE_BUILD @EXPORT_TAG');
 };
+
+
+subtest 'test run_star_commands() success' => sub {
+    # Just user the 'perl' command itself as the command to run that way we
+    # don't need to use different commands for different platforms.
+    # Use the $^X variable as an easy way to find it, so we don't have to worry
+    # about what $ENV{PATH} is
+
+    # Test just one simple command.
+    # NOTE: run_star_commands() returns 0 on success, and nonzero on failure
+    # just like commands on the command line do and perl's system() does too.
+    ok(run_star_commands('perl -e "1+1;"') == 0,
+        'check run_star_commands() simple success.');
+
+    # Now test if it can handle comma (,\s*) seperated commands.
+    ok((run_star_commands(q{perl -e "1+1;", perl -e "1+1;"}) == 0),
+        'check run_star_commands() double success.');
+
+    # Now test if it can handle a list of single commands..
+    ok((run_star_commands('perl -e "1+1;"', 'perl -e "1+1;"') == 0),
+        'check run_star_commands() list success.');
+
+    # Now test if it can handle a list of comma separated commands..
+    ok((run_star_commands(q{perl -e "1+1;", perl -e "1+1;"},
+        q{perl -e "1+1;", perl -e "1+1;"}) == 0),
+        'check run_star_commands() double list success.');
+};
+
 
 # Needed my all other subtests.
 my $package_path = $ENV{FETCHWARE_LOCAL_BUILD_URL};
@@ -54,6 +87,77 @@ cp("$package_path", '.') or die "copy $package_path failed: $!";
 
 # I have to unarchive the package before I can build it.
 my $build_path = unarchive($package_path) unless skip_all_unless_release_testing();
+
+
+subtest 'test run_configure() success' => sub {
+    skip_all_unless_release_testing();
+
+    # Must chdir() to $build_path!
+    # But save cwd first for later chdir()ing back.
+    my $old_cwd = cwd();
+    ok(chdir($build_path),
+        'Failed to chdir() to $build_path!');
+
+    # Test run_configure() success.
+    ok(run_configure(),
+        'checked run_configure() success.');
+
+    # Test run_configure() with custom configure_options.
+    # Use option --help to avoid needing to run make_clean().
+    config(configure_options => '--help');
+    ok(run_configure(),
+        'checked run_configure() configure_options success.');
+
+
+
+    # Clear %config between run_configure() runs.
+    __clear_CONFIG();
+
+
+    # Test run_configure() with custom prefix.
+    # Use $build_path, so that you know it's a path that exists no matter the
+    # platform.
+    config(prefix => rel2abs($build_path));
+    ok(run_configure(),
+        'checked run_configure() prefix success.');
+
+
+    # Clear %config between run_configure() runs.
+    __clear_CONFIG();
+
+
+    # Test run_configure() with custom prefix and configure_options.
+    # Use $build_path, so that you know it's a path that exists no matter the
+    # platform.
+    config(prefix => rel2abs($build_path));
+    config(configure_options => '--help');
+    ok(run_configure(),
+        'checked run_configure() both success.');
+
+
+    # Clear %config between run_configure() runs.
+    __clear_CONFIG();
+
+
+    # Test run_configure()'s exception.
+    config(configure_options => '--prefix=/doesnt/matter');
+    config(prefix => '/doesnt/matter');
+    eval_ok(sub {run_configure()},
+        <<EOE, 'checked run_configure() exception');
+App-Fetchware: run-time error. You specified both the --prefix option twice.
+Once in 'prefix' and once in 'configure_options'. You may only specify prefix
+once in either configure option. See perldoc App::Fetchware.
+EOE
+
+    # Clear %config after last run_configure() run to reset it for later tests.
+    __clear_CONFIG();
+
+    # Must chdir() back to $build_path's parent.
+    ok(chdir($old_cwd),
+        'Failed to chdir() to $build_path!');
+    
+};
+
 
 subtest 'test build() default success' => sub {
     skip_all_unless_release_testing();
