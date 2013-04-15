@@ -116,7 +116,7 @@ command line option.
 sub msg (@) {
 
     # If fetchware was not run in quiet mode, -q.
-    unless ($fetchware::quiet > 0) {
+    unless (defined $fetchware::quiet and $fetchware::quiet > 0) {
         # print are arguments. Use say if the last one doesn't end with a
         # newline. $#_ is the last subscript of the @_ variable.
         if ($_[$#_] =~ /\w*\n\w*\z/) {
@@ -158,9 +158,9 @@ sub vmsg (@) {
     ###BUGALERT### Can I do something like:
     #eval "use constant quiet => 0;" so that the iffs below can be resolved at
     #run-time to make vmsg() and msg() faster???
-    unless ($fetchware::quiet > 0) {
+    unless (defined $fetchware::quiet and $fetchware::quiet > 0) {
         # If verbose is also turned on.
-        if ($fetchware::verbose > 0) {
+        if (defined $fetchware::quiet and $fetchware::verbose > 0) {
             # print our arguments. Use say if the last one doesn't end with a
             # newline. $#_ is the last subscript of the @_ variable.
             if ($_[$#_] =~ /\w*\n\w*\z/) {
@@ -211,7 +211,7 @@ sub run_prog {
     my ($program, @args) = @_;
 
     # If fetchware is run without -q.
-    unless ($fetchware::quiet > 0) {
+    unless (defined $fetchware::quiet and $fetchware::quiet > 0) {
         local $" = '][';
         vmsg <<EOM;
 Running command [$program] with options [@args].
