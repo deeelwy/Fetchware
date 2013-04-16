@@ -212,9 +212,9 @@ note("CEFsFPPFPPFPPFPPFPP[$fetchwarefile]");
 
     my $pc = dir(cwd());
     my $last_dir = $pc->dir_list(-1, 1);
-    diag("LASTDIR[$last_dir]");
+    note("LASTDIR[$last_dir]");
 
-    diag("CWD[@{[cwd()]}]");
+    note("CWD[@{[cwd()]}]");
 
 
     # Create a test fetchware package to text extract_fetchwarefile().
@@ -223,7 +223,7 @@ note("CEFsFPPFPPFPPFPPFPP[$fetchwarefile]");
         =
         create_fetchware_package(\$fetchwarefile, $last_dir, tmpdir());
 
-    diag("TFPP[$fetchware_package_path]");
+    note("TFPP[$fetchware_package_path]");
 
     is(${extract_fetchwarefile($fetchware_package_path)},
         $fetchwarefile, 'checked extract_fetchwarefile() success');

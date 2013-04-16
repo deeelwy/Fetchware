@@ -10,7 +10,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '9'; #Update if this changes.
+use Test::More 0.98 tests => '10'; #Update if this changes.
 use File::Copy 'cp';
 use File::Temp 'tempdir';
 use File::Spec::Functions 'tmpdir';
@@ -30,7 +30,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_INSTALL)); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
-diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
+note("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
@@ -74,24 +74,27 @@ subtest 'test chdir_unless_already_at_path() success' => sub {
 };
 
 
-# Needed my all other subtests.
-my $package_path = $ENV{FETCHWARE_LOCAL_BUILD_URL};
-fail("FETCHWARE environment vars not set!!! Run frt()")
-    if not defined $package_path;
 
 
-# Call start() to create & cd to a tempdir, so end() called later can delete all
-# of the files that will be downloaded.
-start();
-# Copy the $ENV{FETCHWARE_LOCAL_URL}/$package_path file to the temp dir, which
-# is what download would normally do for fetchware.
-cp("$package_path", '.') or die "copy $package_path failed: $!";
 
 ###BUGALERT### Needs to fail gracefully or su to root when run as non-root.
 # I have to unarchive the package before I can build it.
 my $build_path;
 subtest 'do prerequisites' => sub {
     skip_all_unless_release_testing();
+
+    # Needed my all other subtests.
+    my $package_path = $ENV{FETCHWARE_LOCAL_BUILD_URL};
+    fail("FETCHWARE environment vars not set!!! Run frt()")
+        if not defined $package_path;
+
+    # Call start() to create & cd to a tempdir, so end() called later can delete all
+    # of the files that will be downloaded.
+    start();
+    # Copy the $ENV{FETCHWARE_LOCAL_URL}/$package_path file to the temp dir, which
+    # is what download would normally do for fetchware.
+    cp("$package_path", '.') or die "copy $package_path failed: $!";
+
     $build_path = unarchive($package_path);
     ok($build_path, 'prerequisite install() run');
     ok(build($build_path), 'prerequisite build() run');
@@ -127,6 +130,8 @@ subtest 'test install() install_commands success' => sub {
 };
 
 
+##BUGALERT###Add a make_test_dist() based test for regular users.
+
 subtest 'test install() no_install success' => sub {
     no_install 'True';
 
@@ -153,8 +158,11 @@ subtest 'test overriding install()' => sub {
 };
 
 
-# Call end() to delete temp dir created by start().
-end();
+subtest 'Call end() to delete temporary directory.' => sub {
+    # Call end() to delete temp dir created by start().
+    ok(end(),
+        'ran end() to delete temp dir.');
+};
 
 
 # Remove this or comment it out, and specify the number of tests, because doing

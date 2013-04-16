@@ -10,7 +10,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '10'; #Update if this changes.
+use Test::More 0.98 tests => '12'; #Update if this changes.
 use File::Copy 'cp';
 use Path::Class;
 use File::Spec::Functions 'rel2abs';
@@ -30,7 +30,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_BUILD run_star_commands)); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
-diag(qq{App::Fetchwares default imports [@App::Fetchware::EXPORT]});
+note(qq{App::Fetchwares default imports [@App::Fetchware::EXPORT]});
 
 
 
@@ -74,19 +74,25 @@ subtest 'test run_star_commands() success' => sub {
 };
 
 
-# Needed my all other subtests.
-my $package_path = $ENV{FETCHWARE_LOCAL_BUILD_URL};
+my $package_path;
+my $build_path;
+subtest 'Do build() prereqs.' => sub {
+    skip_all_unless_release_testing();
+    # Needed my all other subtests.
+    $package_path = $ENV{FETCHWARE_LOCAL_BUILD_URL};
 
+    # Call start() to create & cd to a tempdir, so end() called later can delete all
+    # of the files that will be downloaded.
+    start();
+    # Copy the $ENV{FETCHWARE_LOCAL_URL}/$package_path file to the temp dir, which
+    # is what download would normally do for fetchware.
+    cp("$package_path", '.') or die "copy $package_path failed: $!";
 
-# Call start() to create & cd to a tempdir, so end() called later can delete all
-# of the files that will be downloaded.
-start();
-# Copy the $ENV{FETCHWARE_LOCAL_URL}/$package_path file to the temp dir, which
-# is what download would normally do for fetchware.
-cp("$package_path", '.') or die "copy $package_path failed: $!";
-
-# I have to unarchive the package before I can build it.
-my $build_path = unarchive($package_path) unless skip_all_unless_release_testing();
+    # I have to unarchive the package before I can build it.
+    $build_path = unarchive($package_path);
+    ok(-e $build_path,
+        'checked build() prereqs.');
+};
 
 
 subtest 'test run_configure() success' => sub {
@@ -282,8 +288,12 @@ subtest 'test overriding build()' => sub {
 };
 
 
-# Call end() to delete temp dir created by start().
-end();
+subtest 'Call end() to delete temporary directory.' => sub {
+    skip_all_unless_release_testing();
+    # Call end() to delete temp dir created by start().
+    ok(end(),
+        'checked calling end() to delete tempdir');
+};
 
 
 # Remove this or comment it out, and specify the number of tests, because doing

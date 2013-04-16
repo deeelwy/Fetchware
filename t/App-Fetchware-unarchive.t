@@ -27,7 +27,7 @@ BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_UNARCHIVE)); }
 
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
-diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
+note("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 
 # Call start() to create & cd to a tempdir, so end() called later can delete all

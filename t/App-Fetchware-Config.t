@@ -26,7 +26,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 BEGIN { use_ok('App::Fetchware::Config', ':CONFIG'); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
-diag("App::Fetchware::Config's default imports [@App::Fetchware::Config::EXPORT_OK]");
+note("App::Fetchware::Config's default imports [@App::Fetchware::Config::EXPORT_OK]");
 
 
 

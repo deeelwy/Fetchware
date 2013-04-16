@@ -46,7 +46,7 @@ subtest 'test cmd_list() success' => sub {
 
     ok(cmd_install($test_dist_path),
         'checked cmd_list() by installing a test-dist to list');
-diag("CWD[@{[cwd()]}]");
+note("CWD[@{[cwd()]}]");
 
     my $stdout;
     my $error;
@@ -72,7 +72,7 @@ diag("CWD[@{[cwd()]}]");
 # Annoyingly clean up CONFIG. Shouln't end() do this!!!!:)
 __clear_CONFIG();
 
-diag("CWD2[@{[cwd()]}]");
+note("CWD2[@{[cwd()]}]");
     # Now uninstall the useless test dist.
     ok(cmd_uninstall('test-dist-1.00'),
         'checked cmd_list() clean up installed test-dist.');

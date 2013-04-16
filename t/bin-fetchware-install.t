@@ -51,8 +51,8 @@ lookup_url '$ENV{FETCHWARE_FTP_LOOKUP_URL}';
 filter 'httpd-2.2';
 EOF
 
-diag('FETCHWAREFILE');
-diag("$fetchwarefile");
+note('FETCHWAREFILE');
+note("$fetchwarefile");
     my $fetchwarefile_path = create_test_fetchwarefile($fetchwarefile);
 
     ok(-e $fetchwarefile_path,
@@ -81,7 +81,7 @@ subtest 'test cmd_install(*.fpkg)' => sub {
     # fetchware database dir.
     # It must be a dir with the sticky bit set or owned by the user running the
     # program to pass safe_open()'s security tests.
-    diag("FPP[$fetchware_package_path]");
+    note("FPP[$fetchware_package_path]");
     mv($fetchware_package_path, tmpdir())
         ? pass("checked cmd_install() *.fpkg move fpkg.")
         : fail("Failed to cp [$fetchware_package_path] to cwd os error [$!].");
@@ -108,7 +108,7 @@ subtest 'test test-dist.fpkg cmd_install' => sub {
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
     my $install_success = cmd_install($test_dist_path);
-    diag("IS[$install_success");
+    note("IS[$install_success");
 
     ok($install_success,
         'check test-dist.fpkg cmd_install');

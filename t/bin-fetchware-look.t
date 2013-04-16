@@ -56,12 +56,12 @@ filter 'httpd-2.2';
 EOF
 
     my $fetchwarefile_path = create_test_fetchwarefile($fetchwarefile);
-diag("FFP[$fetchwarefile_path]");
+note("FFP[$fetchwarefile_path]");
     ok(-e $fetchwarefile_path,
         'check create_test_fetchwarefile() test Fetchwarefile');
 
     my $look_path = cmd_look($fetchwarefile_path);
-diag("LP[$look_path]");
+note("LP[$look_path]");
     # And then test if cmd_look() was successful.
     like($look_path, qr/@{[config('filter')]}/,
         'check cmd_look(Fetchware) success.');

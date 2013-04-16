@@ -345,7 +345,6 @@ App-Fetchware: internal syntax error: make_config_sub() was called without a
 name. It must receive a name parameter as its first paramter. See perldoc
 App::Fetchware.
 EOD
-    use Test::More;
     unless ($one_or_many_values eq 'ONE'
             or $one_or_many_values eq 'ONEARRREF',
             or $one_or_many_values eq 'MANY'
@@ -719,8 +718,6 @@ EOD
 
     msg "Looking up download url using lookup_url [@{[config('lookup_url')]}]";
 
-use Test::More;
-diag "lookup_url[@{[config('lookup_url')]}]";
     # die if lookup_url wasn't specified.
     # die if lookup_method was specified wrong.
     vmsg 'Checking that lookup has been configured properly.';
@@ -860,9 +857,6 @@ sub parse_directory_listing {
             return file_parse_filelist($directory_listing);
         }
     }
-diag "pdl file listing";
-diag explain $directory_listing;
-diag "end pdl";
 }
 
 
@@ -900,9 +894,6 @@ sub determine_download_url {
             return lookup_by_timestamp($filename_listing);
         }
     }
-diag "ddurl file listing";
-diag explain $filename_listing;
-diag "end ddurl";
 }
 
 
@@ -1108,9 +1099,6 @@ sub  lookup_by_timestamp {
     # Note: the crazy || ors are to make perl sort each timestamp array first by
     # year, then month, then day of the month, and so on.
     my @sorted_listing = sort { $b->[1] <=> $a->[1] } @$file_listing;
-diag "lbt file listing";
-diag explain \@sorted_listing;
-diag "end lbt";
 
     # Manage duplicate timestamps apropriately including .md5, .asc, .txt files.
     # And support some hacks to make lookup() more robust.
@@ -1178,10 +1166,6 @@ files.
 sub lookup_determine_downloadurl {
     my $file_listing = shift;
 
-use Test::More;
-diag "file_listing";
-diag explain $file_listing;
-diag "endfilelisting";
     # First grep @$file_listing for $CONFIG{filter} if $CONFIG{filter} is defined.
     # This is done, because some distributions have multiple versions of the
     # same program in one directory, so sorting by version numbers or
@@ -1206,7 +1190,6 @@ diag "endfilelisting";
     # algorithms. Both Apache and the Linux kernel maintain these files.
     $_->[0] =~ /^(?:latest|current)[_-]is[_-](.*)$/i for @$file_listing;
     my $latest_version = $1;
-    diag("latestver[$latest_version]");
     @$file_listing = grep { $_->[0] =~ /$latest_version/ } @$file_listing
         if defined $latest_version;
 
@@ -1215,8 +1198,6 @@ diag "endfilelisting";
     # Furthermore, choose them based on best compression to worst to save some
     # bandwidth.
     for my $fl (@$file_listing) {
-        use Test::More;
-        diag explain $fl;
         given ($fl->[0]) {
             when (/\.tar\.xz$/) {
                 return "@{[config('lookup_url')]}/$fl->[0]";
@@ -1328,7 +1309,6 @@ EOD
 
     msg "Downloading from url [$download_url] to temp dir [$temp_dir]";
 
-diag("CWD!!![@{[cwd()]}]");
     my $downloaded_file_path = download_file($download_url);
     vmsg "Downloaded file to [$downloaded_file_path]";
 
@@ -1367,7 +1347,6 @@ $package_path is returned to caller.
 
 sub determine_package_path {
     my ($tempdir, $filename) = @_;
-    diag explain \@_;
 
     # return $package_path, which stores the full path of where the file
     # HTTP::Tiny downloaded.
@@ -1405,9 +1384,9 @@ helper subroutines C<{gpg,sha1,md5,digest}_verify()>.
 ###BUGALERT### Update comment below regarding support status of Crypt::OpenPGP.
 =over
 =item LIMITATIONS
-Uses gpg command line or Crypt::OpenPGP for Windows, and the interface to gpg is
-a little brittle, while Crypt::OpenPGP is complex, poorly maintained, and bug
-ridden, but still usable.
+Uses gpg command line, and the interface to gpg is a little brittle.
+Crypt::OpenPGP is buggy and not currently maintainted again, so fetchware cannot
+make use of it, so were stuck with using the command line gpg program.
 
 =item drop_privs() NOTES
 
@@ -1466,7 +1445,6 @@ EOD
             my ($gpg_err, $sha_err, $md5_err);
             eval {$retval = gpg_verify($download_url)};
             $gpg_err = $@;
-            diag("gpgrv[$retval]");
             if ($gpg_err) {
                 msg <<EOM;
 Cyptographic using gpg failed!
@@ -1479,7 +1457,6 @@ Trying SHA1 verification of downloaded package.
 EOM
                 eval {$retval = sha1_verify($download_url, $package_path)};
                 $sha_err = $@;
-                diag("sharv[$retval]");
                 if ($sha_err) {
                     msg <<EOM;
 SHA1 verification failed!
@@ -1487,13 +1464,11 @@ EOM
                     warn $sha_err;
                 }
                 if (! $retval or $sha_err) {
-                    diag("GOTTOMD5");
                     msg <<EOM;
 Trying MD5 verification of downloaded package.
 EOM
                     eval {$retval = md5_verify($download_url, $package_path)};
                     $md5_err = $@;
-                    diag("md5rv[$retval]");
                     if ($md5_err) {
                         msg <<EOM;
 MD5 verification failed!
@@ -1584,9 +1559,8 @@ App::Fetchware to extend it!
 
     'Package Verified' = gpg_verify($download_url);
 
-###BUGALERT### Update statement regarding use of Crypt::OpenPGP.
 Verifies the downloaded source code distribution using the command line program
-gpg or Crypt::OpenPGP on Windows or if gpg is not available.
+gpg.
 =cut
 
 sub gpg_verify {
@@ -1678,6 +1652,12 @@ EOD
         # Use automatic key retrieval & a cool pool of keyservers
         ###BUGALERT## Give Crypt::OpenPGP another try with
         #pool.sks-keyservers.net
+        ###BUGALERT### Should I cache the files gpg puts in its "homedir"? They
+        #are the public keys that verify this fetchware package. Or should they
+        #always be downloaded on demand as they are now??? But if verify() can
+        #have keys cached inside the fetchware package does that mean that I
+        #should open up this as an API for fetchware extensions????? I don't
+        #know. I'll have to think more about this issue.
         run_prog('gpg', '--keyserver', 'pool.sks-keyservers.net',
             '--keyserver-options', 'auto-key-retrieve=1',
             '--homedir', '.',  "$sig_file");
@@ -1823,7 +1803,6 @@ sub digest_verify {
     } else {
         eval {
             $digest_file = download_file("$download_url.$digest_ext");
-            diag("digestfile[$digest_file]");
         };
         if ($@) {
             die <<EOD;
@@ -1839,7 +1818,6 @@ EOD
     
 ###subify calc_sum()
     # Open the downloaded software archive for reading.
-    diag("PACKAGEPATH[$package_path");
     my $package_fh = safe_open($package_path, <<EOD);
 App-Fetchware: run-time error. Fetchware failed to open the file it downloaded
 while trying to read it in order to check its MD5 sum. The file was
@@ -1883,7 +1861,6 @@ EOD
 
 ###subify compare_sums();
     # Open the downloaded software archive for reading.
-    diag("DIGESTFILE[$digest_file]");
     my $digest_fh = safe_open($digest_file, <<EOD);
 App-Fetchware: run-time error. Fetchware failed to open the $digest_type file it
 downloaded while trying to read it in order to check its $digest_type sum. The file was
@@ -1893,8 +1870,6 @@ EOD
     while (<$digest_fh>) {
         next if /^\s+$/; # skip whitespace only lines just in case.
         my @fields = split ' '; # Defaults to $_, which is filled in by <>
-        diag("fields[@fields]");
-        diag("filemd5[$fields[0]]calcmd5[$calculated_digest]");
 
         if ($fields[0] eq $calculated_digest) {
             return 'Package verified';
@@ -1991,7 +1966,6 @@ EOD
 
     msg "Unarchiving the downloaded package [$package_path]";
 
-    diag("PP[$package_path]");
 
     my ($format, $files) = list_files($package_path);
     
@@ -2260,7 +2234,6 @@ sub check_archive_files {
     # Determine if *all* files are in the same directory.
     my %dir;
     for my $path (@$files) {
-##TEST##diag("path[$path]");
         # Skip Fetchwarefiles.
         next if $path eq './Fetchwarefile';
         if (file_name_is_absolute($path)) {
@@ -2280,18 +2253,13 @@ EOE
         }
 
         my ($volume,$directories,$file) = splitpath($path); 
-##TEST##diag("vol[$volume]dirs[$directories]file[$file]");
         my @dirs = splitdir($directories);
-##TEST##diag("dirssss");
-##TEST##diag explain \@dirs;
         # Skip empty directories.
         next unless @dirs;
 
         $dir{$dirs[0]}++;
     }
 
-diag("dirhash");
-diag explain \%dir;
 
     my $i = 0;
     for my $dir (keys %dir) {
@@ -2307,7 +2275,6 @@ EOD
     
         # Return $build_path
         my $build_path = $dir;
-        diag("BUILDPATH[$build_path]");
         return $build_path;
     }
 }
@@ -2405,13 +2372,11 @@ EOD
     msg "Building your package in [$build_path]";
 
     use Cwd;
-    diag("before[@{[cwd()]}]");
     vmsg "changing Directory to build path [$build_path]";
     chdir $build_path or die <<EOD;
 App-Fetchware: run-time error. Failed to chdir to the directory fetchware
 unarchived [$build_path]. See perldoc App::Fetchware.
 EOD
-    diag("after[@{[cwd()]}]");
 
 
     # If build_commands is set, then all other build config options are ignored.
@@ -2538,7 +2503,6 @@ sub run_configure {
         # Support multiple options like configure_options '--prefix', '.';
         for my $configure_option (config('configure_options')) {
             $configure .= " $configure_option";
-            diag("configureopts[$configure]");
         }
     }
     
@@ -2551,7 +2515,6 @@ once in either configure option. See perldoc App::Fetchware.
 EOD
         } else {
             $configure .= " --prefix=@{[config('prefix')]}";
-            diag("prefixaddingprefix[$configure]");
         }
     }
     
@@ -2786,7 +2749,6 @@ sub uninstall ($) {
     state $callback; # A state variable to keep its value between calls.
     if (caller ne 'fetchware') {
         $callback = shift;
-        diag("callback[$callback]");
         die <<EOD if ref $callback ne 'CODE';
 App-Fetchware: start() was called from a package other than 'fetchware', and with an
 argument that was not a code reference. Outside of package 'fetchware' this
@@ -2929,7 +2891,6 @@ sub end (;$) {
     state $callback; # A state variable to keep its value between calls.
     if (caller ne 'fetchware') {
         $callback = shift;
-        diag("callback[$callback]");
         die <<EOD if ref $callback ne 'CODE';
 App-Fetchware: end() was called from a package other than 'fetchware', and with an
 argument that was not a code reference. Outside of package 'fetchware' this

@@ -72,8 +72,8 @@ lookup_url '$ENV{FETCHWARE_LOCAL_UPGRADE_URL}';
 filter 'httpd-2.2';
 EOF
 
-diag('FETCHWAREFILE');
-diag("$fetchwarefile");
+note('FETCHWAREFILE');
+note("$fetchwarefile");
     my $fetchwarefile_path = create_test_fetchwarefile($fetchwarefile);
 
     ok(-e $fetchwarefile_path,
@@ -94,10 +94,10 @@ diag("$fetchwarefile");
     my $httpd_upgrade = catfile($parent_upgrade_path, 'httpd-2.2.22.tar.bz2');
     my $httpd_upgrade_asc = catfile($parent_upgrade_path,
         'httpd-2.2.22.tar.bz2.asc');
-diag("httpd_upgrade[$httpd_upgrade] stripedupgradepath[$striped_upgrade_path]");
+note("httpd_upgrade[$httpd_upgrade] stripedupgradepath[$striped_upgrade_path]");
     ok(cp($httpd_upgrade, $striped_upgrade_path),
         'checked cmd_upgrade() cp new version to local upgrade url');
-diag("httpd_upgrade_asc[$httpd_upgrade_asc]");
+note("httpd_upgrade_asc[$httpd_upgrade_asc]");
     ok(cp($httpd_upgrade_asc, $striped_upgrade_path),
         'checked cmd_upgrade() cp new version asc to local upgrade url');
 
@@ -153,7 +153,7 @@ subtest 'test cmd_upgrade() test-dist' => sub {
     my $upgrade_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
         CLEANUP => 1, TMPDIR => 1);
 
-diag("UPGRADETD[$upgrade_temp_dir]");
+note("UPGRADETD[$upgrade_temp_dir]");
 
     my $old_test_dist_path = make_test_dist('test-dist', '1.00',
         $upgrade_temp_dir);
@@ -172,7 +172,7 @@ diag("UPGRADETD[$upgrade_temp_dir]");
         }
     }
 
-diag("INSTALLPATH[$old_test_dist_path]");
+note("INSTALLPATH[$old_test_dist_path]");
 
     # I obviously must install test-dist before I can test upgrading it :)
     my $fetchware_package_path = cmd_install($old_test_dist_path);
@@ -198,9 +198,9 @@ diag("INSTALLPATH[$old_test_dist_path]");
 
     my $new_test_dist_path_md5 = md5sum_file($new_test_dist_path);
 
-diag("upgradepath[");
+note("upgradepath[");
 system('ls', '-lh', $upgrade_temp_dir);
-diag("]");
+note("]");
 
     # cmd_uninstall accepts a string that needs to be found in the fetchware
     # database. It does *not* take Fetchwarefiles or fetchware packages as

@@ -20,7 +20,7 @@ BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :TESTING)); }
 
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
-diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
+note("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
@@ -49,7 +49,7 @@ Throw exception to test override.
 EOD
         };
 
-        diag("ARGS[@args]");
+        note("ARGS[@args]");
 
         eval_ok(sub {override @args},
             qr/Throw exception to test override/, "checked override $sub");

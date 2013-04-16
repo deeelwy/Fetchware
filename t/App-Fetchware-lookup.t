@@ -29,7 +29,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_LOOKUP)); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
-diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
+note("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 
 subtest 'OVERRIDE_LOOKUP exports what it should' => sub {
@@ -125,7 +125,7 @@ subtest 'test ftp_parse_filelist()' => sub {
     
     my $filename_listing = ftp_parse_filelist($directory_listing);
 
-diag explain $filename_listing;
+note explain $filename_listing;
     cmp_deeply($filename_listing, eval(expected_filename_listing()),
         'checked ftp_parse_listing() success');
     pass('fixin it');
@@ -150,9 +150,9 @@ subtest 'test http_parse_filelist()' => sub {
 
     my $directory_listing = get_directory_listing();
 
-diag("COPYHERE");
-diag explain $directory_listing;
-diag("ENDCOPYHERE");
+note("COPYHERE");
+note explain $directory_listing;
+note("ENDCOPYHERE");
 
     my $filename_listing = http_parse_filelist(return_html_listing());
 

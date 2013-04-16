@@ -42,7 +42,7 @@ BEGIN { use_ok('App::Fetchware::HTMLPageSync', ':DEFAULT'); }
 
 # Print the subroutines that App::Fetchware::HTMLPageSync imported by default
 # when I used it.
-diag("App::Fetchware's default imports [@App::Fetchware::HTMLPageSync::EXPORT]");
+note("App::Fetchware's default imports [@App::Fetchware::HTMLPageSync::EXPORT]");
 
 
 subtest 'test uninstall() exception' => sub {

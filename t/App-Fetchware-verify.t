@@ -12,13 +12,14 @@ use 5.010;
 use Fcntl ':mode';
 use File::Spec::Functions 'devnull';
 use File::Copy 'cp';
+use File::Temp 'tempfile';
 
 use App::Fetchware::Util ':UTIL';
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '8'; #Update if this changes.
+use Test::More 0.98 tests => '10'; #Update if this changes.
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -31,7 +32,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_VERIFY)); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
-diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
+note("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 
 
@@ -50,29 +51,36 @@ subtest 'OVERRIDE_VERIFY exports what it should' => sub {
         'checked for correct OVERRIDE_VERIFY @EXPORT_TAG');
 };
 
-# Needed by all other subtests.
-my $package_path = $ENV{FETCHWARE_LOCAL_URL};
-$package_path =~ s!^file://!!;
-# Use config subs to determine a $download_url based on the current version of
-# apache instead of updating this manually.
-lookup_url 'http://www.apache.org/dist/httpd';
-filter 'httpd-2.2';
-my $download_url = lookup();
 
 
-# Call start() to create & cd to a tempdir, so end() called later can delete all
-# of the files that will be downloaded.
-start();
-# Copy the $ENV{FETCHWARE_LOCAL_URL}/$package_path file to the temp dir, which
-# is what download would normally do for fetchware.
-cp("$package_path", '.') or die "copy $package_path failed: $!";
+my $download_url;
+my $package_path;
+subtest 'Do verify() prereqs.' => sub {
+    skip_all_unless_release_testing();
+    # Call start() to create & cd to a tempdir, so end() called later can delete
+    # all of the files that will be downloaded.
+    my $temp_dir = start();
+    # Use config subs to determine a $download_url based on the current version
+    # of apache instead of updating this manually.
+    lookup_url 'http://www.apache.org/dist/httpd';
+    filter 'httpd-2.2';
+    $download_url = lookup();
+    $package_path = download($temp_dir, $download_url);
+
+    ok(-e $temp_dir,
+        'checked successful start().');
+    ok(defined $download_url,
+        'checked successful lookup().');
+    ok(-e $package_path,
+        'checked successful download().');
+};
 
 subtest 'test digest_verify()' => sub {
     skip_all_unless_release_testing();
 
     for my $digest_type (qw(SHA-1 MD5)) {
 
-        diag("TYPE[$digest_type]");
+        note("TYPE[$digest_type]");
 
 
         ok(digest_verify($digest_type, $download_url, $package_path),
@@ -96,7 +104,15 @@ EOE
 ###HOWTOTEST###EOE
 
         # Test failure by setting $package_path to the wrong thing.
-        is(digest_verify($digest_type, $download_url, devnull()), undef,
+        # Create a useless file to test against.
+        my ($tf_fh, $tf_name)
+            =
+            tempfile("fetchware-test-$$-XXXXXXXXXX", TMPDIR => 1, UNLINK => 1);
+        ok(-e $tf_name,
+            'checked tempfile creation to test digest_verify() failure()');
+        print $tf_fh 'SOME CRAP TO ACTUALLY MD5/SHA1 SUM!!!!!';
+        close $tf_fh;
+        is(digest_verify($digest_type, $download_url, $tf_name), undef,
             "checked digest_verify($digest_type) failure");
 
         eval_ok(sub {
@@ -149,7 +165,7 @@ subtest 'test gpg_verify()' => sub {
 
     lookup_url 'http://www.alliedquotes.com/mirrors/apache//httpd/';
 
-    gpg_key_url 'http://www.alliedquotes.com/mirrors/apache//httpd/KEYS';
+    gpg_sig_url 'http://www.alliedquotes.com/mirrors/apache//httpd/KEYS';
 
     ok(gpg_verify($download_url), 'checked gpg_verify() success');
 
@@ -190,7 +206,7 @@ subtest 'test verify()' => sub {
 
     # test using copied gpg_verify setup from above.
     eval {verify($download_url, $package_path)};
-    diag("exe[$@]");
+    note("exe[$@]");
     unless ($@) {
         pass("checked verify() automatic method gpg");
     } else {
@@ -237,7 +253,7 @@ EOE
     # test verify_failure_ok
     ###BUGALERT### Must test success & failure with this option.
     verify_failure_ok 'On';
-    diag("vfo[@{[config('verify_failure_ok')]}]");
+    note("vfo[@{[config('verify_failure_ok')]}]");
     is(verify('ftp://fake.url/doesnt/exist.ever', $package_path),
         'warned due to verify_failure_ok',
         'checked verify() verify_failure_ok');
@@ -253,6 +269,10 @@ EOE
     config_delete('verify_method');
 
 };
+
+
+###BUGALERT###Add a subtest that uses make_test_dist() and md5sum_file() to test
+#verify() functionality on non FETCHWARE_RELEASE_TESTING systems.
 
 
 subtest 'test overriding verify()' => sub {
@@ -273,8 +293,11 @@ subtest 'test overriding verify()' => sub {
 
 
 
-# Call end() to delete temp dir created by start().
-#end();
+subtest 'Call end() to clean up temporary directory.' => sub {
+    # Call end() to delete temp dir created by start().
+    ok(end(),
+        'cleared out fetchware temporary directory.');
+};
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.

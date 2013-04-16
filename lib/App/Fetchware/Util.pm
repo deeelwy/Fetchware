@@ -319,10 +319,7 @@ sub download_dirlist {
     # calls in this loop continue to fail.
     while ($@) {
 
-use Test::More;
-diag explain \config('mirror');
         if (defined($mirror = $mirror_iter->())) {
-note("MIRROR[$mirror]");
             ###BUGALERT### Must process $mirror!!!
             #if it has no path replace its hostname with the hostname in $url.
             #the scheme *can* change!
@@ -405,13 +402,9 @@ Returns an array ref of the directory listing.
 
 sub ftp_download_dirlist {
     my $ftp_url = shift;
-    use Test::More;
-    diag("ftp_url[$ftp_url]");
     $ftp_url =~ m!^ftp://([-a-z,A-Z,0-9,\.]+)(/.*)?!;
     my $site = $1;
     my $path = $2;
-    use Test::More;
-    diag("site[$site]path[$path]");
 
     # Add debugging later based on fetchware commandline args.
     # for debugging: $ftp = Net::FTP->new('$site','Debug' => 10);
@@ -465,23 +458,18 @@ HTTP headers [@{[Data::Dumper::Dumper($response->{headers})]}].
 See man App::Fetchware.
 EOD
 
-    use Test::More;
-    diag("$response->{status} $response->{reason}\n");
 
     while (my ($k, $v) = each %{$response->{headers}}) {
         for (ref $v eq 'ARRAY' ? @$v : $v) {
-            diag("$k: $_\n");
         }
     }
 
-    diag($response->{content}) if length $response->{content};
     die <<EOD unless length $response->{content};
 App-Fetchware: run-time error. The lookup_url you provided downloaded nothing.
 HTTP status code [$response->{status} $response->{reason}]
 HTTP headers [@{[Data::Dumper::Dumper($response)]}].
 See man App::Fetchware.
 EOD
-    diag explain $response;
     return $response->{content};
 }
 
@@ -506,24 +494,17 @@ what OS I'm running on.
 sub file_download_dirlist {
     my $local_lookup_url = shift;
 
-diag "before[$local_lookup_url]";
     $local_lookup_url =~ s!^file://!!; # Strip scheme garbage.
-diag "after[$local_lookup_url]";
 
     # Prepend original_cwd() if $local_lookup_url is a relative path.
     unless (file_name_is_absolute($local_lookup_url)) {
-diag "origcwd[@{[original_cwd()]}]";
         $local_lookup_url =  catdir(original_cwd(), $local_lookup_url);
     }
 
     my @file_listing;
     for my $file (glob catfile($local_lookup_url, '*')) {
-diag "lfdfile[$file]";
         push @file_listing, $file;
     }
-diag "lfd file_listing";
-diag explain \@file_listing;
-diag "end lfd file_listing";
     return \@file_listing;
 }
 
@@ -564,10 +545,7 @@ sub download_file {
     # calls in this loop continue to fail.
     while ($@) {
 
-use Test::More;
-diag explain \config('mirror');
         if (defined($mirror = $mirror_iter->())) {
-note("MIRROR[$mirror]");
             ###BUGALERT### Must process $mirror!!!
             #if it has no path replace its hostname with the hostname in $url.
             #the scheme *can* change!
@@ -648,15 +626,10 @@ Uses Net::FTP to download the specified FTP URL using binary mode.
 sub download_ftp_url {
     my $ftp_url = shift;
 
-    use Test::More;
-    diag("ftp_url[$ftp_url]");
     $ftp_url =~ m!^ftp://([-a-z,A-Z,0-9,\.]+)(/.*)?!;
     my $site = $1;
     my $path = $2;
-    use Test::More;
-    diag("FIRSTpath[$path]");
     my ($volume, $directories, $file) = splitpath($path);
-    diag("site[$site]path[$path]dirs[$directories]file[$file]");
 
     # for debugging: $ftp = Net::FTP->new('site','Debug',10);
     # open a connection and log in!
@@ -703,7 +676,6 @@ EOD
     $ftp->quit;
 
     # The caller needs the $filename to determine the $package_path later.
-    diag("FILE[$file]");
     return $file;
 }
 
@@ -750,12 +722,9 @@ listingfrom your provided url [$http_url]. HTTP status code
 See man App::Fetchware.
 EOD
 
-    use Test::More;
-    diag("$response->{status} $response->{reason}\n");
 
     while (my ($k, $v) = each %{$response->{headers}}) {
         for (ref $v eq 'ARRAY' ? @$v : $v) {
-            diag("$k: $_\n");
         }
     }
 
@@ -776,10 +745,8 @@ EOD
     # tempdir.
     my $path = $http_url;
     $path =~ s!^http://!!;
-    diag("path[$path]");
     # Determine filename from the $path.
     my ($volume, $directories, $filename) = splitpath($path);
-    diag("filename[$filename]");
     # If $filename is empty string, then its probably a index directory listing.
     $filename ||= 'index.html';
     ###BUGALERT### Need binmode() on Windows???
@@ -798,7 +765,6 @@ error [$!]. See perldoc App::Fetchware.
 EOS
 
     # The caller needs the $filename to determine the $package_path later.
-    diag("httpFILE[$filename]");
     return $filename;
 }
 
@@ -941,7 +907,6 @@ ported or tested under Win32 yet.
 
 sub safe_open {
     my $file_to_check = shift;
-note("FTC[$file_to_check]");
     my $open_fail_message = shift // <<EOE;
 Failed to open file [$file_to_check]. OS error [$!].
 EOE
@@ -959,8 +924,6 @@ EOE
     }
 
     my $info = stat($fh);# or goto STAT_ERROR;
-    note('INFO');
-    note explain \$info;
 
     # Owner must be either me (whoever runs fetchware) or superuser. No one else
     # can be trusted.
@@ -1016,7 +979,6 @@ EOD
     # file in any directory above /home now anyway even if _PC_CHOWN_RESTRICTED
     # is set.
     for my $dir (@directories) {
-note("CDIR[$dir]");
 
         my $info = stat($dir);# or goto STAT_ERROR;
 
@@ -1547,9 +1509,6 @@ handling, because flock will do them for us!
 sub create_tempdir {
     my %opts = @_;
 
-diag("OPTS!!![");
-diag explain \%opts;
-diag("]");
 
     msg 'Creating temp dir to use to install your package.';
 
@@ -1573,7 +1532,6 @@ diag("]");
         push @args, CLEANUP => 1 if not defined $opts{KeepTempDir};
 
         # Call tempdir() with the @args I've built.
-note("ARGS[@args]");
         $temp_dir = tempdir(@args);
 
         # Must chmod 700 so gpg's localized keyfiles are good.
@@ -1587,7 +1545,6 @@ note("ARGS[@args]");
             if (not defined $opts{NoChown}
                 and is_os_type('Unix') and ($< == 0 or $> == 0)
             ) {
-    diag("GOTHERE!!!11");
                 # Determine /etc/passwd entry for the "effective" uid of the
                 # current fetchware process. I should use the "effective" uid
                 # instead of the "real" uid, because effective uid is used to
@@ -1601,9 +1558,6 @@ note("ARGS[@args]");
             }
         }
 
-        use Test::More;
-        diag("tempdir[$temp_dir]");
-note("FTEXCEPTION[$@]");
         $exception = $@;
         1; # return true unless an exception is thrown.
     } or die <<EOD;
@@ -1613,7 +1567,6 @@ exception was [$exception]. See perldoc App::Fetchware.
 EOD
 
     $original_cwd = cwd();
-    diag("cwd[@{[$original_cwd]}]");
     vmsg "Saving original working directory as [$original_cwd]";
 
     # Change directory to $CONFIG{TempDir} to make unarchiving and building happen
@@ -1624,7 +1577,6 @@ App-Fetchware: run-time error. Fetchware failed to change its directory to the
 temporary directory that it successfully created. This just shouldn't happen,
 and is weird, and may be a bug. See perldoc App::Fetchware.
 EOD
-    diag("cwd[@{[cwd()]}]");
     vmsg "Successfully changed working directory to [$temp_dir].";
 
     # Create 'fetcwhare.sem' - the fetchware semaphore lock file.

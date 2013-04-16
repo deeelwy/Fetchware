@@ -302,8 +302,8 @@ lookup_url '$ENV{FETCHWARE_FTP_LOOKUP_URL}';
 filter 'httpd-2.2';
 EOF
 
-diag('FETCHWAREFILE');
-diag("$fetchwarefile");
+note('FETCHWAREFILE');
+note("$fetchwarefile");
 
 
 

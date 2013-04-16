@@ -28,7 +28,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 BEGIN { use_ok('App::Fetchware', qw(:DEFAULT)); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
-diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
+note("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
@@ -37,7 +37,7 @@ subtest 'test end()' => sub {
     skip_all_unless_release_testing();
 
     my $tempdir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
-    diag("td[$tempdir]");
+    note("td[$tempdir]");
 
     ok(-e $tempdir, 'checked end() tempdir creationg');
 

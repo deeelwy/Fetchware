@@ -273,13 +273,10 @@ sub make_test_dist {
 
     # Append $ver_num to $file_name to complete the dist's name.
     my $dist_name = "$file_name-$ver_num";
-diag("dist_name[$dist_name]");
 
     $destination_directory = rel2abs($destination_directory);
-diag("destination_directory[$destination_directory]");
 
     my $test_dist_filename = catfile($destination_directory, "$dist_name.fpkg");
-diag("test_dist_filename[$test_dist_filename]");
 
 
 

@@ -30,7 +30,7 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 BEGIN { use_ok('App::Fetchware', qw(:DEFAULT :OVERRIDE_DOWNLOAD)); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
-diag("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
+note("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 my $class = 'App::Fetchware';
 
@@ -54,7 +54,7 @@ subtest 'OVERRIDE_DOWNLOAD exports what it should' => sub {
 subtest 'test determine_package_path()' => sub {
     skip_all_unless_release_testing();
     my $cwd = cwd();
-    diag("cwd[$cwd]");
+    note("cwd[$cwd]");
 
     ###BUGALERT### Brittle test!!!
     is(determine_package_path($cwd, 'bin/fetchware'),

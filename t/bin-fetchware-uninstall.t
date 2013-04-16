@@ -56,8 +56,8 @@ filter 'ctags';
 verify_failure_ok 'On';
 EOF
 
-diag('FETCHWAREFILE');
-diag("$fetchwarefile");
+note('FETCHWAREFILE');
+note("$fetchwarefile");
     my $fetchwarefile_path = create_test_fetchwarefile($fetchwarefile);
 
     ok(-e $fetchwarefile_path,
@@ -185,7 +185,7 @@ subtest 'test cmd_uninstall() with test-dist.fpkg' => sub {
     my $upgrade_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
         CLEANUP => 1, TMPDIR => 1);
 
-diag("UPGRADETD[$upgrade_temp_dir]");
+note("UPGRADETD[$upgrade_temp_dir]");
 
     my $test_dist_path = make_test_dist('test-dist', '1.00', $upgrade_temp_dir);
     my $test_dist_md5 = md5sum_file($test_dist_path);

@@ -77,12 +77,12 @@ EOF
 
     my @fetchware_packages;
     for my $fetchwarefile ($apache_fetchwarefile, $ctags_fetchwarefile) {
-diag('FETCHWAREFILE');
-diag("$fetchwarefile");
+note('FETCHWAREFILE');
+note("$fetchwarefile");
         my $package_name = $fetchwarefile;
         $package_name =~ /(apache-2\.2|ctags)/; 
         $package_name = $1;
-diag("packagename[$package_name]");
+note("packagename[$package_name]");
         my $fetchwarefile_path = create_test_fetchwarefile($fetchwarefile);
 
         ok(-e $fetchwarefile_path,
@@ -110,15 +110,15 @@ diag("packagename[$package_name]");
     my $httpd_upgrade = catfile($parent_upgrade_path, 'httpd-2.2.22.tar.bz2');
     my $httpd_upgrade_asc = catfile($parent_upgrade_path,
         'httpd-2.2.22.tar.bz2.asc');
-diag("httpd_upgrade[$httpd_upgrade] stripedupgradepath[$striped_upgrade_path]");
+note("httpd_upgrade[$httpd_upgrade] stripedupgradepath[$striped_upgrade_path]");
     ok(cp($httpd_upgrade, $striped_upgrade_path),
         'checked cmd_upgrade() cp new version  httpd to local upgrade url');
-diag("httpd_upgrade_asc[$httpd_upgrade_asc]");
+note("httpd_upgrade_asc[$httpd_upgrade_asc]");
     ok(cp($httpd_upgrade_asc, $striped_upgrade_path),
         'checked cmd_upgrade() cp new version httpd asc to local upgrade url');
     # ctags copy stuff.
     my $ctags_upgrade = catfile($parent_upgrade_path, 'ctags-5.8.tar.gz');
-diag("ctags_upgrade[$ctags_upgrade]");
+note("ctags_upgrade[$ctags_upgrade]");
     ok(cp($ctags_upgrade, $striped_upgrade_path),
         'checked cmd_upgrade() cp new version ctags to local upgrade url');
 
@@ -126,8 +126,8 @@ diag("ctags_upgrade[$ctags_upgrade]");
     # upgrade all packages, which will test if upgrading everything in
     # fetchware_database_path works.
     my @upgraded_package_paths = cmd_upgrade_all();
-    diag("HERE");
-    diag explain \@upgraded_package_paths;
+    note("HERE");
+    note explain \@upgraded_package_paths;
 
 
     # Test after both packages have been upgraded.
@@ -185,7 +185,7 @@ subtest 'test cmd_upgrade_all() test-dist' => sub {
     my $upgrade_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
         CLEANUP => 1, TMPDIR => 1);
 
-diag("UPGRADETD[$upgrade_temp_dir]");
+note("UPGRADETD[$upgrade_temp_dir]");
 
     my $old_test_dist_path = make_test_dist('test-dist', '1.00', $upgrade_temp_dir);
     my $old_another_dist_path = make_test_dist('another-dist', '1.00', $upgrade_temp_dir);
@@ -225,7 +225,7 @@ diag("UPGRADETD[$upgrade_temp_dir]");
 
     # Upgrade all installed fetchware packages.
     my @upgraded_packages = cmd_upgrade_all();
-diag("UPGRADED_PACKAGES[@upgraded_packages]");
+note("UPGRADED_PACKAGES[@upgraded_packages]");
     for my $upgraded_package (@upgraded_packages) {
         like($upgraded_package, qr/(test|another)-dist-1\.01/,
             'checked cmd_upgrade_all() success.');
