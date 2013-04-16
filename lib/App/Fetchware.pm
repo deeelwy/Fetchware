@@ -4067,73 +4067,82 @@ These libraries are:
 
 =over
 
-=item App::Fetchware::Util
+=item L<App::Fetchware::Util>
+
+Houses various logging subroutines, downloading subroutines, security
+subroutines, and temporary directory managment subroutines that fetchware itself
+uses, and you can also make use of them in your own fetchware extensions.
 
 =over
 
-=item * Logging subroutines - msg(), vmsg(), and run_prog().
+=item * Logging subroutines - L<msg()|App::Fetchware::Util/msg()>, L<vmsg()|App::Fetchware::Util/vmsg()>, and L<run_prog()|App::Fetchware::Util/run_prog()>.
 
 =over
 
 =item * These subroutines support fetchware's command line options such as -v
 (--verbose) and -q (--quiet).
 
-=item * msg() should be used to print a message to the screen that should always
-be printed, while vmsg() should only be used to print messages to the screen
-when the -v (--verbose) command line option is turned on.
+=item * L<msg()|App::Fetchware::Util/msg()> should be used to print a message
+to the screen that should always be printed, while
+L<vmsg()|App::Fetchware::Util/vmsg()> should only be used to print messages
+to the screen when the -v (--verbose) command line option is turned on.  
 
-=item * run_prog() is a system() wrapper that also supports -v and -q options,
-and should be used to run any external commands that your App::Fetchware
-extension needs to run.
+=item * L<run_prog()|App::Fetchware::Util/run_prog()> is a system() wrapper
+that also supports -v and -q options, and should be used to run any external
+commands that your App::Fetchware extension needs to run.
 
 =back
 
 
-=item * Downloading subroutines - download_file() and download_dirlist().
+=item * Downloading subroutines - L<download_file()|App::Fetchware::Util/download_file> and L<download_dirlist()|App::Fetchware::Util/download_dirlist()>.
 
 =over
 
-=item * download_file() should be used to download files. It supports the
-following schemes ftp://, http://, or file://. It simply downloads the file
-using Net::Ftp or HTTP::Tiny to the current working directory.  
+=item * L<download_file()|App::Fetchware::Util/download_file> should be used to
+download files. It supports the following schemes ftp://, http://, or file://.
+It simply downloads the file using Net::Ftp or HTTP::Tiny to the current working
+directory.  
 
-=item * download_dirlist() should be used to download FTP, HTTP, or local
-directory listings. It is mostly just used by lookup() to determine if a new
-version is available based on the information it parses from the directory
-listing.
+=item * L<download_dirlist()|App::Fetchware::Util/download_dirlist()> should be
+used to download FTP, HTTP, or local directory listings. It is mostly just used
+by lookup() to determine if a new version is available based on the information
+it parses from the directory listing.
 
 =back
 
 
-=item * Security subroutines - safe_open() and drop_privs().
+=item * Security subroutines - L<safe_open()|App::Fetchware::Util/safe_open> and L<drop_privs()|App::Fetchware::Util/drop_privs()>.
 
 =over
 
-=item * safe_open() opens the file and then runs a bunch of file and directory
-tests to ensure the relative safety of depending on the contents of the file
-being sure to avoid race conditions as much as possible.
+=item * L<safe_open()|App::Fetchware::Util/safe_open> opens the file and then
+runs a bunch of file and directory tests to ensure the relative safety of
+depending on the contents of the file being sure to avoid race conditions as
+much as possible.  
 
-=item * drop_privs() forks and drops privileges. It's used by fetchware to drop
-privs to avoid downloading and compiling software as root. It most likely should
-not be called by App::Fetchware extensions, but it is there if you need it.
+=item * L<drop_privs()|App::Fetchware::Util/drop_privs()> forks and drops
+privileges. It's used by fetchware to drop privs to avoid downloading and
+compiling software as root. It most likely should not be called by
+App::Fetchware extensions, but it is there if you need it.  
 
 =back
 
 
-=item * Temporary Directory subroutines - create_tempdir(), original_cwd(), and
-cleanup_tempdir()
+=item * Temporary Directory subroutines - L<create_tempdir()|App::Fetchware::Util/create_tempdir()>, L<original_cwd()|App::Fetchware::Util/original_cwd()>, and L<cleanup_tempdir()|App::Fetchware::Util/cleanup_tempdir()>.
 
 =over
 
-=item * create_tempdir() creates and chdir()'s into a temporary directory using
-File::Temp's tempdir() function. It also deals with creating a Fetchware
-semaphore file to keep C<fetchware clean> from deleting any still needed
-temporary directories.
+=item * L<create_tempdir()|App::Fetchware::Util/create_tempdir()> creates and
+chdir()'s into a temporary directory using File::Temp's tempdir() function. It
+also deals with creating a Fetchware semaphore file to keep C<fetchware clean>
+from deleting any still needed temporary directories.
 
-=item * original_cwd() simply returns what fetchware's current working directory
-was before create_tempdir() created and chdir()'d into the temporary directory.
+=item * L<original_cwd()|App::Fetchware::Util/original_cwd()> simply returns
+what fetchware's current working directory was before create_tempdir() created
+and chdir()'d into the temporary directory.
 
-=item * cleanup_tempdir() deals with closing the fetchware semaphore file.
+=item * L<cleanup_tempdir()|App::Fetchware::Util/cleanup_tempdir()> deals with
+closing the fetchware semaphore file.
 
 =back
 
@@ -4141,47 +4150,98 @@ was before create_tempdir() created and chdir()'d into the temporary directory.
 =back
 
 
-=item Test::Fetchware
+=item L<Test::Fetchware>
+
+Test::Fetchware includes utility subroutines that fetchware itself uses to test
+itself, and they are shared with extension writers through this module.
 
 =over
 
-=item * eval_ok() - A poor man's Test::Exception in one simple subroutine. Why
-require every user to install a dependency only used for testing when one simple
-subroutine does the trick.
+=item * L<eval_ok()|Test::Fetchware/eval_ok()> - A poor man's Test::Exception
+in one simple subroutine. Why require every user to install a dependency only
+used for testing when one simple subroutine does the trick.
 
-=item * print_ok() - A poor man's Test::Output in one simple subroutine.
+=item * L<print_ok()|Test::Fetchware/print_ok()> - A poor man's Test::Output in
+one simple subroutine.
 
-=item * skip_all_unless_release_testing() - Does just what it's name says. If
-fetchware's internal release/author only environment variables are set, only
-then will any Test::More subtests that call this subroutine skip the entire
-subtest. This is used to skip running tests that install real programs on the
-testing computer's system. Many of Fetchware's tests actually install a real
-program such as Apache, and I doubt every Fetchware user is going to also have
-Apache installed and uninstalled a bagillion times when they install Fetchware.
-Use this subroutine in your own App::Fetchware extension's to keep that from
-happening.
+=item *
+L<skip_all_unless_release_testing()|Test::Fetchware/skip_all_unless_release_testing()>
+- Does just what it's name says. If fetchware's internal release/author only 
+nvironment variables are set, only then will any Test::More subtests that call
+this subroutine skip the entire subtest. This is used to skip running tests that
+install real programs on the testing computer's system. Many of Fetchware's
+tests actually install a real program such as Apache, and I doubt every
+Fetchware user is going to also have Apache installed and uninstalled a
+bagillion times when they install Fetchware.  Use this subroutine in your own
+App::Fetchware extension's to keep that from happening.
 
-=item * make_clean() - Just run_prog('make', 'clean') in the current working
-directory just as its name suggests.
+=item * L<make_clean()|Test::Fetchware/make_clean()> - Just run_prog('make',
+'clean') in the current working directory just as its name suggests.
 
-=item * make_test_dist() - Use this subroutine or craft your own similar
-subroutine, if you need more flexibility, to test actually installing a program
-on user's systems that just happens to execute all of the proper installation
-commands, but supplies installation commands that don't actually install
-anything. It's used to test actually installing software without actually
-installing any software.
+=item * L<make_test_dist()|Test::Fetchware/make_test_dist()> - Use this
+subroutine or craft your own similar subroutine, if you need more flexibility,
+to test actually installing a program on user's systems that just happens to
+execute all of the proper installation commands, but supplies installation
+commands that don't actually install anything. It's used to test actually
+installing software without actually installing any software.
 
-=item * md5sum_file() - Used to provide a md5sum file for make_test_dist() create
-software packages in order to pass fetchware's verify checks.
+=item * L<md5sum_file()|Test::Fetchware/md5sum_file()> - Used to provide a
+md5sum file for make_test_dist() create software packages in order to pass
+fetchware's verify checks.
 
-=item * verbose_on() - Make's all vmsg()'s actually print to the screen even if
--v or --verbose was not actually provided on the command line. Used to aid
-debugging.
+=item * L<verbose_on()|Test::Fetchware/verbose_on()> - Make's all vmsg()'s
+actually print to the screen even if -v or --verbose was not actually
+provided on the command line. Used to aid debugging.
+
+=back
+
+=item L<App::Fetchware::Config>
+
+App::Fetchware::Config stores and manages fetchware's parsed configuration file.
+parse_fetchwarefile() from L<fetchware> does the actual parsing, but it stores
+the configuration file inside App::Fetchware::Config. Use the subroutines below
+to access any configuration file options that you create with make_config_sub()
+to customize your fetchware extension. Also feel free to reuse any names of
+App::Fetchware configuration subroutines such as C<temp_dir> or C<lookup_url>
+
+=over
+
+=item L<config()|App::Fetchware::Config/config()> - Sets and gets values from
+the currently parsed fetchware configuration file. If there is one argument,
+then it returns that configuration options value or undef if there is none.If
+there are more than one argument, then the first argument is what configuration
+option to use, and the rest of the arguments are what values to set that
+configuration option to.
+
+=item L<config_iter()|App::Fetchware::Config/config_iter()> - returns a
+configuration I<iterator>. that when I<kicked> (called, like
+C<$config_iter-E<gt>()>) will return one value from the specifed
+configuration option. Can be kicked any number of times, but once the number of
+configuration values is exhausted the iterator will return undef.
+
+=item L<config_replace()|App::Fetchware::Config/config_replace()> - config() is
+used to I<set> configuration options, and once set they I<cannot> be changed b
+config(). This is meant to catch and reduce errors. But sometimes, mostly in
+test suites, you need to change the value of a configuration option. That's
+what config_replace() is for.
+
+=item L<config_delete()|App::Fetchware::Config/config_delete()> - deletes the
+specified configuration option. Mostly just used for testing.
+
+=item L<__clear_CONFIG()|App::Fetchware::Config/__clear_CONFIG()> - An internal
+only subroutine that should be only used when it is really really needed. It
+I<clears> (deletes) the entire internal has that the configuration options are
+stored in. It really should only be used during testing to clear
+App::Fetchware::Config's intenal state between tests.
+
+=item L<debug_CONFIG()|App::Fetchware::Config/debug_CONFIG()> - prints
+App::Fetchware::Congig's internal state directly to STDOUT. Meant for debugging
+only in your test suite.
 
 =back
 
 
-=item App::Fetchware's OVERRIDE_* export tags.
+=item L<App::Fetchware's OVERRIDE_* export tags.|FETCHWAREFILE API SUBROUTINES>
 
 App::Fetchware's main API subroutines, especially the crazy complicated ones
 such as lookup(), are created by calling and passing data among many component
@@ -4191,7 +4251,7 @@ subroutines when they override a App::Fetchware API subroutine.
 
 =over
 
-=item lookup()'s OVERRIDE_LOOKUP export tag.
+=item L<lookup()'s OVERRIDE_LOOKUP export tag.|lookup() API REFERENCE>
 
 This export tag is the largest, and perhaps the most important, because it
 implements fetchware's ability to determine if a new version of your software
@@ -4202,14 +4262,14 @@ See the section L<lookup() API REFERENCE> for more details on how to use these
 subroutines to determine if new versions of your software is available
 automatically.
 
-=item download()'s OVERRIDE_DOWNLOAD export tag.
+=item L<download()'s OVERRIDE_DOWNLOAD export tag.|download() API REFERENCE>
 
 Only exports the subroutine determine_package_path(), which simply comcatenates
 a $tempdir with a $filename to return a properl $package_path, which unarchive
 later uses. This is mostly its own subroutine to better document how this is
 done, and to allow easier code reuse.
 
-=item verify()'s OVERRIDE_VERIFY export tag.
+=item L<verify()'s OVERRIDE_VERIFY export tag.|verify() API REFERENCE>
 
 Exports a family of subroutines to verify via MD5, SHA1, or GPG the integrity of
 your downloaded package. MD5 and SHA1 are supported for legacy reasons. All
@@ -4222,7 +4282,16 @@ that they are stored on the server.
 digest_verify() an be used to add support for any other Digest::* modules that
 CPAN has a Digest based module for that correctly follow Digest's API.
 
-=item build()'s OVERRIDE_BUILD export tag.
+=item L<unarchive()'s OVERRIDE_UNARCHIVE export tag.|unarchive() API REFERENCE>
+
+Exports subroutines that will help you unarchive software packages in tar and
+zip format. The most important part to remember is to use list_files() to list
+the files in your archive, and pass that list to check_archive_files() ensure
+that the archive will not overwrite any system files, and contains no absolute
+paths that could cause havok on your system. unarchive_package() does the actual
+unarchiveing of software packages.
+
+=item L<build()'s OVERRIDE_BUILD export tag.|build() API REFERENCE>
 
 Provides run_star_commands(), which is mean to execute common override commands
 that fetchware provides with the C<build_commands>, C<install_commands>, and
@@ -4233,7 +4302,7 @@ commands default AutoTools commands (build() => ./configure, make; install() =>
 make install; uninstall() => ./configure, make uninstall). See its
 L<documentation|run_star_commands(config('*_commands'));> for more details.
 
-=item install()'s OVERRIDE_INSTALL export tag.
+=item L<install()'s OVERRIDE_INSTALL export tag.|install() API REFERENCE>
 
 install() only exports chdir_unless_already_at_path(), which is of limited use.
 install() also uses build()'s run_star_commands().
@@ -4241,7 +4310,7 @@ install() also uses build()'s run_star_commands().
 =item uninstall()'s OVERRDIE_UNINSTALL export tag.
 
 uninstall() actually has no exports of its own, but it does make use of
-build()'s and install()'s exports.
+build() and install()'s exports.
 
 
 =back
@@ -4625,10 +4694,10 @@ dropping privileges. It only does it on Unix.
 
 =head1 ERRORS
 
-As with the rest of App::Fetchware, App::Fetchware::Config does not return any
-error codes; instead, all errors are die()'d if it's App::Fetchware::Config's
-error, or croak()'d if its the caller's fault. These exceptions are simple
-strings, and are listed in the L</DIAGNOSTICS> section below.
+App::Fetchware does not return any error codes; instead, all errors are die()'d
+if it's App::Fetchware::Config's error, or croak()'d if its the caller's fault.
+These exceptions are short paragraphs that give full details about the error
+instead of the vague one liner that perl's own errors give.
 ###BUGALERT### Actually implement croak or more likely confess() support!!!
 
 =cut
