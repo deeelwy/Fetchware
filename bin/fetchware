@@ -279,11 +279,8 @@ EOD
             #package database, and call exit right here if the current version
             #is already installed unless of course --force is used!!!
             my $download_url = lookup();
-            diag("DUDUDUDUDUDUDU[$download_url]");
 
-diag("CHILDTEMPDIR[$temp_dir]");
             my $package_path = download($temp_dir, $download_url);
-           diag("PPPPPPPPPPP[$package_path]");
 
             ###BUGALERT### Add support for caching the key files gpg creates to
             #the fetchwarefile, and for actually using them later on inside the
@@ -307,9 +304,6 @@ diag("CHILDTEMPDIR[$temp_dir]");
         # processing as though no fork()ing or priv dropping took place.
         ($P_build_path)
             = pipe_read_newline($output);
-diag("PARENTTEMPDIR[$temp_dir]");
-use Cwd 'cwd';
-diag("CWD[@{[cwd()]}");
 
         # If we forked, then the child already ran start(), and chdir()'d to
         # $temp_dir; therefore, we must also chdir($temp_dir) here if we
@@ -451,10 +445,6 @@ EOD
     # processing as though no fork()ing or priv dropping took place.
     ($P_build_path) = pipe_read_newline($output);
 
-use Test::More;
-diag("p_BUILD_PATH[$P_build_path]");
-use Cwd 'cwd';
-diag("Cwd is @{[cwd()]}");
 
 
     # If we forked, then the child already ran start(), and chdir()'d to
@@ -1721,30 +1711,23 @@ EOD
         vmsg 'Transformed competing filenames into a string of version numbers.';
         vmsg Dumper(\@file_listing);
         @file_listing = sort { $b->[1] <=> $a->[1] } @file_listing;
-diag("HERE!!!");
-diag(explain(@file_listing));
-diag("ENDHERE!!!");
         # If the highest sorted, "latest version," filename is the same as the one
         # lookup() lookedup, then a new version is available, and we should install
         # it.
         # Clean up 
         $P_file_listing_0_0 = $file_listing[0][0];
-diag("fl00[$P_file_listing_0_0");
-diag("dub[$P_download_url_basename] upb[$P_upgrade_name_basename]");
         if ($P_file_listing_0_0 eq $P_download_url_basename
             # Make cmd_upgrade() not upgrade when the ver
             and $P_file_listing_0_0 ne $P_upgrade_name_basename) {
             msg 'New version available upgrading now.';
 
             my $package_path = download($temp_dir, $download_url);
-            diag("PPPPPPPPPPP[$package_path]");
 
             ###BUGALERT### Add support for caching the key files gpg creates to the
             #fetchwarefile, and for actually using them later on inside the fpkg.
             verify($download_url, $package_path);
 
             $P_build_path = unarchive($package_path);
-diag("PBUILDPATHIS[$P_build_path]");
             build($P_build_path);
         } # End If new version available.
 
@@ -1877,9 +1860,7 @@ EOD
         #fetchware_database_path() that does not end .fpkg, which should be
         #here.
         vmsg "Upgrading installed fetchware package [$fetchware_package]";
-diag("cmd_upgrade() arg[$fetchware_package]");
         push @upgraded_packages, cmd_upgrade($fetchware_package);
-diag("cmd_upgrade() return[$upgraded_packages[-1]]");
     }
 
     ###BUGALERT### push the fetchware pacakge name and its cmd_upgrade() return
@@ -1981,10 +1962,8 @@ EOD
         if (defined($filename) and -e $filename) {
 
             my $download_url = lookup();
-            diag("DUDUDUDUDUDUDU[$download_url]");
 
             my $package_path = download(cwd(), $download_url);
-            diag("PPPPPPPPPPP[$package_path]");
 
             ###BUGALERT### Add support for caching the key files gpg creates to
             #the fetchwarefile, and for actually using them later on inside the
@@ -2140,10 +2119,6 @@ EOD
     # Number of directories remove_tree removed successfully.
     my $num_remove_tree_successes = 0;
 
-use Test::More;
-note('glob');
-note explain \@globbed_fetchware_temp_dirs;
-note('glob');
 
     # Loop over fetchware temp dirs, and delete the ones that are not locked.
     for my $temp_dir (@globbed_fetchware_temp_dirs) {
@@ -2383,7 +2358,6 @@ EOD
     # "package-1.2"
     my $pc = dir($unarchived_package_path);
     my $last_dir = $pc->dir_list(-1, 1);
-    diag("LASTLASTDIR[$last_dir]");
     my $fetchware_package_name = "$last_dir.fpkg";
 
     # The dir the new fpkg goes in is the current working directory, or a user
@@ -2406,7 +2380,6 @@ EOD
     # unneeded machine specific paths from the paths that will be stored in the
     # fetchware package.
     $_ = abs2rel($_) for @file_list;
-diag("CWDCWD[@{[cwd()]}]");
 
     my $tar = Archive::Tar->new();
 
@@ -2530,19 +2503,13 @@ user to specify a more specific name to query the fetchware database with.
 
 sub determine_fetchware_package_path {
     my $fetchware_package = shift;
-diag "FP!!!!!!!!!!![$fetchware_package]";
 my ($package, $filename, $line) = caller;
-diag("Package[$package]Filename[$filename]Line[$line]");
     my $fetchware_db_glob = catfile(fetchware_database_path(), '*');
 
-diag "BEFOREGREP";
-diag explain \(glob $fetchware_db_glob);
     my @fetchware_package_filenames
         =
         grep /$fetchware_package/, glob $fetchware_db_glob;
 
-diag "AFTERGREP";
-diag explain \@fetchware_package_filenames;
     die <<EOD if @fetchware_package_filenames == 0;
 fetchware: Fetchware failed to determine the fetchware package that is
 associated with the argument that you provided to fetchware
@@ -2698,7 +2665,6 @@ sub uninstall_fetchware_package_from_database {
         catfile(fetchware_database_path(), $uninstall_package_name)
             unless file_name_is_absolute($uninstall_package_name);
 
-diag("UPN[$uninstall_package_name]");
     unlink $uninstall_package_name
         or die <<EOD;
 fetchware: Fetchware successfully uninstalled the fetchware package you
