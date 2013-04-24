@@ -2262,7 +2262,7 @@ on.
 
 =head2 parse_fetchwarefile()
 
-    'Evaled config file successfully' = parse_fetchwarefile(\$fetchwarefile;
+    'Evaled config file successfully' = parse_fetchwarefile(\$fetchwarefile);
 
 Eval's the \$fetchwarefile to effectively "parse" it.
 
@@ -2304,6 +2304,36 @@ EOD
 fetchware: run-time error. fetchware failed to execute the Fetchwarefile
 [$$fetchwarefile] you provieded on the command line or that was packaged
 with your Fetchware package (*.fpkg). The error was [$@].
+EOD
+
+
+    # Ensure that the specified App::Fetchware implementation exports the proper
+    # subroutines.
+    my %api_subs = (
+        start => 'who cares',
+        lookup => 'who cares',
+        download => 'who cares',
+        verify => 'who cares',
+        unarchive => 'who cares',
+        build => 'who cares',
+        install => 'who cares',
+        uninstall => 'who cares',
+        end => 'who cares',
+    );
+
+    # Determine if all of the @api_subs are in sublist, the list of all subs in
+    # the current package.
+    # Code adapted from Perl Cookbook pg. 129.
+    my (%union, %intersection);
+    for my $element (keys %api_subs, sublist()) {
+        $union{$element}++ && $intersection{$element}++;
+    }
+
+    die <<EOD unless grep {$api_subs{$_} eq $intersection{$_}} keys %api_subs;
+fetchware: The App::Fetchware module you choose in your fetchwarefile does not
+properly export the necessary subroutines fetchware needs it to. These include:
+start(), lookup(), download(), verify, unarchive(), build(), install(), and
+uninstall().
 EOD
 
     return 'Evaled config file successfully';

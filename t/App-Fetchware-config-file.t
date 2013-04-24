@@ -22,12 +22,13 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 # Test if I can load the module "inside a BEGIN block so its functions are exported
 # and compile-time, and prototypes are properly honored."
 BEGIN { use_ok('App::Fetchware', ':DEFAULT'); }
+#BEGIN { use_ok('App::Fetchware'); }#, ':DEFAULT'); }
+#BEGIN { require('App::Fetchware'); App::Fetchware->import();}
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
 note("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 ###BUGALERT### make_config_sub() has no tests!!!
-
 
 subtest 'test config file subs' => sub {
     # Test 'ONE' and 'BOOLEAN' config subs.
@@ -132,6 +133,30 @@ EOE
             }
         }
     }
+};
+
+
+subtest 'test hook() success' => sub {
+    use Test::More;
+    use App::Fetchware::Util ':UTIL';
+    use App::Fetchware;
+
+    # Test hook()'s returning success when it successfully replaces something.
+    my $test_string = 'start() overridden';
+    ok((hook start => sub { return $test_string}),
+        'checked hook() success.');
+
+    # Now let's test that start() was successfully overridden.
+    is(start(), $test_string,
+        'checked hook() override success.');
+
+    eval_ok(sub {hook doesntexistever134 => sub { return $test_string}},
+        <<EOE, 'checked hook() exception');
+App-Fetchware: The subroutine [doesntexistever134] you attempted to override does
+not exist in this package. Perhaps you misspelled it, or it does not exist in
+the current package.
+EOE
+
 };
 
 

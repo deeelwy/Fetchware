@@ -20,6 +20,7 @@ use Digest::MD5;
 use Archive::Tar;
 use Archive::Zip qw(:ERROR_CODES :CONSTANTS);
 use Cwd 'cwd';
+use Sub::Mage;
 
 use App::Fetchware::Util ':UTIL';
 use App::Fetchware::Config ':CONFIG';
@@ -28,30 +29,11 @@ use App::Fetchware::Config ':CONFIG';
 # things in 5.10 were changed in 5.10.1+.
 use 5.010001;
 
-# Add prototypes for the subroutines that can be used in Fetchwarefiles that can
-# take a coderef in packages other than fetchware, but if in fetchware will just
-# take a normal arguments. 
-#
-# The semicolon means the options that follow it are optional. Perl's sucky
-# prototypes can't specify two different versions of the same subroutine with
-# different arguments, so instead all options are optional, and they can be a
-# coderef and/or whatever scalars the subroutine would normally take.
-sub start (;$$);
-sub lookup (;$);
-sub download ($;$);
-sub verify ($;$);
-sub unarchive ($);
-sub build ($);
-sub install ($);
-sub uninstall ($);
-sub end (;$);
-
 # Set up Exporter to bring App::Fetchware's API to everyone who use's it
 # including fetchware's ability to let you rip into its guts, and customize it
 # as you need.
 use Exporter qw( import );
-# By default fetchware exports its configuration file like subroutines and
-# fetchware().
+# By default fetchware exports its configuration file like subroutines.
 #
 # These days popular dogma considers it bad to import stuff without being asked
 # to do so, but App::Fetchware is meant to be a configuration file that is both
@@ -90,7 +72,7 @@ our @EXPORT = qw(
     end
     uninstall
 
-    make_config_sub
+    hook
 );
 
 # These tags allow you to replace some or all of fetchware's default behavior to
@@ -274,6 +256,14 @@ will die with an error message.
 Function created with C<$CONFIG{$name} = $value;> inside the generated function that
 is named $name.
 
+=item * 'ONEARRREF'
+
+Generates a function with the name of make_config_sub()'s first parameter that
+can B<only> be called one time per Fetchwarefile. And just like C<'ONE'> above
+if called more than once it will throw an exception. However, C<'ONEARRREF'> can
+be called with a list of values just like C<'MANY'> can, but it can still only
+be called once like C<'ONE'>.
+
 =item * 'MANY'
 
 Generates a function with the name of make_config_sub()'s first parameter that
@@ -334,11 +324,14 @@ make_config_sub() except for fetchware() and override().
 
 
 sub make_config_sub {
-    my ($name, $one_or_many_values) = @_;
+    my ($name, $one_or_many_values, $callers_package) = @_;
 
     # Obtain caller's package name, so that the new configuration subroutine
-    # can be created in the caller's package instead of our own.
-    my $package = caller;
+    # can be created in the caller's package instead of our own. Use the
+    # specifed $callers_package if the caller specified one. This allows
+    # create_config_options() to reuse make_config_sub() by passing in its
+    # caller to make_config_sub().
+    my $package = $callers_package // caller;
 
     die <<EOD unless defined $name;
 App-Fetchware: internal syntax error: make_config_sub() was called without a
@@ -500,14 +493,6 @@ EOD
 
     my $temp_dir = start();
 
-    # Or
-
-    start sub {
-        # Callback that replaces start()'s behavior.
-        # Callback receives the same arguments as start(), and is must return
-        # the same number and type of arguments that start() returns.
-    };
-
 =over
 =item Configuration subroutines used:
 =over
@@ -579,41 +564,7 @@ fetchware comand at the same time.
 
 =cut
 
-    sub start (;$$) {
-        # Based on what package we're called in, either accept a callback as an
-        # argument and save it for later, or execute the already saved callback.
-###BUGALERT### Save this copy and paste boilerplate into a sub before_api_sub()
-        #perhaps, and use Sub::Mage's before (just like Moose's before, but
-        #works for regular subroutines) to execute this subroutine before the
-        #main subroutine is executed. Instead of forcing extension developers to
-        #remember to call Sub::Mage's before(), bin/fetchware could do it for
-        #them after it inherits them. parse_fetchwarefile() could do it!
-        #Another option is to still use Sub::Mage's before(), but to use a
-        #subroutine attribute sub :TakeCallback {..} or something to allow the
-        #user to control if their subs take callbacks or not.
-        #But I kinda prefer just having bin/fetchware doit for the user inside
-        #parse_fetchwarefile().
-        state $callback; # A state variable to keep its value between calls.
-        if (caller ne 'fetchware') {
-            $callback = shift;
-            die <<EOD if ref $callback ne 'CODE';
-App-Fetchware: start() was called from a package other than 'fetchware', and with an
-argument that was not a code reference. Outside of package 'fetchware' this
-subroutine can only be called with a code reference as its one and only
-argument.
-EOD
-            return 'Callback added.';
-        # We *were* called in package fetchware.
-        } else {
-            # Only execute and return the specified $callback, if it has
-            # previously been defined. If it has not, then execute the rest of
-            # this subroutine normally.
-            if (defined $callback and ref $callback eq 'CODE') {
-                return $callback->(@_);
-            }
-        }
-
-
+    sub start {
         my %opts = @_;
 
         # Add temp_dir config sub to create_tempdir()'s arguments.
@@ -640,11 +591,6 @@ EOD
 =head2 lookup()
 
     my $download_url = lookup();
-    lookup sub {
-        # Callback that replaces lookup()'s behavior.
-        # Callback receives the same arguments as lookup(), and is must return
-        # the same number and type of arguments that lookup() returns.
-    };
 
 =over
 =item Configuration subroutines used:
@@ -692,30 +638,7 @@ values will result in fetchware throwing an exception.
 
 =cut
 
-sub lookup (;$) {
-    # Based on what package we're called in, either accept a callback as an
-    # argument and save it for later, or execute the already saved callback.
-    state $callback; # A state variable to keep its value between calls.
-    if (caller ne 'fetchware') {
-        $callback = shift;
-        die <<EOD if ref $callback ne 'CODE';
-App-Fetchware: start() was called from a package other than 'fetchware', and with an
-argument that was not a code reference. Outside of package 'fetchware' this
-subroutine can only be called with a code reference as its one and only
-argument.
-EOD
-        return 'Callback added.';
-    # We *were* called in package fetchware.
-    } else {
-        # Only execute and return the specified $callback, if it has previously
-        # been defined. If it has not, then execute the rest of this subroutine
-        # normally.
-        if (defined $callback and ref $callback eq 'CODE') {
-            return $callback->(@_);
-        }
-    }
-
-
+sub lookup {
     msg "Looking up download url using lookup_url [@{[config('lookup_url')]}]";
 
     # die if lookup_url wasn't specified.
@@ -1235,11 +1158,6 @@ EOD
 =head2 download()
 
     my $package_path = download($download_url);
-    download sub {
-        # Callback that replaces download()'s behavior.
-        # Callback receives the same arguments as download(), and is must return
-        # the same number and type of arguments that download() returns.
-    };
 
 =over
 =item Configuration subroutines used:
@@ -1281,30 +1199,7 @@ Under drop_privs() download() is executed in the child with reduced privileges.
 
 =cut
 
-sub download ($;$) {
-    # Based on what package we're called in, either accept a callback as an
-    # argument and save it for later, or execute the already saved callback.
-    state $callback; # A state variable to keep its value between calls.
-    if (caller ne 'fetchware') {
-        $callback = shift;
-        die <<EOD if ref $callback ne 'CODE';
-App-Fetchware: download() was called from a package other than 'fetchware', and with an
-argument that was not a code reference. Outside of package 'fetchware' this
-subroutine can only be called with a code reference as its one and only
-argument.
-EOD
-        return 'Callback added.';
-    # We *were* called in package fetchware.
-    } else {
-        # Only execute and return the specified $callback, if it has previously
-        # been defined. If it has not, then execute the rest of this subroutine
-        # normally.
-        if (defined $callback and ref $callback eq 'CODE') {
-            return $callback->(@_);
-        }
-    }
-
-
+sub download {
     my ($temp_dir, $download_url) = @_;
 
     msg "Downloading from url [$download_url] to temp dir [$temp_dir]";
@@ -1358,11 +1253,6 @@ sub determine_package_path {
 =head2 verify()
 
     verify($download_url, $package_path)
-    verify sub {
-        # Callback that replaces verify()'s behavior.
-        # Callback receives the same arguments as verify(), and is must return
-        # the same number and type of arguments that verify() returns.
-    };
 
 =over
 =item Configuration subroutines used:
@@ -1407,30 +1297,7 @@ Under drop_privs() verify() is executed in the child with reduced privileges.
 
 =cut
 
-sub verify ($;$) {
-    # Based on what package we're called in, either accept a callback as an
-    # argument and save it for later, or execute the already saved callback.
-    state $callback; # A state variable to keep its value between calls.
-    if (caller ne 'fetchware') {
-        $callback = shift;
-        die <<EOD if ref $callback ne 'CODE';
-App-Fetchware: start() was called from a package other than 'fetchware', and with an
-argument that was not a code reference. Outside of package 'fetchware' this
-subroutine can only be called with a code reference as its one and only
-argument.
-EOD
-        return 'Callback added.';
-    # We *were* called in package fetchware.
-    } else {
-        # Only execute and return the specified $callback, if it has previously
-        # been defined. If it has not, then execute the rest of this subroutine
-        # normally.
-        if (defined $callback and ref $callback eq 'CODE') {
-            return $callback->(@_);
-        }
-    }
-
-
+sub verify {
     my ($download_url, $package_path) = @_;
 
     msg "Verifying the downloaded package [$package_path]";
@@ -1889,11 +1756,6 @@ EOD
 =head2 unarchive()
 
     my $build_path = unarchive($package_path)
-    unarchive sub {
-        # Callback that replaces unarchive()'s behavior.
-        # Callback receives the same arguments as unarchive(), and is must return
-        # the same number and type of arguments that unarchive() returns.
-    };
 
 =over
 =item Configuration subroutines used:
@@ -1938,30 +1800,7 @@ Under drop_privs() unarchive() is executed in the child with reduced privileges.
 
 =cut
 
-sub unarchive ($) {
-    # Based on what package we're called in, either accept a callback as an
-    # argument and save it for later, or execute the already saved callback.
-    state $callback; # A state variable to keep its value between calls.
-    if (caller ne 'fetchware') {
-        $callback = shift;
-        die <<EOD if ref $callback ne 'CODE';
-App-Fetchware: start() was called from a package other than 'fetchware', and with an
-argument that was not a code reference. Outside of package 'fetchware' this
-subroutine can only be called with a code reference as its one and only
-argument.
-EOD
-        return 'Callback added.';
-    # We *were* called in package fetchware.
-    } else {
-        # Only execute and return the specified $callback, if it has previously
-        # been defined. If it has not, then execute the rest of this subroutine
-        # normally.
-        if (defined $callback and ref $callback eq 'CODE') {
-            return $callback->(@_);
-        }
-    }
-
-
+sub unarchive {
     my $package_path = shift;
 
     msg "Unarchiving the downloaded package [$package_path]";
@@ -2128,7 +1967,7 @@ EOD
 }
 
 
-=head3 unarchive_package($format, $package_path)
+=head3 unarchive_package()
 
     unarchive_package($format, $package_path)
 
@@ -2284,11 +2123,6 @@ EOD
 =head2 build()
 
     'build succeeded' = build($build_path)
-    build sub {
-        # Callback that replaces build()'s behavior.
-        # Callback receives the same arguments as build(), and is must return
-        # the same number and type of arguments that build() returns.
-    };
 
 =over
 =item Configuration subroutines used:
@@ -2343,30 +2177,7 @@ and install will then chdir to $build_path.
 
 =cut
 
-sub build ($) {
-    # Based on what package we're called in, either accept a callback as an
-    # argument and save it for later, or execute the already saved callback.
-    state $callback; # A state variable to keep its value between calls.
-    if (caller ne 'fetchware') {
-        $callback = shift;
-        die <<EOD if ref $callback ne 'CODE';
-App-Fetchware: start() was called from a package other than 'fetchware', and with an
-argument that was not a code reference. Outside of package 'fetchware' this
-subroutine can only be called with a code reference as its one and only
-argument.
-EOD
-        return 'Callback added.';
-    # We *were* called in package fetchware.
-    } else {
-        # Only execute and return the specified $callback, if it has previously
-        # been defined. If it has not, then execute the rest of this subroutine
-        # normally.
-        if (defined $callback and ref $callback eq 'CODE') {
-            return $callback->(@_);
-        }
-    }
-
-
+sub build {
     my $build_path = shift;
 
     msg "Building your package in [$build_path]";
@@ -2429,7 +2240,7 @@ recreate the paths to get rid of the errors.
 =cut
 
 
-=head3 run_star_commands(config('*_commands'));
+=head3 run_star_commands()
 
     run_star_commands(config('*_commands'));
 
@@ -2528,14 +2339,9 @@ EOD
 }
 
 
-=head2 install($build_path)
+=head2 install()
 
     'install succeeded' = install($build_path);
-    install sub {
-        # Callback that replaces install()'s behavior.
-        # Callback receives the same arguments as install(), and is must return
-        # the same number and type of arguments that install() returns.
-    };
 
 =over
 =item Configuration subroutines used:
@@ -2585,29 +2391,7 @@ build() built the package in, in order to be able to install the program.
 
 =cut
 
-sub install ($) {
-    # Based on what package we're called in, either accept a callback as an
-    # argument and save it for later, or execute the already saved callback.
-    state $callback; # A state variable to keep its value between calls.
-    if (caller ne 'fetchware') {
-        $callback = shift;
-        die <<EOD if ref $callback ne 'CODE';
-App-Fetchware: start() was called from a package other than 'fetchware', and with an
-argument that was not a code reference. Outside of package 'fetchware' this
-subroutine can only be called with a code reference as its one and only
-argument.
-EOD
-        return 'Callback added';
-    # We *were* called in package fetchware.
-    } else {
-        # Only execute and return the specified $callback, if it has previously
-        # been defined. If it has not, then execute the rest of this subroutine
-        # normally.
-        if (defined $callback and ref $callback eq 'CODE') {
-            return $callback->(@_);
-        }
-    }
-
+sub install {
     my $build_path = shift;
 
     # Skip installation if the user requests it.
@@ -2687,11 +2471,6 @@ EOD
 =head2 uninstall()
 
     'uninstall succeeded' = uninstall($build_path)
-    uninstall sub {
-        # Callback that replaces uninstall()'s behavior.
-        # Callback receives the same arguments as uninstall(), and is must return
-        # the same number and type of arguments that uninstall() returns.
-    };
 
 =over
 =item Configuration subroutines used:
@@ -2743,30 +2522,7 @@ the program.
 ###BUGALERT### NOT TESTED!!! There is no t/App-Fetchware-uninstall.t test
 #file!!! cmd_uninstall(), which uses uninstall(), is tested, but not uninstall()
 #directly!!!
-sub uninstall ($) {
-    # Based on what package we're called in, either accept a callback as an
-    # argument and save it for later, or execute the already saved callback.
-    state $callback; # A state variable to keep its value between calls.
-    if (caller ne 'fetchware') {
-        $callback = shift;
-        die <<EOD if ref $callback ne 'CODE';
-App-Fetchware: start() was called from a package other than 'fetchware', and with an
-argument that was not a code reference. Outside of package 'fetchware' this
-subroutine can only be called with a code reference as its one and only
-argument.
-EOD
-        return 'Callback added.';
-    # We *were* called in package fetchware.
-    } else {
-        # Only execute and return the specified $callback, if it has previously
-        # been defined. If it has not, then execute the rest of this subroutine
-        # normally.
-        if (defined $callback and ref $callback eq 'CODE') {
-            return $callback->(@_);
-        }
-    }
-
-
+sub uninstall {
     my $build_path = shift;
 
     msg "Uninstalling package unarchived at path [$build_path]";
@@ -2810,11 +2566,6 @@ EOM
 =head2 end()
 
     end();
-    end sub {
-        # Callback that replaces end()'s behavior.
-        # Callback receives the same arguments as end(), and is must return
-        # the same number and type of arguments that end() returns.
-    };
 
 =over
 =item Configuration subroutines used:
@@ -2885,29 +2636,7 @@ fetchware's temporary directory out from under it.
 
 =cut
 
-sub end (;$) {
-    # Based on what package we're called in, either accept a callback as an
-    # argument and save it for later, or execute the already saved callback.
-    state $callback; # A state variable to keep its value between calls.
-    if (caller ne 'fetchware') {
-        $callback = shift;
-        die <<EOD if ref $callback ne 'CODE';
-App-Fetchware: end() was called from a package other than 'fetchware', and with an
-argument that was not a code reference. Outside of package 'fetchware' this
-subroutine can only be called with a code reference as its one and only
-argument.
-EOD
-        return 'Callback added.';
-    # We *were* called in package fetchware.
-    } else {
-        # Only execute and return the specified $callback, if it has previously
-        # been defined. If it has not, then execute the rest of this subroutine
-        # normally.
-        if (defined $callback and ref $callback eq 'CODE') {
-            return $callback->(@_);
-        }
-    }
-
+sub end {
     # Use cleanup_tempdir() to cleanup your tempdir for us.
     cleanup_tempdir();
 }
@@ -2916,7 +2645,6 @@ EOD
 
 1;
 
-__END__
 
 
 =head1 SYNOPSIS
@@ -2927,7 +2655,7 @@ __END__
     use App::Fetchware;
 
     # Only the App:Fetchware import and program and lookup_url config options
-    # are mandatory, but this can change if you use a App::Fetchware extension.
+    # are mandatory, but this can change if you use an App::Fetchware extension.
     program 'Your program';
     filter 'version-2';
     temp_dir '/var/tmp';
@@ -2954,8 +2682,8 @@ __END__
     ### This is how Fetchwarefile's can replace lookup()'s or any other
     ### App::Fetchware API subroutine's default behavior.
     ### Remember your coderef must take the same parameters and return the same
-    # value.
-    lookup sub {
+    ### value.
+    hook lookup => sub {
         # Callback that replaces lookup()'s behavior.
         # Callback receives the same arguments as lookup(), and is must return
         # the same number and type of arguments that lookup() returns.
@@ -2986,8 +2714,8 @@ __END__
     end();
 
     ### See EXTENDING App::Fetchware WITH A MODULE for details on how to extend
-    ### fetchware with a module to install software that App::Fetchware's
-    ### configuration file syntax that's not flexible enough.
+    ### fetchware with a module to install software that cannot be expressed
+    ### using App::Fetchware's configuration file syntax.
 
 =cut
 
@@ -3691,7 +3419,7 @@ configuration file syntax, then an actual programming language.
 =head2 The magic of C<use App::Fetchware;>
 
 The real magic power behind turning a Perl program into a configuration file
-sytanx comes from the C<use App::Fetchware;> line. This line is single handedly
+sytax comes from the C<use App::Fetchware;> line. This line is single handedly
 responsible for making this work. This one line imports all of the configuration
 subroutines that make up fetchware's configuration file syntax. And this
 mechanism is also behind fetchware's extension mechanism. (To use a
@@ -3705,17 +3433,66 @@ how to create App::Fetchware extensions.
 
 =head2 So how do I add some custom Perl code to customize my Fetchwarefile?
 
-Well, you can just put random perl code wherever you want in your Fetchwarefile,
-but you must then connect that code back into App::Fetchware's API. To do that
-use one of the configuration option hooks, which have the same name as
-App::Fetchware's main API. These hooks are start(), lookup(), download(),
-verify(), unarchive(), build(), install(), uninstall(), and end(). So to
-completely replace App::Fetchare's lookup() subroutine, because perhaps your
-program needs a totally different way of of checking if a new version is
-available, you only need to use that hook as though it were a configuration
-option:
+You use hook() to override one of fetchware's API subroutines. Then when
+fetchware goes to call that subroutine, your own subroutine is called in its
+place. You can hook() as many of fetchware's API subroutines as you need to.
 
-    lookup sub {
+=over
+
+Remember your replackement subroutine B<must> take the exact same arguments, and
+return the same outputs that the standard fetchware API subroutines do!
+
+All of the things these subroutines return are later used as parameters to later
+API subroutines, so failing to return a correct value will cause fetchware to
+fail.
+
+=back
+
+=cut
+
+=head3 hook()
+
+    # Inside a Fetchwarefile...
+    hook lookup => sub {
+        # Your own custom lookup handler goes here!
+    };
+
+hook() allows you to replace fetchware's API subroutines with whatever Perl
+code reference you want to. But it B<must> take the same arguments that each API
+subroutine takes, and provide the same return value. See the section
+L<FETCHWAREFILE API SUBROUTINES> for the details of what the API subroutine's
+parameters are, and what their return values should be.
+
+hook() should be used sparingly, and only if you really know what you're doing,
+because it directly changes fetchware's behavior. It exists for cases where your
+have a software package that exceeds the abilities of fetchware's configuration
+options, but creating a fetchware extension for it would be crazy overkill.
+
+=cut
+
+sub hook ($$) {
+    my ($sub_to_hook, $callback) = @_;
+
+    die <<EOD unless App::Fetchware->can($sub_to_hook);
+App-Fetchware: The subroutine [$sub_to_hook] you attempted to override does
+not exist in this package. Perhaps you misspelled it, or it does not exist in
+the current package.
+EOD
+
+    override $sub_to_hook => $callback;
+
+    # Overriding the subroutine is not enough, because it is overriding it
+    # inside App::Fetchware, so I need to also override the subroutine inside
+    # hook()'s caller as done below.
+    {
+        no warnings 'redefine';
+        clone($sub_to_hook => (from => 'App::Fetchware', to => caller()));
+    }
+}
+
+=pod
+
+    hook lookup => sub {
         # Your replacement for lookup() goes here.
     };
 
@@ -3727,7 +3504,7 @@ other App::Fetchware subroutines may expect to be passed to them. So, let's fix
 lookup(). Just check lookup()'s documentation to see what its arguments are and
 what it returns by checking out the section L<FETCHWAREFILE API SUBROUTINES>:
 
-    lookup sub {
+    hook lookup => sub {
         # lookup does not take any arguments.
         
         # Your replacement for lookup() goes here.
@@ -3740,7 +3517,7 @@ what it returns by checking out the section L<FETCHWAREFILE API SUBROUTINES>:
 Some App::Fetchware API subroutines take arguments, so be sure to account for
 them:
 
-    download sub {
+    hook download => sub {
         # Take same args as App::Fetchware's download() does.
         my $download_url = shift;
         
@@ -3750,28 +3527,40 @@ them:
         return $package_path;
     };
 
-If changing lookup()'s behavior or even one of the other App::Fetchware
+If changing lookup()'s behavior or one of the other App::Fetchware
 subroutines, and you only want to change part of its behavior, then consider
-using one of the C<:OVERRIDE_*> tags. These tags exist for most of the
+importing one of the C<:OVERRIDE_*> export tags. These tags exist for most of the
 App::Fetchware API subroutines, and are listed below along with what helper
 subroutines they import with them. To check their documentation see the section 
 L<FETCHWAREFILE API SUBROUTINES>.
 
 =over
 
-=item B<OVERRIDE_LOOKUP> - check_lookup_config, get_directory_listing, parse_directory_listing, determine_download_url, ftp_parse_filelist, http_parse_filelist, file_parse_filelist, lookup_by_timestamp, lookup_by_versionstring, lookup_determine_downloadurl
+=item L<OVERRIDE_LOOKUP|lookup() API REFERENCE> - L</check_lookup_config()>,
+L</get_directory_listing()>, L</parse_directory_listing()>,
+L</determine_download_url()>, L</ftp_parse_filelist()>, L</http_parse_filelist()>,
+L</file_parse_filelist()>, L</lookup_by_timestamp()>,
+L</lookup_by_versionstring()>, L</lookup_determine_downloadurl()>
 
-=item B<OVERRIDE_DOWNLOAD> - determine_package_path
+=item L<OVERRIDE_DOWNLOAD|download() API REFERENCE> -
+L</determine_package_path()>
 
-=item B<OVERRIDE_VERIFY> - gpg_verify, sha1_verify, md5_verify, digest_verify
+=item L<OVERRIDE_VERIFY|verify() API REFERENCE> - L</gpg_verify()>,
+L</sha1_verify()>, L</md5_verify()>, L</digest_verify()>
 
-=item B<OVERRIDE_UNARCHIVE> - check_archive_files, list_files, list_files_tar, list_files_zip, unarchive_package, unarchive_tar, unarchive_zip
+=item L<OVERRIDE_UNARCHIVE|unarchive() API REFERENCE> -
+L</check_archive_files()>, L</list_files()>, L</list_files_tar()>,
+L</list_files_zip()>, L</unarchive_package()>, L</unarchive_tar()>,
+L</unarchive_zip()>
 
-=item B<OVERRIDE_BUILD> - run_star_commands and run_configure.
+=item L<OVERRIDE_BUILD|build() API REFERENCE> - L</run_star_commands()> and
+L</run_configure()>.
 
-=item B<OVERRIDE_INSTALL> - chdir_unless_already_at_path.
+=item L<OVERRIDE_INSTALL|install() API REFERENCE> -
+L</chdir_unless_already_at_path()>.
 
-=item B<OVERRIDE_UNINSTALL> - none.
+=item OVERRIDE_UNINSTALL - uninstall() uses build()'s and install()'s API's, but
+does not add any subroutines of its own..
 
 =back
 
@@ -3781,12 +3570,11 @@ An example:
 
     ...
 
-    lookup sub {
+    hook lookup => sub {
 
         ...
 
         # ...Download a directory listing....
-        ###BUGALERT### improve this example.
 
         # Use same lookup alorithms that lookup() uses.
         return lookup_by_versionstring($filename_listing);
@@ -3799,9 +3587,9 @@ Feel free to specify a list of the specifc subroutines that you need to avoid
 namespace polution, or install and use L<Sub::Import> if you demand more control
 over imports.
 
-=head2 A real example
+#=head2 A real example
 
-    ###BUGALERT### Actually create a useful example!!!!!!
+#    ###BUGALERT### Actually create a useful example!!!!!!
 
 ###BUGALERT### Add an section of use cases. You know explaing why you'd use
 #no_install, or why'd you'd use look, or why And so on.....

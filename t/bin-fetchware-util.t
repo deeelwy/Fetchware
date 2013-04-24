@@ -267,7 +267,7 @@ subtest 'check copy_fpkg_to_fpkg_database()' => sub {
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-#done_testing();
+done_testing();
 
 
 sub test_config {
