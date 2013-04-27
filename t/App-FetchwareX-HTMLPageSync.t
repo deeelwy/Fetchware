@@ -1,5 +1,5 @@
 #!perl
-# App-Fetchware-HTMLPageSync.t tests App::Fetchware::HTMLPageSync.
+# App-FetchwareX-HTMLPageSync.t tests App::FetchwareX::HTMLPageSync.
 # Pretend to be bin/fetchware, so that I can test App::Fetchware as though
 # bin/fetchware was calling it.
 # This is needed in HTMLPageSync, because HTMLPageSync uses start() and end()
@@ -38,11 +38,11 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 # Test if I can load the module "inside a BEGIN block so its functions are exported
 # and compile-time, and prototypes are properly honored."
 # There is no ':OVERRIDE_START' to bother importing.
-BEGIN { use_ok('App::Fetchware::HTMLPageSync', ':DEFAULT'); }
+BEGIN { use_ok('App::FetchwareX::HTMLPageSync', ':DEFAULT'); }
 
-# Print the subroutines that App::Fetchware::HTMLPageSync imported by default
+# Print the subroutines that App::FetchwareX::HTMLPageSync imported by default
 # when I used it.
-note("App::Fetchware's default imports [@App::Fetchware::HTMLPageSync::EXPORT]");
+note("App::Fetchware's default imports [@App::FetchwareX::HTMLPageSync::EXPORT]");
 
 
 subtest 'test uninstall() exception' => sub {
@@ -52,7 +52,7 @@ subtest 'test uninstall() exception' => sub {
 
     eval_ok(sub {uninstall(cwd())},
         <<EOE, 'checked uninstall() destination_directory exception');
-App-Fetchware-HTMLPageSync: Failed to uninstall the specified App::Fetchware::HTMLPageSync
+App-FetchwareX-HTMLPageSync: Failed to uninstall the specified App::FetchwareX::HTMLPageSync
 package, because no destination_directory is specified in its Fetchwarefile.
 This configuration option is required and must be specified.
 EOE
@@ -190,7 +190,7 @@ subtest 'test HTMLPageSync unarchive()' => sub {
 
     # unarchive() needs an array reference.
     eval_ok(sub { unarchive([ "file-that-doesn-t-exist-$$" ])},
-        qr/App-Fetchware-HTMLPageSync: run-time error. Fetchware failed to copy the file \[/,
+        qr/App-FetchwareX-HTMLPageSync: run-time error. Fetchware failed to copy the file \[/,
         'checked unarchive exception');
 };
 
@@ -220,7 +220,7 @@ subtest 'test HTMLPageSync uninstall()' => sub {
 
     # Test uninstall()s exceptions.
     eval_ok(sub {uninstall("$$-@{[int(rand(383889))]}")},
-        qr/App-Fetchware-HTMLPageSync: Failed to uninstall the specified package and specifically/,
+        qr/App-FetchwareX-HTMLPageSync: Failed to uninstall the specified package and specifically/,
         'checked uninstall() $build_path exception');
 };
 

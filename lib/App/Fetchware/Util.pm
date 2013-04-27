@@ -695,9 +695,9 @@ to HTTP::Tiny, which does not check them for correctness either. HTTP::Tiny
 simply loops over its internal listing of what is arguments should be, and then
 accesses the arguments if they exist.
 
-This was really only implemented to allow App::Fetchware::HTMLPageSync to change
+This was really only implemented to allow App::FetchwareX::HTMLPageSync to change
 its user agent string to avoid being blocked or freaking out Web developers that
-they're being screen scraped by some obnoxious bot as HTMLPageSync is wimply and
+they're being screen scraped by some obnoxious bot as HTMLPageSync is wimpy and
 harmless, and only downloads one page. 
 
 You would add an argument like this:

@@ -2746,16 +2746,16 @@ create a Fetchwarefile in your text editor of choice.
 Use your text editor to create a file with a C<.Fetchwarefile> file extension.
 Use of this convention is not required, but it makes it obvious what type of
 file it is. Then, just copy and paste the example text below, and replace
-C<[program_name]> with what you choose your C<program_name> to be.
-C<program_name> is simply a configuration option that simply names your
+C<[program]> with what you choose your C<program> to be.
+C<program> is simply a configuration option that simply names your
 Fetchwarefile. It is not actually used for anything other than to name your
 Fetchwarefile to document what program or behavior this Fetchwarefile manages.
 
     use App::Fetchware;
 
-    # [program_name] - explain what [program_name] does.
+    # [program] - explain what [program] does.
 
-    program_name '[program_name]';
+    program '[program]';
 
 Fetchwarefiles are actually small, well structured, Perl programs that can
 contain arbitrary perl code to customize fetchware's behavior, or, in most
@@ -2763,11 +2763,11 @@ cases, simply specify a number of fetchware or a fetchware extension's
 configuration options. Below is my filled in example App::Fetchware
 fetchwarefile.
 
-    use App::Fetchware::HTMLPageSync;
+    use App::FetchwareX::HTMLPageSync;
 
     # Cool Wallpapers - Downloads cool wall papers.
 
-    program_name 'Cool Wallpapers';
+    program 'Cool Wallpapers';
 
 Notice the C<use App::Fetchware;> line at the top. That line is
 absolutely critical for this Fetchwarefile to work properly, because it is what
@@ -3358,7 +3358,7 @@ responsible for making this work. This one line imports all of the configuration
 subroutines that make up fetchware's configuration file syntax. And this
 mechanism is also behind fetchware's extension mechanism. (To use a
 App::Fetchware extension, you just C<use> it. Like
-C<use App::Fetchware::HTMLPageSync;>. That's all there is to it. This I<other>
+C<use App::FetchwareX::HTMLPageSync;>. That's all there is to it. This I<other>
 App::Fetchware is responsible for exporting subroutines of the same names as
 those that make up App::Fetchware's API. These subroutines are listed in the
 section L<FETCHWAREFILE API SUBROUTINES> as well as their helper subroutines.
@@ -3521,14 +3521,18 @@ Feel free to specify a list of the specifc subroutines that you need to avoid
 namespace polution, or install and use L<Sub::Import> if you demand more control
 over imports.
 
-#=head2 A real example
+=head2 A real example
 
-#    ###BUGALERT### Actually create a useful example!!!!!!
+A short, simple example fetchware extension is included with App::Fetchware
+called L<App::FetchwareX::HTMLPageSync>. It simple downloads an HTML page,
+parses out the links you want to download, and then downloads them to a
+directory of your choice. It is quite brief and compact, and does something
+useful. For example, I use it to keep a directory of wallpaper up to date.
+
+=cut
 
 ###BUGALERT### Add an section of use cases. You know explaing why you'd use
 #no_install, or why'd you'd use look, or why And so on.....
-
-=cut
 
 
 =head1 CREATING A FETCHWARE EXTENSION
@@ -3627,7 +3631,7 @@ specifying specific subroutines in all but one of them.
 
 That's all there is to it. That simple C<use App::Fetchware...;> imports from
 App::Fetchware or a App::Fetchware extension such as
-App::Fetchware::HTMLPageSync the API subroutines C<fetchware> needs to use to
+App::FetchwareX::HTMLPageSync the API subroutines C<fetchware> needs to use to
 install, upgarde, or uninstall whatever program your Fetchwarefile specifies.
 
 After understanding how they work, simply follow the instructons and consider

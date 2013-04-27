@@ -1,4 +1,4 @@
-package App::Fetchware::HTMLPageSync;
+package App::FetchwareX::HTMLPageSync;
 # ABSTRACT: An App::Fetchware extension that downloads files based on an HTML page.
 use strict;
 use warnings;
@@ -47,10 +47,10 @@ use App::Fetchware::CreateConfigOptions
 
 
 
-=head1 App::Fetchware::HTMLPageSync API SUBROUTINES
+=head1 App::FetchwareX::HTMLPageSync API SUBROUTINES
 
-This is App::Fetchware::HTMLPageSync's API that fetchware uses to execute any
-Fetchwarefile's that make use of App::Fetchware::HTMLPageSync. This API is the
+This is App::FetchwareX::HTMLPageSync's API that fetchware uses to execute any
+Fetchwarefile's that make use of App::FetchwareX::HTMLPageSync. This API is the
 same that regular old App::Fetchware uses for most standard FOSS software, and
 this internal documentation is only needed when debugging HTMLPageSync's code or
 when studying it to create your own fetchware extension.
@@ -63,10 +63,10 @@ when studying it to create your own fetchware extension.
     my $temp_file = start();
 
 start() creats a temp dir, chmod 700's it, and chdir()'s to it just like the one
-in App::Fetchware does. App::Fetchware::HTMLPageSync
+in App::Fetchware does. App::FetchwareX::HTMLPageSync
 
 start() is imported from App::Fetchware, and also exported by
-App::Fetchware::HTMLPageSync. This is how App::Fetchware::HTMLPageSync
+App::FetchwareX::HTMLPageSync. This is how App::FetchwareX::HTMLPageSync
 "subclasses" App::Fetchware.
 
 =cut
@@ -305,7 +305,7 @@ Copying [$file_path] -> [@{[config('destination_directory')]}].
 EOM
         ###BUGALERT### Should this die and all the rest be croaks instead???
         cp($file_path, config('destination_directory')) or die <<EOD;
-App-Fetchware-HTMLPageSync: run-time error. Fetchware failed to copy the file [$file_path] to the
+App-FetchwareX-HTMLPageSync: run-time error. Fetchware failed to copy the file [$file_path] to the
 destination directory [@{[config('destination_directory')]}].
 The OS error was [$!].
 EOD
@@ -357,11 +357,11 @@ EOM
     end();
 
 end() chdir()s back to the original directory, and cleans up the temp directory
-just like the one in App::Fetchware does. App::Fetchware::HTMLPageSync
+just like the one in App::Fetchware does. App::FetchwareX::HTMLPageSync
 
 
 end() is imported from App::Fetchware, and also exported by
-App::Fetchware::HTMLPageSync. This is how App::Fetchware::HTMLPageSync
+App::FetchwareX::HTMLPageSync. This is how App::FetchwareX::HTMLPageSync
 "subclasses" App::Fetchware.
 
 =cut
@@ -371,12 +371,12 @@ App::Fetchware::HTMLPageSync. This is how App::Fetchware::HTMLPageSync
 
     uninstall($build_path);
 
-Uninstalls App::Fetchware::HTMLPageSync by recursivly deleting the
+Uninstalls App::FetchwareX::HTMLPageSync by recursivly deleting the
 C<destination_directory> where it stores the wallpapers or whatever you
 specified it to download for you.
 
 =over
-NOTICE: uninstalling your App::Fetchware::HTMLPageSync packagw B<will> B<delete>
+NOTICE: uninstalling your App::FetchwareX::HTMLPageSync packagw B<will> B<delete>
 the contents of that package's associated C<destination_directory>! If you would
 like to keep your contents of your C<destination_directory> then either manually
 delete the pacakge you want to delete from your fetchware database directory, or
@@ -404,7 +404,7 @@ EOM
     #chdir_to_build_path() can be put in :OVERRIDE_UNINSTALL!!! Which I can use
     #here.
         chdir $build_path or die <<EOD;
-App-Fetchware-HTMLPageSync: Failed to uninstall the specified package and specifically to change
+App-FetchwareX-HTMLPageSync: Failed to uninstall the specified package and specifically to change
 working directory to [$build_path] before running make uninstall or the
 uninstall_commands provided in the package's Fetchwarefile. Os error [$!].
 EOD
@@ -419,7 +419,7 @@ EOM
             remove_tree(config('destination_directory'));
         } else {
             die <<EOD;
-App-Fetchware-HTMLPageSync: Failed to uninstall the specified App::Fetchware::HTMLPageSync
+App-FetchwareX-HTMLPageSync: Failed to uninstall the specified App::FetchwareX::HTMLPageSync
 package, because no destination_directory is specified in its Fetchwarefile.
 This configuration option is required and must be specified.
 EOD
@@ -449,7 +449,7 @@ __END__
 
 =head1 SYNOPSIS
 
-=head2 Example App::Fetchware::HTMLPageSync Fetchwarefile.
+=head2 Example App::FetchwareX::HTMLPageSync Fetchwarefile.
 
     page_name 'Cool Wallpapers';
 
@@ -486,7 +486,7 @@ __END__
         return @wanted_download_urls;
     };
 
-=head2 App::Fetchware::HTMLPageSync App::Fetchware-like API.
+=head2 App::FetchwareX::HTMLPageSync App::Fetchware-like API.
 
     my $temp_file = start();
 
@@ -518,26 +518,26 @@ App::Fetchware extension comes in.
 
 =head1 DESCRIPTION
 
-App::Fetchware::HTMLPageSync as you can tell from its name is an example
+App::FetchwareX::HTMLPageSync as you can tell from its name is an example
 App::Fetchware extension. It's not a large extension, but instead is a simple one
 meant to show how easy it is extend App::Fetchware.
 
-App::Fetchware::HTMLPageSync parses the Web page you specify to create a list of
+App::FetchwareX::HTMLPageSync parses the Web page you specify to create a list of
 download links. Then it downloads those links, and installs them to your
 C<destination_directory>.
 
-In order to use App::Fetchware::HTMLPageSync to help you mirror the download
+In order to use App::FetchwareX::HTMLPageSync to help you mirror the download
 links on a HTML page you need to
-L<create a App::Fetchware::HTMLPageSync Fetchwarefile.|/"CREATING A App::Fetchware::HTMLPageSync FETCHWAREFILE">
+L<create a App::FetchwareX::HTMLPageSync Fetchwarefile.|/"CREATING A App::FetchwareX::HTMLPageSync FETCHWAREFILE">
 Then you'll need to
-L<learn how to use that Fetchwarefile with fetchware.|/"USING YOUR App::Fetchware::HTMLPageSync FETCHWAREFILE WITH FETCHWARE">
+L<learn how to use that Fetchwarefile with fetchware.|/"USING YOUR App::FetchwareX::HTMLPageSync FETCHWAREFILE WITH FETCHWARE">
 
 =cut
 
 
-=head1 CREATING A App::Fetchware::HTMLPageSync FETCHWAREFILE
+=head1 CREATING A App::FetchwareX::HTMLPageSync FETCHWAREFILE
 
-In order to use App::Fetchware::HTMLPageSync you must first create a
+In order to use App::FetchwareX::HTMLPageSync you must first create a
 Fetchwarefile to use it. In a future release I intend to expand App::Fetchware's
 simple API to incude the ability for App::Fetchware extensions to extend
 fetchware's simple new command, which will simply ask you a few questions and
@@ -556,7 +556,7 @@ simply a configuration opton that simply names your Fetchwarefile. It is not
 actually used for anything other than to name your Fetchwarefile to document
 what program or behavior this Fetchwarefile manages.
 
-    use App::Fetchware::HTMLPageSync;
+    use App::FetchwareX::HTMLPageSync;
 
     # [page_name] - explain what [page_name] does.
 
@@ -566,15 +566,15 @@ Fetchwarefiles are actually small, well structured, Perl programs that can
 contain arbitrary perl code to customize fetchware's behavior, or, in most
 cases, simply specify a number of fetchware or a fetchware extension's (as in
 this case) configuration options. Below is my filled in example
-App::Fetchware::HTMLPageSync fetchwarefile.
+App::FetchwareX::HTMLPageSync fetchwarefile.
 
-    use App::Fetchware::HTMLPageSync;
+    use App::FetchwareX::HTMLPageSync;
 
     # Cool Wallpapers - Downloads cool wall papers.
 
     page_name 'Cool Wallpapers';
 
-Notice the C<use App::Fetchware::HTMLPageSync;> line at the top. That line is
+Notice the C<use App::FetchwareX::HTMLPageSync;> line at the top. That line is
 absolutely critical for this Fetchwarefile to work properly, because it is what
 allows fetchware to use Perl's own syntax as a nice easy to use syntax for
 Fetchwarefiles. If you do not use the matching C<use App::Fetchware...;> line,
@@ -585,7 +585,7 @@ Fetchwarefile.
 
 =item B<2. Determine your html_page_url>
 
-At the heart of App::Fetchware::HTMLPageSync is its C<html_page_url>, which is
+At the heart of App::FetchwareX::HTMLPageSync is its C<html_page_url>, which is
 the URL to the HTML page you want HTMLPageSync to download and parse out links
 to wallpaper or whatever else you'd like to automate downloading. To figure this
 out just use your browser to find the HTML page you want to use, and then copy
@@ -721,15 +721,15 @@ code you may need. This requires knowledge of the Perl programming language.
 =cut
 
 
-=head1 USING YOUR App::Fetchware::HTMLPageSync FETCHWAREFILE WITH FETCHWARE
+=head1 USING YOUR App::FetchwareX::HTMLPageSync FETCHWAREFILE WITH FETCHWARE
 
 After you have
-L<created your Fetchwarefile|/"CREATING A App::Fetchware::HTMLPageSync FETCHWAREFILE">
+L<created your Fetchwarefile|/"CREATING A App::FetchwareX::HTMLPageSync FETCHWAREFILE">
 as shown above you need to actually use the fetchware command line program to
-install, upgrade, and uninstall your App::Fetchware::HTMLPageSync Fetchwarefile.
+install, upgrade, and uninstall your App::FetchwareX::HTMLPageSync Fetchwarefile.
 
 Take note how fetchware's package management metaphor does not quite line up
-with what App::Fetchware::HTMLPageSync does. Why would a HTML page mirroring
+with what App::FetchwareX::HTMLPageSync does. Why would a HTML page mirroring
 script be installed, upgraded, or uninstalled? Well HTMLPageSync simply adapts
 fetchware's package management metaphor to its own enviroment performing the
 likely action for when one of fetchware's behaviors are executed.
@@ -766,11 +766,11 @@ deleting your destination directory.
 =cut
 
 
-=head1 HOW App::Fetchware::HTMLPageSync OVERRIDES App::Fetchware
+=head1 HOW App::FetchwareX::HTMLPageSync OVERRIDES App::Fetchware
 
-This sections documents how App::Fetchware::HTMLPageSync overrides
+This sections documents how App::FetchwareX::HTMLPageSync overrides
 App::Fetchware's API, and is only interesting if you're debugging
-App::Fetchware::HTMLPageSync, or you're writing your own App::Fetcwhare
+App::FetchwareX::HTMLPageSync, or you're writing your own App::Fetcwhare
 extension. If not, you don't need to know these details.
 
 =head2 App::Fetchware API Subroutines
@@ -821,7 +821,7 @@ HTMLPageSync just imports end() and start() from App::Fetchware to take
 advantage of their ability to manage a temporary directory.
 
 
-=head2 App::Fetchware::HTMLPageSync's Configuration Subroutines
+=head2 App::FetchwareX::HTMLPageSync's Configuration Subroutines
 
 Because HTMLPageSync is a App::Fetchware extension, it can not just use the same
 configuration subroutines that App::Fetchware uses. Instead, it must create its
@@ -891,7 +891,7 @@ strings, and are listed in the L</DIAGNOSTICS> section below.
 
 =head1 CAVEATS
 
-Certain features of App::Fetchware::HTMLPageSync require knowledge of the Perl
+Certain features of App::FetchwareX::HTMLPageSync require knowledge of the Perl
 programming language in order for you to make use of them. However, this is
 limited to optional callbacks that are not needed for most uses. These features
 are the C<html_treebuilder_callback> and C<download_links_callback> callbacks.
