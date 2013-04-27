@@ -7,78 +7,43 @@ use warnings;
 # things in 5.10 were changed in 5.10.1+.
 use 5.010001;
 
-# Load only the fetchware API subroutines that A::P::HTMLPageSync does not
-# override by implementing them here in its own subroutine.
-use App::Fetchware qw(start end temp_dir mirror config make_config_sub);
+# Use fetchware's API's to help us out.
 use App::Fetchware::Util ':UTIL';
+use App::Fetchware::Config ':CONFIG';
 
 # Local imports.
 use File::Copy 'cp';
 use File::Path 'remove_tree';
 
-# Set up Exporter to bring App::Fetchware's API to everyone who use's it
-# including fetchware's ability to let you rip into its guts, and customize it
-# as you need.
-use Exporter qw( import );
-
-# Export HTMLPageSync's version of App::Fetchware's API. This is what does the
-# "overriding," when a user puts use App::Fetchware::HTMLPageSync in their
-# Fetchwarefile, which will load this module, and import HTMLPageSync's API,
-# which implements and replaces (overrides) App::Fetchware's API.
-our @EXPORT = qw(
-    start
-    lookup
-    download
-    verify
-    unarchive
-    build
-    install
-    end
-    uninstall
-
-    page_name
-    html_page_url
-    destination_directory
-    keep_destination_directory
-    user_agent
-    html_treebuilder_callback
-    download_links_callback
-);
+# Use App::Fetchware::ExportAPI to specify which App::Fetchware API subroutines
+# we are going to "KEEP", import from App::Fetchware, and which API subs we are
+# going to "OVERRRIDE", implemente here in this package.
+#
+# ExportAPI takes care of the grunt work for us by setting our packages @EXPORT
+# appropriatly, and even importing Exporter's import() method into our package
+# for us, so that our App::Fetchware API subroutines and configuration options
+# specified below can be import()ed properly.
+use App::Fetchware::ExportAPI
+    KEEP => [qw(start end)],
+    OVERRIDE =>
+    [qw(lookup download verify unarchive build install uninstall)]
+;
 
 
-# App::Fetchware "subclasses" must forward declare any App::Fetchware api
-# subroutines that they will "override" just like App::Fetchware does.
-sub lookup (;$);
-sub download ($;$);
-sub verify ($;$);
-sub unarchive ($);
-sub build ($);
-sub install (;$);
-sub uninstall ($);
-
-
-# Since configuration subs have prototypes, and prototypes must be known at
-# compile time in order to be honored, I must wrap my calls to make_config_sub()
-# inside a BEGIN block so they happen at compile time.
-BEGIN {
-    # API functions using make_config_sub() can be ONE, ONEARRREF, MANY, or
-    # BOOLEAN. See (###BUGALERT### link to docs in whereever they are.
-    my @api_functions = (
-        [ page_name => 'ONE' ],
-        [ html_page_url => 'ONE' ],
-        [ destination_directory => 'ONE' ],
-        [ keep_destination_directory => 'BOOLEAN' ],
-        [ user_agent => 'ONE' ],
-        # return true for tags you want to sort through.
-        [ html_treebuilder_callback => 'ONE' ],
-        # get @download_urls, filter them, and return them again.
-        [ download_links_callback => 'ONE' ],
-    );
-
-    for my $api_function (@api_functions) {
-        make_config_sub(@{$api_function});
-    }
-}
+# Use App::Fetchware::CreateconfigOptions to build our App::Fetchware
+# configuration options for us. These are subroutines with correct prototypes to
+# turn a perl code file into something that resembles a configuration file.
+use App::Fetchware::CreateConfigOptions
+    ONE => [qw(
+        page_name
+        html_page_url
+        destination_directory
+        user_agent
+        html_treebuilder_callback
+        download_links_callback
+    )],
+    BOOLEAN => [qw(keep_destination_directory)]
+;
 
 
 
@@ -120,7 +85,7 @@ This list of download urls is returned as an array reference, $download_url.
 
 =cut
 
-sub lookup (;$) {
+sub lookup {
     msg
     "Looking up download urls using html_page_url [@{[config('html_page_url')]}]";
     ###BUGALERT### Create a user changeable version of lookup_check_args??(), so
@@ -255,7 +220,7 @@ download_http_url()'s call to HTTP::Tiny.
 
 =cut
 
-sub download ($;$) {
+sub download {
     my ($temp_dir, $download_url) = @_;
 
     msg 'Downloading the download urls lookup() determined.';
@@ -307,7 +272,7 @@ it normally does.
 
 =cut
 
-sub verify ($;$) {
+sub verify {
     vmsg <<EOM;
 Skipping verify subroutine, because HTMLPageSync does not need to verify anything
 EOM
@@ -325,7 +290,7 @@ destination directory, C<destination_directory>.
 
 =cut
 
-sub unarchive ($) {
+sub unarchive {
     # AKA $package_path.
     my $download_file_paths = shift;
 
@@ -362,7 +327,7 @@ that it does nothing.
 
 =cut
 
-sub build ($) {
+sub build {
     vmsg <<EOM;
 Skipping build subroutine, because HTMLPageSync does not need to build anything
 EOM
@@ -379,7 +344,7 @@ do_nothing(), which does nothing.
 
 =cut
 
-sub install (;$) {
+sub install {
     vmsg <<EOM;
 Skipping install subroutine, because HTMLPageSync does not need to install anything
 EOM
@@ -422,7 +387,7 @@ directory somewhere else.
 
 =cut
 
-sub uninstall ($) {
+sub uninstall {
     my $build_path = shift;
 
     # Only delete destination_directory if keep_destination_directory is false.
@@ -470,6 +435,12 @@ EOM
     return 'True for success.';
 }
 
+
+#use App::Fetchware::ExportAPI
+#    KEEP => [qw(start end)],
+#    OVERRIDE =>
+#    [qw(lookup download verify unarchive build install uninstall)]
+#;
 
 1;
 
@@ -854,9 +825,7 @@ advantage of their ability to manage a temporary directory.
 
 Because HTMLPageSync is a App::Fetchware extension, it can not just use the same
 configuration subroutines that App::Fetchware uses. Instead, it must create its
-own configuration subroutines with App::Fetchware's make_config_sub() internal
-API subroutine that is used inside a C<BEGIN {...}> block to create all of the
-configuration options that App::Fetchware or one of its extensions need. These
+own configuration subroutines with App::Fetchware::CreateConfigOptions. These
 configuration subroutines are the configuration options that you use in your
 App::Fetchware or App::Fetchware extension.
 

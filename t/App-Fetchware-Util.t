@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More;# 0.98 tests => '23'; #Update if this changes.
+use Test::More;# 0.98 tests => '26'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir rootdir);
 use URI::Split 'uri_split';
@@ -60,8 +60,6 @@ subtest 'UTIL export what they should' => sub {
         create_tempdir
         original_cwd
         cleanup_tempdir
-        export_api
-        create_config_options
     );
 
     # sort them to make the testing their equality very easy.
@@ -1000,144 +998,6 @@ EOE
 
     # chdir back to $original_cwd so File::Temp can delete temp files.
     chdir $original_cwd;
-};
-
-
-subtest 'Test export_api() success.' => sub {
-    package TestPackage;
-    our @EXPORT;
-    use App::Fetchware::Util ':UTIL';
-    # I must load App::Fetchware, because export_api() will try to copy its API
-    # subs into Test::Package's namespace.
-    use App::Fetchware ();
-    my @api_subs
-        = qw(start lookup download verify unarchive build install uninstall);
-    export_api(KEEP => \@api_subs);
-    package main;
-
-    main::export_ok(\@api_subs, \@TestPackage::EXPORT);
-
-    package TestPackage2;
-    our @EXPORT;
-    use App::Fetchware::Util ':UTIL';
-    sub start { return 'nothing'; }
-    sub lookup { return 'nothing'; }
-    sub download { return 'nothing'; }
-    sub verify { return 'nothing'; }
-    sub unarchive { return 'nothing'; }
-    sub build { return 'nothing'; }
-    sub install { return 'nothing'; }
-    sub uninstall { return 'nothing'; }
-    export_api(OVERRIDE => \@api_subs);
-    package main;
-    
-    export_ok(\@api_subs, \@TestPackage2::EXPORT);
-};
-
-
-# Copying and pasting this a bagillion times is stupid, so it's a subroutine
-# instead.
-sub export_ok{
-    my ($sorted_subs, $sorted_export) = @_;
-
-    package main;
-    my @sorted_subs = sort @$sorted_subs;
-    my @sorted_export = sort @$sorted_export;
-    my $i = 0;
-    for my $e (@sorted_subs) {
-        if ($e eq $sorted_export[$i]) {
-            pass("[$e] matches [$sorted_export[$i]]");
-        } else {
-            fail("[$e] does *not* match [$sorted_export[$i]]");
-        }
-        $i++;
-    }
-}
-
-
-subtest 'Test create_config_options() success' => sub {
-    package TestPackage3;
-    use App::Fetchware::Util ':UTIL';
-    use App::Fetchware::Config 'config';
-    use App::Fetchware;
-    use Test::More;
-    our @EXPORT;
-    my @one;
-    my @onearrref;
-    my @many;
-    my @bool;
-    my @import;
-BEGIN {
-    @one = qw(conf_sub0 conf_sub1 conf_sub2);
-    @onearrref = qw(one_arrref_one one_arrref_two);
-    @many = qw(many_sub0 many_sub1 many_sub2);
-    @bool = qw(bool0 bool1 bool2);
-    @import = qw(temp_dir no_install);
-    my @api_subs;
-
-    @api_subs = (
-        [conf_sub0 => 'ONE'],
-        [conf_sub1 => 'ONE'],
-        [conf_sub2 => 'ONE'],
-    );
-    create_config_options(ONE => \@one);
-
-    create_config_options(ONEARRREF => \@onearrref);
-
-    create_config_options(MANY => \@many);
-
-    create_config_options(BOOLEAN => \@bool);
-    
-    create_config_options(IMPORT => \@import);
-}
-
-    for my $sub (@one, @onearrref, @many, @bool, @import) {
-        ok(eval "$sub 'test';",
-            'checked [$sub] execution.');
-        ok(config($sub),
-            'checked [$sub] exists in %CONFIG');
-    }
-
-    package main;
-    export_ok([@one, @onearrref, @many, @bool, @import],
-        \@TestPackage3::EXPORT);
-    
-    package TestPackage4;
-    use App::Fetchware::Util ':UTIL';
-    use App::Fetchware;
-    our @EXPORT;
-    create_config_options(
-        ONE => [qw(a b c)],
-        ONEARRREF => [qw(d e f)],
-        MANY => [qw(g h i)],
-        BOOLEAN => [qw(j k l)],
-        IMPORT => \@import,
-    );
-
-    package main;
-    export_ok(['a'..'l', @import], \@TestPackage4::EXPORT);
-};
-
-###BUGALERT###Add tests for _make_config_sub()!!!
-
-
-
-subtest 'Test _add_export() success.' => sub {
-    package TestPackage5;
-    use App::Fetchware::Util ':UTIL';
-    our @EXPORT; #_add_export needs @EXPORT to be defined.
-
-    sub a_sub {
-        return 'nothing';
-    }
-    # Avoid running caller(), because inside a subtest the caller is
-    # Test::Builder not TestPackage5, so just use a variable to fake it.
-    my $caller = 'TestPackage5';
-    App::Fetchware::Util::_add_export(a_sub => $caller);
-    package main;
-
-    is($TestPackage5::EXPORT[0], 'a_sub',
-        'checked _add_export() success.');
 };
 
 

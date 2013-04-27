@@ -28,7 +28,7 @@ BEGIN { use_ok('App::Fetchware', ':DEFAULT'); }
 # Print the subroutines that App::Fetchware imported by default when I used it.
 note("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
-###BUGALERT### make_config_sub() has no tests!!!
+###BUGALERT### _make_config_sub() has no tests!!!
 
 subtest 'test config file subs' => sub {
     # Test 'ONE' and 'BOOLEAN' config subs.

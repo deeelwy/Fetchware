@@ -11,6 +11,7 @@ use Cwd;
 use Archive::Tar;
 use Path::Class;
 use Digest::MD5;
+use Fcntl ':flock';
 
 use App::Fetchware::Util ':UTIL';
 use App::Fetchware::Config '__clear_CONFIG';
@@ -41,6 +42,8 @@ our %EXPORT_TAGS = (
         md5sum_file
         expected_filename_listing
         verbose_on
+        export_ok
+        end_ok
     )],
 );
 # *All* entries in @EXPORT_TAGS must also be in @EXPORT_OK.
@@ -515,6 +518,66 @@ during testing.
 sub verbose_on {
     # Turn on verbose functionality.
     $fetchware::verbose = 1;
+}
+
+
+=head2 export_ok()
+
+    export_ok($sorted_subs, $sorted_export);
+    
+    my @api_subs
+        = qw(start lookup download verify unarchive build install uninstall);
+    export_ok(\@api_subs, \@TestPackage::EXPORT);
+
+Just loops over C<@{$sorted_subs}>, and array ref, and ensures that each one
+matches the same element of C<@{$sorted_export}>. You do not have to pre sort
+these array refs, because export_ok() will copy them, and sort that copy of
+them. Uses Test::More's pass() or fail() for each element in the arrays.
+
+=cut
+
+sub export_ok{
+    my ($sorted_subs, $sorted_export) = @_;
+
+    package main;
+    my @sorted_subs = sort @$sorted_subs;
+    my @sorted_export = sort @$sorted_export;
+
+    fail("Specified arrays have a different length.\n[@sorted_subs]\n[@sorted_export]")
+        if @sorted_subs != @sorted_export;
+
+    my $i = 0;
+    for my $e (@sorted_subs) {
+        if ($e eq $sorted_export[$i]) {
+            pass("[$e] matches [$sorted_export[$i]]");
+        } else {
+            fail("[$e] does *not* match [$sorted_export[$i]]");
+        }
+        $i++;
+    }
+}
+
+
+=head2 end_ok()
+
+Because end() no longer uses File::Temp's cleanup() to delete B<all> temporary
+File::Temp managed temporary directories when end() is called, you can no longer
+test end() we a simple C<ok(not -e $temp_dir, $test_name);>; instead, you should
+use this testing subroutine. It tests if the specified $temp_dir still has a
+locked C<'fetchware.sem'> fetchware semaphore file. If the file is not locked,
+then end_ok() reports success, but if it cannot obtain a lock, end_ok reports
+failure simply using ok().
+=cut
+
+sub end_ok {
+    my $temp_dir = shift;
+
+    ok(open(my $fh_sem, '>', catfile($temp_dir, 'fetchware.sem')),
+        'checked cleanup_tempdir() open fetchware lock file success.');
+    ok( flock($fh_sem, LOCK_EX | LOCK_NB),
+        'checked cleanup_tempdir() success.');
+    ok(close $fh_sem,
+        'checked cleanup_tempdir() released fetchware lock file success.');
 }
 
 

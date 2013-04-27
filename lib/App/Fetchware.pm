@@ -129,77 +129,11 @@ our @EXPORT_OK = @{$EXPORT_TAGS{OVERRIDE_ALL}};
 =head1 FETCHWAREFILE API SUBROUTINES
 
 The subroutines below B<are> Fetchwarefile's API subroutines or helper
-subroutines for App::Fetchware's API subroutines, but I<more importantly> also
-Fetchwarefile's configuration file syntax See the section
-L<FETCHWAREFILE CONFIGURATION SYNTAX> for more information regarding using these
-subroutines as Fetchwarefile configuration syntax.
-###BUGALERT### Link to sections on craxy Fetchwarefile stuff and extensions too.
-
-
-=over
-
-=item 'ONE' Fetchwarefile API Subroutines.
-
-=over
-=item program $value;
-=item filter $value;
-=item temp_dir $value;
-=item user $value;
-=item no_install $value;
-=item prefix $value;
-=item configure_options $value;
-=item make_options $value;
-=item build_commands $value;
-=item install_commands $value;
-=item uninstall_commands $value;
-=item lookup_url $value;
-=item lookup_method $value;
-=item gpg_sig_url $value;
-=item verify_method $value;
-
-=back
-
-These Fetchwarefile API subroutines can B<only> be called just one time in each
-Fetchwarefile. Only one time. Otherwise they will die() with an error message.
-
-These subroutines are generated at compile time by make_config_sub().
-
-=item 'MANY' Fetchwarefile API Subroutines.
-=over
-=item mirror $value;
-
-=back
-
-C<mirror> can be called many times with each one adding a mirror that fetchware
-will try if the one included in lookup_url or gpg_sig_url fails.
-
-C<mirror> is the only 'MANY' API subroutine that can be called more than one
-time.
-
-=item 'BOOLEAN' Fetchware API Subroutines
-=over
-=item no_install;
-=item verify_failure_ok;
-
-=back
-
-C<no_install> is a true/false, on/off, 1/0 directive. It supports only true or
-false values.  True or false work the same way they work in perl with the
-special case of /false/i and /off/i also being false.
-
-If you set no_install to true, its default is false, then fetchware will only
-skip the part where it installs your programs. Instead it will build a Fetchware
-package ending in '.fpkg' that can be installed with 'fetchware install <package>'.
-Do this to build your software as a user, and then install it as root system
-wide later on. However, this is no longer necessary as fetchware will drop privs
-does everything but install your software as a non-root user.
-
-If you set verify_failure_ok to true, its default is false too, then fetchware
-will print a warning if fetchware fails to verify the gpg signature instead of
-die()ing printing an error message.
-
-###BUGALERT### Add a --force option to fetchware to be able to do the above on
-#the command line too.
+subroutines for App::Fetchware's API subroutines. If you want information on
+fetchware's configuration file syntax, then see the section
+L<FETCHWAREFILE CONFIGURATION SYNTAX> for more information. For additional
+information on how to keep or override these APi subroutines in a fetchware
+extension see the section L<CREATING A FETCHWARE EXTENSION>
 
 =cut
 
@@ -212,85 +146,89 @@ die()ing printing an error message.
 
 
 
-=head2 make_config_sub()
-
-    make_config_sub($name, $one_or_many_values)
-
-A function factory that builds many functions that are the exact same, but have
-different names. It supports three types of functions determined by
-make_config_sub()'s second parameter.  It's first parameter is the name of that
-function. This is the subroutine that builds all of Fetchwarefile's
-configuration subroutines such as lookupurl, mirror, fetchware, etc....
-
-=over
-=item LIMITATION
-
-make_config_sub() creates subroutines that have prototypes, but in order for
-perl to honor those prototypes perl B<must> know about them at compile-time;
-therefore, that is why make_config_sub() must be called inside a C<BEGIN> block.
-
-=back
-
-=over
-=item NOTE
-make_config_sub() uses caller to determine the package that make_config_sub()
-was called from. This package is then prepended to the string that is eval'd to
-create the designated subroutine in the caller's package. This is needed so that
-App::Fetchware "subclasses" can import this function, and enjoy its simple
-interface to create custom configuration subroutines.
-
-=back
-
-=over
-
-=item $one_or_many_values Supported Values
-
-=over
-
-=item * 'ONE'
-
-Generates a function with the name of make_config_sub()'s first parameter that
-can B<only> be called one time per Fetchwarefile. If called more than one time
-will die with an error message.
-
-Function created with C<$CONFIG{$name} = $value;> inside the generated function that
-is named $name.
-
-=item * 'ONEARRREF'
-
-Generates a function with the name of make_config_sub()'s first parameter that
-can B<only> be called one time per Fetchwarefile. And just like C<'ONE'> above
-if called more than once it will throw an exception. However, C<'ONEARRREF'> can
-be called with a list of values just like C<'MANY'> can, but it can still only
-be called once like C<'ONE'>.
-
-=item * 'MANY'
-
-Generates a function with the name of make_config_sub()'s first parameter that
-can be called more than just once. This option is only used by fetchware's
-C<mirror()> API call.
-
-Function created with C<push @{$CONFIG{$name}}, $value;> inside the generated function that
-is named $name.
-
-=item * 'BOOLEAN'
-
-Generates a function with the name of make_config_sub()'s first parameter that
-can be called only once just like 'ONE' can be, but it also only support true or
-false values.  What is true and false is the same as in perl, with the exception
-that /false/i and /off/i are also false.
-
-Function created the same way as 'ONE''s are, but with /false/i and /off/i
-mutated into a Perl accepted false value (they're turned into zeros.).
-
-=back
-
-=back
-
-All API subroutines fetchware provides to Fetchwarefile's are generated by
-make_config_sub() except for fetchware() and override().
-
-=cut
+# _make_config_sub() is an internal subroutine that only App::Fetchware and
+# App::Fetchware::CreateConfigOptions should use. Use
+# App::Fetchware::CreateConfigOptions to create any configuration option
+# subroutines that you want your fetchware extensions to have.
+#=head2 _make_config_sub()
+#
+#    _make_config_sub($name, $one_or_many_values)
+#
+#A function factory that builds many functions that are the exact same, but have
+#different names. It supports three types of functions determined by
+#_make_config_sub()'s second parameter.  It's first parameter is the name of that
+#function. This is the subroutine that builds all of Fetchwarefile's
+#configuration subroutines such as lookupurl, mirror, fetchware, etc....
+#
+#=over
+#=item LIMITATION
+#
+#_make_config_sub() creates subroutines that have prototypes, but in order for
+#perl to honor those prototypes perl B<must> know about them at compile-time;
+#therefore, that is why _make_config_sub() must be called inside a C<BEGIN> block.
+#
+#=back
+#
+#=over
+#=item NOTE
+#_make_config_sub() uses caller to determine the package that _make_config_sub()
+#was called from. This package is then prepended to the string that is eval'd to
+#create the designated subroutine in the caller's package. This is needed so that
+#App::Fetchware "subclasses" can import this function, and enjoy its simple
+#interface to create custom configuration subroutines.
+#
+#=back
+#
+#=over
+#
+#=item $one_or_many_values Supported Values
+#
+#=over
+#
+#=item * 'ONE'
+#
+#Generates a function with the name of _make_config_sub()'s first parameter that
+#can B<only> be called one time per Fetchwarefile. If called more than one time
+#will die with an error message.
+#
+#Function created with C<$CONFIG{$name} = $value;> inside the generated function that
+#is named $name.
+#
+#=item * 'ONEARRREF'
+#
+#Generates a function with the name of _make_config_sub()'s first parameter that
+#can B<only> be called one time per Fetchwarefile. And just like C<'ONE'> above
+#if called more than once it will throw an exception. However, C<'ONEARRREF'> can
+#be called with a list of values just like C<'MANY'> can, but it can still only
+#be called once like C<'ONE'>.
+#
+#=item * 'MANY'
+#
+#Generates a function with the name of _make_config_sub()'s first parameter that
+#can be called more than just once. This option is only used by fetchware's
+#C<mirror()> API call.
+#
+#Function created with C<push @{$CONFIG{$name}}, $value;> inside the generated function that
+#is named $name.
+#
+#=item * 'BOOLEAN'
+#
+#Generates a function with the name of _make_config_sub()'s first parameter that
+#can be called only once just like 'ONE' can be, but it also only support true or
+#false values.  What is true and false is the same as in perl, with the exception
+#that /false/i and /off/i are also false.
+#
+#Function created the same way as 'ONE''s are, but with /false/i and /off/i
+#mutated into a Perl accepted false value (they're turned into zeros.).
+#
+#=back
+#
+#=back
+#
+#All API subroutines fetchware provides to Fetchwarefile's are generated by
+#_make_config_sub() except for fetchware() and override().
+#
+#=cut
 
     my @api_functions = (
         [ program => 'ONE' ],
@@ -316,25 +254,25 @@ make_config_sub() except for fetchware() and override().
     );
 
 
-# Loop over the list of options needed by make_config_sub() to generated the
+# Loop over the list of options needed by _make_config_sub() to generated the
 # needed API functions for Fetchwarefile.
     for my $api_function (@api_functions) {
-        make_config_sub(@{$api_function});
+        _make_config_sub(@{$api_function});
     }
 
 
-sub make_config_sub {
+sub _make_config_sub {
     my ($name, $one_or_many_values, $callers_package) = @_;
 
     # Obtain caller's package name, so that the new configuration subroutine
     # can be created in the caller's package instead of our own. Use the
     # specifed $callers_package if the caller specified one. This allows
-    # create_config_options() to reuse make_config_sub() by passing in its
-    # caller to make_config_sub().
+    # create_config_options() to reuse _make_config_sub() by passing in its
+    # caller to _make_config_sub().
     my $package = $callers_package // caller;
 
     die <<EOD unless defined $name;
-App-Fetchware: internal syntax error: make_config_sub() was called without a
+App-Fetchware: internal syntax error: _make_config_sub() was called without a
 name. It must receive a name parameter as its first paramter. See perldoc
 App::Fetchware.
 EOD
@@ -343,7 +281,7 @@ EOD
             or $one_or_many_values eq 'MANY'
             or $one_or_many_values eq 'BOOLEAN') {
         die <<EOD;
-App-Fetchware: internal syntax error: make_config_sub() was called without a
+App-Fetchware: internal syntax error: _make_config_sub() was called without a
 one_or_many_values parameter as its second parameter. Or the parameter it was
 called with was invalid. Only 'ONE', 'MANY', and 'BOOLEAN' are acceptable
 values. See perldoc App::Fetchware.
@@ -381,7 +319,7 @@ EOE
             $eval =~ s/\$name/$name/g;
             $eval =~ s/\$package/$package/g;
             eval $eval or die <<EOD;
-1App-Fetchware: internal operational error: make_config_sub()'s internal eval()
+1App-Fetchware: internal operational error: _make_config_sub()'s internal eval()
 call failed with the exception [$@]. See perldoc App::Fetchware.
 EOD
         } when('ONEARRREF') {
@@ -408,7 +346,7 @@ EOE
             $eval =~ s/\$name/$name/g;
             $eval =~ s/\$package/$package/g;
             eval $eval or die <<EOD;
-2App-Fetchware: internal operational error: make_config_sub()'s internal eval()
+2App-Fetchware: internal operational error: _make_config_sub()'s internal eval()
 call failed with the exception [$@]. See perldoc App::Fetchware.
 EOD
         }
@@ -432,7 +370,7 @@ EOE
             $eval =~ s/\$name/$name/g;
             $eval =~ s/\$package/$package/g;
             eval $eval or die <<EOD;
-3App-Fetchware: internal operational error: make_config_sub()'s internal eval()
+3App-Fetchware: internal operational error: _make_config_sub()'s internal eval()
 call failed with the exception [\$@]. See perldoc App::Fetchware.
 EOD
         } when('BOOLEAN') {
@@ -475,7 +413,7 @@ EOE
             $eval =~ s/\$name/$name/g;
             $eval =~ s/\$package/$package/g;
             eval $eval or die <<EOD;
-4App-Fetchware: internal operational error: make_config_sub()'s internal eval()
+4App-Fetchware: internal operational error: _make_config_sub()'s internal eval()
 call failed with the exception [\$@]. See perldoc App::Fetchware.
 EOD
         }
@@ -2244,14 +2182,14 @@ recreate the paths to get rid of the errors.
 
     run_star_commands(config('*_commands'));
 
-run_star_commands() exists to remove some crazy line for line copy and pasting
-from build(), install(), and uninstall(). They all loop over the list accessing
-a C<ONEARRREF> type of make_config_sub() such as C<config('build_commands')>, and
-then determine what the individual star_commands are, and then run them with
+run_star_commands() exists to remove some crazy copy and pasting from build(),
+install(), and uninstall(). They all loop over the list accessing a C<ONEARRREF>
+configuration option such as C<config('build_commands')>, and then
+determine what the individual star_commands are, and then run them with
 run_prog().
 
 The I<"star"> simply refers to shell globbing with the I<"star"> character C<*>
-meaning "any"--it runs any make_config_sub()s that are C<ONEARRREF>s.
+meaning "any."
 
 =cut
 
@@ -3370,8 +3308,6 @@ will try to get whatever it wants to download at that alternate path as well.
 
 =head2 config
 
-=head2 make_config_sub
-
 =cut
 
 
@@ -3393,16 +3329,14 @@ L<CREATING A FETCHWARE EXTENSION>, for full details.
 
 =head2 How Fetchware's configuration options are made
 
-Each configuration option is created with the make_config_sub() subroutine
-L<make_config_sub()|/make_config_sub()> (Did <-- work????)
-(see the section L<FETCHWAREFILE API SUBROUTINES> for its documentation). This
-subroutine is a simple code generator that generates configuration subroutines.
-These subroutines have the same names as fetchware's configuration options,
-because that is exactly what they are. Perl's L<Prototypes|perlsub/Prototypes>
-are used in the code that is generated, so that you can remove the parentheses
-typically required around each configuration subroutine. This turns what looks
-like a function call into what could believably be considered a configuration
-file syntax.
+Each configuration option is created with L<App::Fetchware::CreateConfigOptions>
+This package's import() is a simple code generator that generates configuration
+subroutines.  These subroutines have the same names as fetchware's configuration
+options, because that is exactly what they are. Perl's
+L<Prototypes|perlsub/Prototypes> are used in the code that is generated, so
+that you can remove the parentheses typically required around each configuration
+subroutine. This turns what looks like a function call into what could
+believably be considered a configuration file syntax.
 
 These prototypes turn:
 
@@ -3767,9 +3701,9 @@ subroutine keeping in mind its arguments and what its supposed to return.
 
 App::Fetchware has various configuration options such as C<temp_dir>, C<prefix>,
 and so on. Chances are your fetchware extension will also need such
-configuration options. These are easily created with App::Fetchware's API
-subroutine make_config_sub(), which manufactures these to order for your
-convenience. There are four different types of configuration options:
+configuration options. These are easily created with
+L<App::Fetchware::CreateConfigOptions>, which manufactures these to order for
+your convenience. There are four different types of configuration options:
 
 =over
 
@@ -3787,9 +3721,8 @@ C<0>. App::Fetchware examples include C<no_install> and C<vefify_failure_ok>.
 =back
 
 Using the documentation above and perhaps also the documentation for
-C<make_config_sub> in the L<FETCHWAREFILE API SUBROUTINES> section, determine
-the names of your configuration options, and what type of configuraton options
-they will be.
+L<App::Fetchware::CreateConfigOptions>, determine the names of your
+configuration options, and what type of configuraton options they will be.
 
 =head2 Implement your fetchware extension.
 
@@ -3805,6 +3738,94 @@ specifics needed for you fetchware extension.
 #override or avoid overriding, and then it will create the skelton with stubs
 #for those API sub already having some empty POD crap and the correct
 #prototypes.
+
+=over
+
+=item 1. Set up proper exports and imports.
+
+Because fetchware needs your fetchware extension to export all of the
+subroutines that make up the fetchware's API, and any configuration
+options (as Perl subroutines) your extension will use, fetchware uses the helper
+packages L<App::Fetchware::ExportAPI> and L<App::Fetchware::CreateConfigOptions>
+to easily manage setting all of this up for you.
+
+First, use L<App::Fetchware::ExportAPI> to be sure to export all of fetchware's
+API subroutines. This package is also capable of "inheriting" any of
+App::Fetchware's API subroutines that you would like to keep. An example.
+
+    # Use App::Fetchware::ExportAPI to set up proper exports this fetchware
+    # extension.
+    use App::Fetchware::ExportAPI KEEP => [qw(start end)],
+        OVERRIDE => [qw(lookup download verify unarchive build install uninstall)]
+    ;
+
+Second, use L<App::Fetchware::CreateConfigOptions> to create all of the
+configuration options (such as temp_dir, no_install, and so on.) you want your
+fetchware extension to have.
+
+There are four types of configuration options.
+
+=over
+
+=item C<ONE> - Take one an only ever one argument, and can only be
+called once per Fetchwarefile.
+
+I<Examples:> C<temp_file>, C<prefix>, and C<lookup_url>.
+
+=item C<ONEARRREF> - Takes one or more arguments like C<MANY>, but unlike
+C<MANY> can only be called once.
+
+I<Examples:> C<configure_options>, C<make_options>, and C<build_commands>.
+
+=item C<MANY> - Takes one or more arguments, and can be called more than once.
+If called more than once, then second call's arguments are I<added> to the
+existing list of arguments.
+
+I<Examples:> C<mirror>.
+
+=item C<BOOLEAN> - Just like C<ONE> except it will convert /off/i and /false/i
+to 0 to support more than just Perl's 0 or undef being false.
+
+I<Examples:> C<verify_failure_ok>, C<no_install>, and C<stay_root>.
+
+=back
+
+An example.
+
+    use App::Fetchware::CreateConfigOptions
+        IMPORT => [qw(temp_dir no_install)],
+        ONE => [qw(repository directory)],
+        ONEARRREF => [qw(build_options install_options)],
+        BOOLEAN => [qw(delete_after_download)],
+    ;
+
+These 2 simple use()'s are all it takes to set up proper exports for your
+fetchware extension.
+
+=item 2. Code any App::Fetchware API subroutines that you won't be reusing from App::Fetchware.
+
+Use their API documentation from the section L<FETCHWAREFILE API SUBROUTINES> to
+ensure that you use the correct subroutine names, arguments and return the
+correct value as well.
+
+An example for overriding lookup() is below.
+
+    =head2 lookup()
+
+        my $download_url = lookup();
+
+    # New lookup docs go here....
+
+    =cut
+
+    sub lookup {
+
+        # New code for new lookup() goes here....
+
+        # Return the required $download_url.
+        return $download_url;
+    }
+
 
 =head3 Use Fetchware's Own Libraries to Save Developement Time.
 
@@ -3916,11 +3937,11 @@ one simple subroutine.
 =item *
 L<skip_all_unless_release_testing()|Test::Fetchware/skip_all_unless_release_testing()>
 - Does just what it's name says. If fetchware's internal release/author only 
-nvironment variables are set, only then will any Test::More subtests that call
+Environment variables are set, only then will any Test::More subtests that call
 this subroutine skip the entire subtest. This is used to skip running tests that
 install real programs on the testing computer's system. Many of Fetchware's
-tests actually install a real program such as Apache, and I doubt every
-Fetchware user is going to also have Apache installed and uninstalled a
+tests actually install a real program such as Apache, and I doubt any
+Fetchware user would like to have Apache installed and uninstalled a
 bagillion times when they install Fetchware.  Use this subroutine in your own
 App::Fetchware extension's to keep that from happening.
 
@@ -3949,9 +3970,10 @@ provided on the command line. Used to aid debugging.
 App::Fetchware::Config stores and manages fetchware's parsed configuration file.
 parse_fetchwarefile() from L<fetchware> does the actual parsing, but it stores
 the configuration file inside App::Fetchware::Config. Use the subroutines below
-to access any configuration file options that you create with make_config_sub()
-to customize your fetchware extension. Also feel free to reuse any names of
-App::Fetchware configuration subroutines such as C<temp_dir> or C<lookup_url>
+to access any configuration file options that you create with
+L<App::Fetchware::CreateConfigOptions> to customize your fetchware extension.
+Also feel free to reuse any names of App::Fetchware configuration subroutines
+such as C<temp_dir> or C<lookup_url>
 
 =over
 
@@ -3969,7 +3991,7 @@ configuration option. Can be kicked any number of times, but once the number of
 configuration values is exhausted the iterator will return undef.
 
 =item L<config_replace()|App::Fetchware::Config/config_replace()> - config() is
-used to I<set> configuration options, and once set they I<cannot> be changed b
+used to I<set> configuration options, and once set they I<cannot> be changed by
 config(). This is meant to catch and reduce errors. But sometimes, mostly in
 test suites, you need to change the value of a configuration option. That's
 what config_replace() is for.
@@ -3979,7 +4001,7 @@ specified configuration option. Mostly just used for testing.
 
 =item L<__clear_CONFIG()|App::Fetchware::Config/__clear_CONFIG()> - An internal
 only subroutine that should be only used when it is really really needed. It
-I<clears> (deletes) the entire internal has that the configuration options are
+I<clears> (deletes) the entire internal hash that the configuration options are
 stored in. It really should only be used during testing to clear
 App::Fetchware::Config's intenal state between tests.
 
@@ -4068,83 +4090,6 @@ build() and install()'s exports.
 
 
 =over
-
-=item 1. Code any App::Fetchware API subroutines that you won't be reusing from App::Fetchware.
-
-Use their API documentation from the section L<FETCHWAREFILE API SUBROUTINES> to
-ensure that you use the correct subroutine names, prototypes, arguments and
-return the correct value as well.
-
-###BUGALERT### Add the prototypes to the API docs.
-
-An example for overriding lookup() is below.
-
-    =head2 lookup()
-
-        my $download_url = lookup();
-
-    # New lookup docs go here....
-
-    =cut
-
-    sub lookup (;$) {
-
-        # New code for new lookup() goes here....
-
-        # Return the required $download_url.
-        return $download_url;
-    }
-
-=item 2. Set up proper exports and imports.
-
-You B<must> import from App::Fetchware any App::Fetchware API subroutines you
-intend to reuse from App::Fetchware such as start() and end(), or perhaps all of
-them but lookup(). So use something like:
-
-    # Import reused API subroutines from App::Fetchware.
-    use App::Fetchware qw(start end);
-
-or
-
-    # Import reused API subroutines from App::Fetchware.
-    use App::Fetchware qw(start download verify unarchive build install end
-        uninstall);
-
-To include whatever subroutines you want to reuse from App::Fetchware.
-
-And you B<must> also setup proper exports to export App::Fetchware's standard
-API subroutines that you either imported from App::Fetchware or implemented
-yourself and also whatever configuration subroutines that your fetchware
-extension created with make_config_sub(). Just customize something like:
-
-    # Setup proper exports of App::Fetchware API subroutines and any
-    # configuration subroutines this fetchware extension uses.
-    our @EXPORT = qw(
-        start
-        lookup
-        download
-        verify
-        unarchive
-        build
-        install
-        end
-        uninstall
-
-        # Any configuration subroutines go here.
-
-        # If you're reussing App::Fetchware's start() and end() perhaps you also
-        # want to import from App::Fetchware temp_dir, and also export here so
-        # users of your Fetchwarefile can change the temporary directory too.
-        temp_dir
-        ...
-
-    );
-
-=back
-
-Then your fetchware extension has exported the App::Fetchware API subroutines
-and any configuraton options that you want users of your fetchware extension to
-be able to use to customize their Fetchwarefile.
 
 
 =head2 Write your fetchware extension's documentation
@@ -4335,12 +4280,12 @@ wanted it to be easy to use. dzil is for Perl programmers, so it requiring some
 knowledge of Perl and Moose is ok. But fetchware is for end users or perhaps
 system administrators not Perl programmers, so something easier is needed.
 
-The extension mechanism was design for ease of use for people who use you
+The extension mechanism was design for ease of use by people who use your
 fetchware extension. And it is. Just "use" whatever fetchware extension you want
 in your Fetchwarefile, and then supplying whatever configuration options you
 need.
 
-This extension mechanism is also very easy to Perl programmers, because you're
+This extension mechanism is also very easy for Perl programmers, because you're
 basically I<subclassing> App::Fetchware, only you have to do it manually:
 
 =over
@@ -4436,7 +4381,9 @@ is B<always> on, but just uses the fairly ubuiquitous C<nobody> user by default.
 This feature requires the OS to be some version of Unix, because Windows and
 other OSes do not support the same fork()ing method of limiting what processes
 can do. On non-Unix OSes, fetchware won't fork() or try to use some other way of
-dropping privileges. It only does it on Unix.
+dropping privileges. It only does it on Unix. If you use some version of Unix,
+and do not want fetchware to drop privileges, then specify the C<stay_root>
+configuration option.
 
 =cut
 

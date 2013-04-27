@@ -316,7 +316,8 @@ subtest 'test HTMLPageSync end()' => sub {
 
     end();
 
-    ok( (not -e $temp_dir) , 'checked end() success');
+    # Use Test::Fetchware's end_ok() to test if end did it's job correctly.
+    end_ok($temp_dir);
 };
 
 
