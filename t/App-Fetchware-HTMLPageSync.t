@@ -1,5 +1,5 @@
 #!perl
-# HTMLPageSync.t tests App::Fetchware::HTMLPageSync.
+# App-Fetchware-HTMLPageSync.t tests App::Fetchware::HTMLPageSync.
 # Pretend to be bin/fetchware, so that I can test App::Fetchware as though
 # bin/fetchware was calling it.
 # This is needed in HTMLPageSync, because HTMLPageSync uses start() and end()
