@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More;# 0.98 tests => '26'; #Update if this changes.
+use Test::More 0.98 tests => '23'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir rootdir);
 use URI::Split 'uri_split';
@@ -179,21 +179,32 @@ EOS
 subtest 'test download_dirlist' => sub {
     skip_all_unless_release_testing();
 
-    # Test download_file()'s parameter checking.
-    eval_ok(sub {download_file()},
-        <<EOE, 'checked download_file() no params exception.');
+    # Ensure we have a clean working environment.
+    __clear_CONFIG();
+
+    # Test download_dirlist()'s parameter checking.
+    eval_ok(sub {download_dirlist()},
+        <<EOE, 'checked download_dirlist() no params exception.');
 App-Fetchware-Util: You can only specify either PATH or URL never both. Only
 specify one or the other when you call download_dirlist().
 EOE
-    eval_ok(sub {download_file('one', 'two', 'three')},
-        <<EOE, 'checked download_file() too many exception.');
+    eval_ok(sub {download_dirlist('one', 'two', 'three')},
+        <<EOE, 'checked download_dirlist() too many exception.');
 App-Fetchware-Util: You can only specify either PATH or URL never both. Only
 specify one or the other when you call download_dirlist().
 EOE
-    eval_ok(sub {download_file(URL => 'fake url who cares')},
-        <<EOE, 'checked download_file() wrong param exception.');
+    eval_ok(sub {download_dirlist('fake url who cares', PATH => 'some/path')},
+        <<EOE, 'checked download_dirlist() wrong param exception.');
 App-Fetchware-Util: You can only specify either PATH or URL never both. Only
 specify one or the other when you call download_dirlist().
+EOE
+
+    eval_ok(sub {download_dirlist(PATH => 'fake/path')},
+        <<EOE, 'checked download_dirlist() PATH but no mirrors exception.');
+App-Fetchware-Util: You only called download_dirlist() with just a PATH
+parameter, but also failed to specify any mirrors in your configuration. Without
+any defined mirrors download_dirlist() cannot determine from what host to
+download your file. Please specify a mirror and try again.
 EOE
 
     my $url = 'invalidscheme://fake.url';
@@ -202,8 +213,8 @@ EOE
     eval_ok(sub {download_dirlist($url)}, <<EOS, 'checked download_dirlist() invalid url scheme');
 App-Fetchware-Util: Failed to download the specifed URL [invalidscheme://fake.url] or path
 [] using the included hostname in the url you specifed or any
-mirrors. The mirrors are [1]. And the urls
-that fetchware tried to download were [1 1].
+mirrors. The mirrors are [invalidscheme://fake.url]. And the urls
+that fetchware tried to download were [invalidscheme://fake.url invalidscheme://fake.url].
 EOS
     # Clear previous mirror.
     config_delete('mirror');
@@ -394,8 +405,11 @@ subtest 'test download_file_url' => sub {
 };
 
 
-subtest 'test download_file' => sub {
+subtest 'test download_file()' => sub {
     skip_all_unless_release_testing();
+
+    # Ensure we have a clean working environment.
+    __clear_CONFIG();
 
     # Test download_file()'s parameter checking.
     eval_ok(sub {download_file()},
@@ -408,10 +422,18 @@ EOE
 App-Fetchware-Util: You can only specify either PATH or URL never both. Only
 specify one or the other when you call download_dirlist().
 EOE
-    eval_ok(sub {download_file(URL => 'fake url who cares')},
+    eval_ok(sub {download_file('fake url who cares', PATH => 'fake/path')},
         <<EOE, 'checked download_file() wrong param exception.');
 App-Fetchware-Util: You can only specify either PATH or URL never both. Only
 specify one or the other when you call download_dirlist().
+EOE
+
+    eval_ok(sub {download_file(PATH => 'fake/path')},
+        <<EOE, 'checked download_file() PATH but no mirrors exception.');
+App-Fetchware-Util: You only called download_file() with just a PATH parameter,
+but also failed to specify any mirrors in your configuration. Without any
+defined mirrors download_file() cannot determine from what host to download your
+file. Please specify a mirror and try again.
 EOE
 
     my $url = 'invalidscheme://fake.url';
@@ -1232,4 +1254,4 @@ sub drop_privs_ok {
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-done_testing();
+#done_testing();

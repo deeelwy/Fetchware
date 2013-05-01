@@ -308,15 +308,33 @@ no_mirror_download_dirlist().
 sub download_dirlist {
     my %opts;
     my $url;
+    # One arg means its a $url.
     if (@_ == 1) {
        $url = shift;
-    } else {
+    # More than one means it's a PATH, and if it's not a path...
+    } elsif (@_ == 2) {
         %opts = @_;
-    }
-
-    die <<EOD if exists $opts{URL} and exists $opts{PATH};
+        # Or your param wasn't PATH
+        if (not exists $opts{PATH} and not defined $opts{PATH}) {
+            # Use goto for cool old-school C-style error handling to avoid copy
+            # and pasting or insane nested ifs.
+            goto PATHERROR;
+        }
+    # ...then it's an error.
+    } else {
+        PATHERROR: die <<EOD;
 App-Fetchware-Util: You can only specify either PATH or URL never both. Only
 specify one or the other when you call download_dirlist().
+EOD
+    }
+
+    # Ensure the user has specified a mirror, because otherwise download_file()
+    # will try to just download a path, and that's not going to work.
+    die <<EOD if not config('mirror') and exists $opts{PATH};
+App-Fetchware-Util: You only called download_dirlist() with just a PATH
+parameter, but also failed to specify any mirrors in your configuration. Without
+any defined mirrors download_dirlist() cannot determine from what host to
+download your file. Please specify a mirror and try again.
 EOD
 
     # Set up our list of urls that we'll try to download the specified PATH or
@@ -397,8 +415,8 @@ EOD
     die <<EOD if not defined $dirlist;
 App-Fetchware-Util: Failed to download the specifed URL [$url] or path
 [$opts{PATH}] using the included hostname in the url you specifed or any
-mirrors. The mirrors are [@{[map {say "$_"} config('mirror')]}]. And the urls
-that fetchware tried to download were [@{[map {say "$_"} @urls]}].
+mirrors. The mirrors are [@{[config('mirror')]}]. And the urls
+that fetchware tried to download were [@urls].
 EOD
 
     return $dirlist;
@@ -604,6 +622,15 @@ App-Fetchware-Util: You can only specify either PATH or URL never both. Only
 specify one or the other when you call download_dirlist().
 EOD
     }
+
+    # Ensure the user has specified a mirror, because otherwise download_file()
+    # will try to just download a path, and that's not going to work.
+    die <<EOD if not config('mirror') and exists $opts{PATH};
+App-Fetchware-Util: You only called download_file() with just a PATH parameter,
+but also failed to specify any mirrors in your configuration. Without any
+defined mirrors download_file() cannot determine from what host to download your
+file. Please specify a mirror and try again.
+EOD
 
     # Set up our list of urls that we'll try to download the specified PATH or
     # URL from.
