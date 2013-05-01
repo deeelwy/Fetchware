@@ -22,6 +22,7 @@ use Fcntl qw(S_ISDIR :flock);
 use if is_os_type('Unix'), 'Privileges::Drop';
 use POSIX '_exit';
 use Sub::Mage;
+use URI::Split qw(uri_split uri_join);
 
 # Enable Perl 6 knockoffs, and use 5.10.1, because smartmatching and other
 # things in 5.10 were changed in 5.10.1+.
@@ -289,65 +290,116 @@ your fetchware extension.
 
 =head2 download_dirlist()
 
-    my $dir_list = download_dirlist($ftp_or_http_url)
+    my $dir_list = download_dirlist($url)
 
-Calls no_mirror_download_dirlist() once for the url given returning the downloaded
-file's directory listing. If the download fails for any reason (an exception is
-die()d), then download_file() will loop over any configured mirrors, and will
-try each one in order until it runs out, and will only fail after all mirrors
-have been tried.
+    my $dir_list = download_dirlist(PATH => $path)
 
-Note: There is no limit to the number of mirrors. If some one wants to input all
-200 some odd mirrors for CPAN or some other project that is mirrored, they are
-free to do so.
+Can be called with either a $url or a PATH parameter. When called with a $url
+parameter, the specified $url is downloaded using no_mirror_download_dirlist(),
+and returned if successful. If it fails then each C<mirror> the user specified
+is also tried unitl there are no more mirrors, and then an exception is thrown.
+
+If you specify a PATH parameter instead of a $url parameter, then that path is
+appended to each C<mirror>, and the resultant url is downloaded using
+no_mirror_download_dirlist().
 
 =cut
 
 sub download_dirlist {
-    my $url = shift;
+    my %opts;
+    my $url;
+    if (@_ == 1) {
+       $url = shift;
+    } else {
+        %opts = @_;
+    }
+
+    die <<EOD if exists $opts{URL} and exists $opts{PATH};
+App-Fetchware-Util: You can only specify either PATH or URL never both. Only
+specify one or the other when you call download_dirlist().
+EOD
+
+    # Set up our list of urls that we'll try to download the specified PATH or
+    # URL from.
+    my @urls = config('mirror');
+    if (exists $opts{PATH}
+        and defined $opts{PATH}
+        and $opts{PATH}) {
+        # The PATH option means that $url is not a full blown URL, but just a
+        # path without a hostname or scheme portion.
+        # Therefore, we append $url, because the PATH option means it's actually
+        # just a path, so we append it to each @url.
+        for my $mirror_url (@urls) {
+            # Use URI to replace the current path with the one the caller
+            # specified in the $url parameter.
+            my ($scheme, $auth, undef, undef, undef) = uri_split($mirror_url);
+            $mirror_url = uri_join($scheme, $auth, $opts{PATH}, undef, undef);
+        }
+    } elsif (defined $url
+        and $url) {
+        # Add $opts{URL} to @urls since it too has a hostname. And use unshift
+        # to put it in the first position instead of last if you were to use
+        # push.
+        unshift @urls, $url;
+
+        # I must parse out the path portion of the specified URL, because this
+        # path portion will be appended to the mirrors you have specified.
+        my $url_path = ( uri_split($url) )[2];
+        for my $mirror_url (@urls) {
+            # If the $mirror_url has no path...
+                my ($scheme, $auth, $path, $query, $frag) =
+                    uri_split($mirror_url);
+            if ($path eq '') {
+                #...then append $opts{URL}'s path.
+                ###BUGALERT## As shown before I was using URI's much nicer
+                #interface, but it was deleting the path instead of replacing
+                #the path! I tried reproducing this with a small test file, but
+                #it worked just fine in the small test file. So, it must be some
+                #really weird bug to fail here, but work in a smaller test file.
+                #I don't know try replacing all of the URI::Split calls with the
+                #equivelent URI->path() calls, and you'll get the weird bug.
+                #$mirror_url->path($url_path);
+                $mirror_url =
+                    uri_join($scheme, $auth, $url_path, $query, $frag);
+            # But if the $mirror_url does have a path...
+            } else {
+                #...Then keep the mirrors path intact.
+                #
+                # Because if you specify a path when you define that mirror
+                # chances are you did it, because that mirror stores it in a
+                # different directory. For example Apache is /apache on some
+                # mirrors, but apache.hostname on other mirrors.
+            }
+        }
+    }
 
     my $dirlist;
 
-    eval {
+    for my $mirror_url (@urls) {
+        eval {
+            msg "Attempting to download [$mirror_url].";
+            # Try the mirror_url directly without trying any mirrors.
+            $dirlist = no_mirror_download_dirlist($mirror_url);
+        };
+        if ($@) {
+            msg "Directory download attempt failed! Error was[";
+            print $@;
+            msg "].";
+        }
 
-    # Try the url directly without trying any mirrors.
-    $dirlist = no_mirror_download_dirlist($url);
-
-    };
-
-    my $mirror;
-    my $mirror_iter = config_iter('mirror');
-
-    # While the above no_mirror_download_file() call has failed, and while the
-    # calls in this loop continue to fail.
-    while ($@) {
-
-        if (defined($mirror = $mirror_iter->())) {
-            ###BUGALERT### Must process $mirror!!!
-            #if it has no path replace its hostname with the hostname in $url.
-            #the scheme *can* change!
-            #if the mirror has a path keep the path.
-            #NOTE: in the download_file() mirror one, you'll have to add in
-            #$url's filename into the new mirror.
-            msg <<EOM;
-Directory download attempt failed! Retrying with mirror:
-[$mirror]
-EOM
-
-            eval {
-
-                # Try the url directly without trying any mirrors.
-                $dirlist = no_mirror_download_dirlist($mirror);
-
-            };
-        } else {
-            msg <<EOM;
-Directory download attempt failed!
-EOM
-            # Forward trapped exception back to caller.
-            die $@;
+        # Skip the rest of the @urls after we successfully download the $url.
+        if (defined $dirlist) {
+            msg "Successfully downloaded the directory listing.";
+            last;
         }
     }
+
+    die <<EOD if not defined $dirlist;
+App-Fetchware-Util: Failed to download the specifed URL [$url] or path
+[$opts{PATH}] using the included hostname in the url you specifed or any
+mirrors. The mirrors are [@{[map {say "$_"} config('mirror')]}]. And the urls
+that fetchware tried to download were [@{[map {say "$_"} @urls]}].
+EOD
 
     return $dirlist;
 }
@@ -517,63 +569,123 @@ sub file_download_dirlist {
 
     my $filename = download_file($url)
 
-Calls no_mirror_download_file() once for the url given returning the downloaded
-file's filename. If the download fails for any reason (an exception is die()d),
-then download_file() will loop over any configured mirrors, and will try each
-one in order until it runs out, and will only fail after all mirrors have been
-tried.
+    my $filename = download_file(PATH => $path)
 
-Note: There is no limit to the number of mirrors. If some one wants to input all
-200 some odd mirrors in CPAN or some other project that is mirrored, they are
-free to do so.
+Can be called with either a $url or a PATH parameter. When called with a $url
+parameter, the specified $url is downloaded using no_mirror_download_file(),
+and returned if successful. If it fails then each C<mirror> the user specified
+is also tried unitl there are no more mirrors, and then an exception is thrown.
+
+If you specify a PATH parameter instead of a $url parameter, then that path is
+appended to each C<mirror>, and the resultant url is downloaded using
+no_mirror_download_file().
 
 =cut
 
 sub download_file {
-    my $url = shift;
+    my %opts;
+    my $url;
+    # One arg means its a $url.
+    if (@_ == 1) {
+       $url = shift;
+    # More than one means it's a PATH, and if it's not a path...
+    } elsif (@_ == 2) {
+        %opts = @_;
+        # Or your param wasn't PATH
+        if (not exists $opts{PATH} and not defined $opts{PATH}) {
+            # Use goto for cool old-school C-style error handling to avoid copy
+            # and pasting or insane nested ifs.
+            goto PATHERROR;
+        }
+    # ...then it's an error.
+    } else {
+        PATHERROR: die <<EOD;
+App-Fetchware-Util: You can only specify either PATH or URL never both. Only
+specify one or the other when you call download_dirlist().
+EOD
+    }
+
+    # Set up our list of urls that we'll try to download the specified PATH or
+    # URL from.
+    my @urls = config('mirror');
+    if (exists $opts{PATH}
+        and defined $opts{PATH}
+        and $opts{PATH}) {
+        # The PATH option means that $url is not a full blown URL, but just a
+        # path without a hostname or scheme portion.
+        # Therefore, we append $url, because the PATH option means it's actually
+        # just a path, so we append it to each @url.
+        for my $mirror_url (@urls) {
+            # Use URI to replace the current path with the one the caller
+            # specified in the $url parameter.
+            my ($scheme, $auth, undef, undef, undef) = uri_split($mirror_url);
+            $mirror_url = uri_join($scheme, $auth, $opts{PATH}, undef, undef);
+        }
+    } elsif (defined $url
+        and $url) {
+        # Add $opts{URL} to @urls since it too has a hostname. And use unshift
+        # to put it in the first position instead of last if you were to use
+        # push.
+        unshift @urls, $url;
+
+        # I must parse out the path portion of the specified URL, because this
+        # path portion will be appended to the mirrors you have specified.
+        my $url_path = ( uri_split($url) )[2];
+        for my $mirror_url (@urls) {
+            # If the $mirror_url has no path...
+                my ($scheme, $auth, $path, $query, $frag) =
+                    uri_split($mirror_url);
+            if ($path eq '') {
+                #...then append $opts{URL}'s path.
+                ###BUGALERT## As shown before I was using URI's much nicer
+                #interface, but it was deleting the path instead of replacing
+                #the path! I tried reproducing this with a small test file, but
+                #it worked just fine in the small test file. So, it must be some
+                #really weird bug to fail here, but work in a smaller test file.
+                #I don't know try replacing all of the URI::Split calls with the
+                #equivelent URI->path() calls, and you'll get the weird bug.
+                #$mirror_url->path($url_path);
+                $mirror_url =
+                    uri_join($scheme, $auth, $url_path, $query, $frag);
+            # But if the $mirror_url does have a path...
+            } else {
+                #...Then keep the mirrors path intact.
+                #
+                # Because if you specify a path when you define that mirror
+                # chances are you did it, because that mirror stores it in a
+                # different directory. For example Apache is /apache on some
+                # mirrors, but apache.hostname on other mirrors.
+            }
+        }
+    }
 
     my $filename;
 
-    eval {
+    for my $mirror_url (@urls) {
+        eval {
+            msg "Attempting to download [$mirror_url].";
+            # Try the mirror_url directly without trying any mirrors.
+            $filename = no_mirror_download_file($mirror_url);
+        };
+        if ($@) {
+            msg "File download attempt failed! Error was[";
+            print $@;
+            msg "].";
+        }
 
-    # Try the url directly without trying any mirrors.
-    $filename = no_mirror_download_file($url);
-
-    };
-
-    my $mirror;
-    my $mirror_iter = config_iter('mirror');
-
-    # While the above no_mirror_download_file() call has failed, and while the
-    # calls in this loop continue to fail.
-    while ($@) {
-
-        if (defined($mirror = $mirror_iter->())) {
-            ###BUGALERT### Must process $mirror!!!
-            #if it has no path replace its hostname with the hostname in $url.
-            #the scheme *can* change!
-            #if the mirror has a path keep the path.
-            #NOTE: in the download_file() mirror one, you'll have to add in
-            #$url's filename into the new mirror.
-            msg <<EOM;
-Directory download attempt failed! Retrying with mirror:
-[$mirror]
-EOM
-
-            eval {
-
-                # Try the url directly without trying any mirrors.
-                $filename = no_mirror_download_file($mirror);
-
-            };
-        } else {
-            msg <<EOM;
-Directory download attempt failed!
-EOM
-            # Forward trapped exception back to caller.
-            die $@;
+        # Skip the rest of the @urls after we successfully download the $url.
+        if (defined $filename) {
+            msg "Successfully downloaded the file [$mirror_url].";
+            last;
         }
     }
+
+    die <<EOD if not defined $filename;
+App-Fetchware-Util: Failed to download the specifed URL [$url] or path
+[$opts{PATH}] using the included hostname in the url you specifed or any
+mirrors. The mirrors are [@{[config('mirror')]}]. And the urls
+that fetchware tried to download were [@{[@urls]}].
+EOD
 
     return $filename;
 }
