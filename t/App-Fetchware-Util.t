@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '23'; #Update if this changes.
+use Test::More 0.98 tests => '25'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir rootdir);
 use URI::Split 'uri_split';
@@ -134,7 +134,19 @@ subtest 'test http_download_dirlist()' => sub {
 
 
 subtest 'test file_download_dirlist()' => sub {
-    skip_all_unless_release_testing();
+
+    # Test file_download_dirlist()'s Exceptions.
+    eval_ok(sub {file_download_dirlist('/akdjf983hfo3e4gghj-doesnotexist')},
+        <<EOE, 'checked file_download_dirlist() does not exist exception.');
+App-Fetchware-Util: The directory that fetchware is trying to use to determine
+if a new version of the software is available does not exist. This directory is
+[/akdjf983hfo3e4gghj-doesnotexist], and the OS error is [No such file or directory].
+EOE
+    my $temp_dir = tempdir("fetchware-test-$$-XXXXXXXXX",
+        CLEANUP => 1, TMPDIR => 1);
+    eval_ok(sub {file_download_dirlist($temp_dir)},
+        qr/if a new version of the software is available is empty. This directory/,
+        'checked file_download_dirlist() empty directory exception.');
 
     # Get a dirlisting for fetchware's testing directory, because it *has* to
     # exist.
@@ -214,7 +226,7 @@ EOE
 App-Fetchware-Util: Failed to download the specifed URL [invalidscheme://fake.url] or path
 [] using the included hostname in the url you specifed or any
 mirrors. The mirrors are [invalidscheme://fake.url]. And the urls
-that fetchware tried to download were [invalidscheme://fake.url invalidscheme://fake.url].
+that fetchware tried to download were [invalidscheme://fake.url invalidscheme://fake.url ].
 EOS
     # Clear previous mirror.
     config_delete('mirror');
@@ -308,6 +320,14 @@ EOS
 
     # Clean up after ourselves.
     __clear_CONFIG();
+};
+
+
+subtest 'test download_dirlist(file://)' => sub {
+    my $got_dirlist;
+    ok($got_dirlist = download_dirlist('file://'. catfile(cwd(), 't')),
+        'checked download_dirlist(file://) success');
+#note explain \$got_dirlist;
 };
 
 
@@ -443,7 +463,7 @@ EOE
 App-Fetchware-Util: Failed to download the specifed URL [invalidscheme://fake.url] or path
 [] using the included hostname in the url you specifed or any
 mirrors. The mirrors are [invalidscheme://fake.url]. And the urls
-that fetchware tried to download were [invalidscheme://fake.url invalidscheme://fake.url].
+that fetchware tried to download were [invalidscheme://fake.url invalidscheme://fake.url ].
 EOS
     # Clear previous mirror.
     config_delete('mirror');
@@ -504,7 +524,7 @@ EOS
     ok(-e $filename, 'checked download_file() http multi-mirror filename success');
     ok(unlink $filename, 'checked deleting downloaded file');
 
-    # Test download_dirlist(PATH => $path) support.
+    # Test download_file(PATH => $path) support.
     __clear_CONFIG();
     # Set up the mirror so that it has no path.
     my ($scheme, $auth, $path, $query, $frag) =
@@ -514,12 +534,25 @@ EOS
     # Then test download_dirlist() with what would normally be the mirror's
     # path.
     ok($filename = download_file(PATH => "$path/KEYS"),
-        'checked download_dirlists(PATH) http success.');
+        'checked download_file(PATH) http success.');
     ok(-e $filename, 'checked download_file(PATH) http success');
     ok(unlink $filename, 'checked deleting downloaded file');
 
     # clean up after ourselves.
     __clear_CONFIG();
+};
+
+
+subtest 'test download_file(file://)' => sub {
+    my $test_dist_path = make_test_dist('test-dist', '1.00');
+    my $test_dist_md5 = md5sum_file($test_dist_path);
+
+    my $got_filename;
+    ok($got_filename = download_file('file://' . $test_dist_path),
+        'checked download_file(file://) success.');
+
+    is(file($got_filename)->basename, file($test_dist_path)->basename,
+        'checked download_file(file://) filename success.');
 };
 
 

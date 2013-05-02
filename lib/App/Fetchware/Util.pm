@@ -340,6 +340,14 @@ EOD
     # Set up our list of urls that we'll try to download the specified PATH or
     # URL from.
     my @urls = config('mirror');
+    # Add lookup_url's hostname to @urls as a last resort for ftp:// and
+    # http:// URLs, and to allow file:// URLs to work, because oftentimes
+    # specifying a mirror when using a local file:// URL makes no sense, and
+    # requiring users to copy and paste the hostname of their lookup_url into a
+    # mirror option is silly.
+    my ($scheme, $auth, undef, undef, undef) =
+        uri_split(config('lookup_url'));
+    push @urls, uri_join($scheme, $auth, undef, undef, undef);
     if (exists $opts{PATH}
         and defined $opts{PATH}
         and $opts{PATH}) {
@@ -355,7 +363,7 @@ EOD
         }
     } elsif (defined $url
         and $url) {
-        # Add $opts{URL} to @urls since it too has a hostname. And use unshift
+        # Add $url to @urls since it too has a hostname. And use unshift
         # to put it in the first position instead of last if you were to use
         # push.
         unshift @urls, $url;
@@ -368,7 +376,7 @@ EOD
                 my ($scheme, $auth, $path, $query, $frag) =
                     uri_split($mirror_url);
             if ($path eq '') {
-                #...then append $opts{URL}'s path.
+                #...then append $url's path.
                 ###BUGALERT## As shown before I was using URI's much nicer
                 #interface, but it was deleting the path instead of replacing
                 #the path! I tried reproducing this with a small test file, but
@@ -574,10 +582,25 @@ sub file_download_dirlist {
         $local_lookup_url =  catdir(original_cwd(), $local_lookup_url);
     }
 
+    # Throw an exception if called with a directory that does not exist.
+    die <<EOD if not -e $local_lookup_url;
+App-Fetchware-Util: The directory that fetchware is trying to use to determine
+if a new version of the software is available does not exist. This directory is
+[$local_lookup_url], and the OS error is [$!].
+EOD
+
+
     my @file_listing;
     for my $file (glob catfile($local_lookup_url, '*')) {
         push @file_listing, $file;
     }
+    # Throw another exception if the directory contains nothing.
+    die <<EOD if @file_listing == 0;
+App-Fetchware-Util: The directory that fetchware is trying to use to determine
+if a new version of the software is available is empty. This directory is
+[$local_lookup_url].
+EOD
+
     return \@file_listing;
 }
 
@@ -635,6 +658,14 @@ EOD
     # Set up our list of urls that we'll try to download the specified PATH or
     # URL from.
     my @urls = config('mirror');
+    # Add lookup_url's hostname to @urls as a last resort for ftp:// and
+    # http:// URLs, and to allow file:// URLs to work, because oftentimes
+    # specifying a mirror when using a local file:// URL makes no sense, and
+    # requiring users to copy and paste the hostname of their lookup_url into a
+    # mirror option is silly.
+    my ($scheme, $auth, undef, undef, undef) =
+        uri_split(config('lookup_url'));
+    push @urls, uri_join($scheme, $auth, undef, undef, undef);
     if (exists $opts{PATH}
         and defined $opts{PATH}
         and $opts{PATH}) {
@@ -650,7 +681,7 @@ EOD
         }
     } elsif (defined $url
         and $url) {
-        # Add $opts{URL} to @urls since it too has a hostname. And use unshift
+        # Add $url to @urls since it too has a hostname. And use unshift
         # to put it in the first position instead of last if you were to use
         # push.
         unshift @urls, $url;
@@ -663,7 +694,7 @@ EOD
                 my ($scheme, $auth, $path, $query, $frag) =
                     uri_split($mirror_url);
             if ($path eq '') {
-                #...then append $opts{URL}'s path.
+                #...then append $url's path.
                 ###BUGALERT## As shown before I was using URI's much nicer
                 #interface, but it was deleting the path instead of replacing
                 #the path! I tried reproducing this with a small test file, but
