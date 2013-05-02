@@ -648,24 +648,31 @@ EOD
 
     # Ensure the user has specified a mirror, because otherwise download_file()
     # will try to just download a path, and that's not going to work.
-    die <<EOD if not config('mirror') and exists $opts{PATH};
+    if (not config('mirror') and exists $opts{PATH}
+        and (config('lookup_url') !~ m!^file://!)) {
+        die <<EOD ;
 App-Fetchware-Util: You only called download_file() with just a PATH parameter,
 but also failed to specify any mirrors in your configuration. Without any
 defined mirrors download_file() cannot determine from what host to download your
 file. Please specify a mirror and try again.
 EOD
+    }
 
     # Set up our list of urls that we'll try to download the specified PATH or
     # URL from.
     my @urls = config('mirror');
-    # Add lookup_url's hostname to @urls as a last resort for ftp:// and
-    # http:// URLs, and to allow file:// URLs to work, because oftentimes
-    # specifying a mirror when using a local file:// URL makes no sense, and
-    # requiring users to copy and paste the hostname of their lookup_url into a
-    # mirror option is silly.
-    my ($scheme, $auth, undef, undef, undef) =
-        uri_split(config('lookup_url'));
-    push @urls, uri_join($scheme, $auth, undef, undef, undef);
+    # If we're called with a PATH option and the lookup_url is for a local file,
+    # then we should just convert from a PATH into a $url.
+    if (exists $opts{PATH} and config('lookup_url') =~ m!^file://!) {
+        $url = "file://$opts{PATH}";
+        delete $opts{PATH};
+    # Otherwise, we should add lookup_url's hostname to the list of mirrors, but
+    # be sure to push it onto @urls so that it is used last.
+    } else {
+        my ($scheme, $auth, undef, undef, undef) =
+            uri_split(config('lookup_url'));
+        push @urls, uri_join($scheme, $auth, undef, undef, undef);
+    }
     if (exists $opts{PATH}
         and defined $opts{PATH}
         and $opts{PATH}) {

@@ -546,18 +546,31 @@ EOS
 subtest 'test download_file(file://)' => sub {
     my $test_dist_path = make_test_dist('test-dist', '1.00');
 
+    # Test download_file() with a url.
     my $got_filename;
     ok($got_filename = download_file('file://' . $test_dist_path),
         'checked download_file(file://) success.');
 
     is(file($got_filename)->basename, file($test_dist_path)->basename,
         'checked download_file(file://) filename success.');
-    ok(unlink($test_dist_path),
-        'checked download_file(file://) cleanup test file.');
     # Also delete the $got_filename, because download_file() will "download"
     # (copy the file).
     ok(unlink($got_filename),
         'checked download_file(file://) cleanup copied file.');
+
+    # Now test download_file() witha PATH instead.
+    # Must specify a lookup_url(), so download_file() can detect that my
+    # lookup_url is a local file:// one.
+    config(lookup_url => "file://$test_dist_path");
+    ok($got_filename = download_file(PATH => $test_dist_path),
+        'checked download_file(file://) PATH success.');
+    # Also delete the $got_filename, because download_file() will "download"
+    # (copy the file).
+    ok(unlink($got_filename),
+        'checked download_file(file://) cleanup copied file.');
+
+    ok(unlink($test_dist_path),
+        'checked download_file(file://) cleanup test file.');
 };
 
 
