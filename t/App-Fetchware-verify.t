@@ -7,7 +7,7 @@ package fetchware;
 use strict;
 use warnings;
 use diagnostics;
-use 5.010;
+use 5.010001;
 
 use Fcntl ':mode';
 use File::Spec::Functions 'devnull';

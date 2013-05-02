@@ -7,13 +7,13 @@ package fetchware;
 use strict;
 use warnings;
 use diagnostics;
-use 5.010;
+use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '6'; #Update if this changes.
+use Test::More ;#0.98 tests => '6'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile);
-use URI::Split 'uri_split';
+use URI::Split qw(uri_split uri_join);
 use Cwd 'cwd';
 
 use Test::Fetchware ':TESTING';
@@ -36,58 +36,67 @@ my $class = 'App::Fetchware';
 
 
 
-subtest 'OVERRIDE_DOWNLOAD exports what it should' => sub {
-    my @expected_overide_download_exports = qw(
-        download_ftp_url
-        download_http_url
-        determine_package_path
-    );
-    # sort them to make the testing their equality very easy.
-    @expected_overide_download_exports = sort @expected_overide_download_exports;
-    my @sorted_download_tag = sort @{$App::Fetchware::EXPORT_TAGS{OVERRIDE_DOWNLOAD}};
-    ok(@expected_overide_download_exports ~~ @sorted_download_tag, 
-        'checked for correct OVERRIDE_DOWNLOAD @EXPORT_TAG');
+##TEST##subtest 'OVERRIDE_DOWNLOAD exports what it should' => sub {
+##TEST##    my @expected_overide_download_exports = qw(
+##TEST##        determine_package_path
+##TEST##    );
+##TEST##    # sort them to make the testing their equality very easy.
+##TEST##    @expected_overide_download_exports = sort @expected_overide_download_exports;
+##TEST##    my @sorted_download_tag = sort @{$App::Fetchware::EXPORT_TAGS{OVERRIDE_DOWNLOAD}};
+##TEST##    ok(@expected_overide_download_exports ~~ @sorted_download_tag, 
+##TEST##        'checked for correct OVERRIDE_DOWNLOAD @EXPORT_TAG');
+##TEST##
+##TEST##};
+##TEST##
+##TEST##
+##TEST##subtest 'test determine_package_path()' => sub {
+##TEST##    my $cwd = cwd();
+##TEST##    note("cwd[$cwd]");
+##TEST##
+##TEST##    is(determine_package_path($cwd, 'bin/fetchware'),
+##TEST##        catfile(cwd(), 'bin/fetchware'),
+##TEST##        'checked determine_package_path() success');
+##TEST##
+##TEST##};
+##TEST##
 
-};
+##TEST##subtest 'test download()' => sub {
+##TEST##    skip_all_unless_release_testing();
+##TEST##
+##TEST##    for my $url ($ENV{FETCHWARE_FTP_DOWNLOAD_URL},
+##TEST##        $ENV{FETCHWARE_HTTP_DOWNLOAD_URL}) {
+##TEST##note("URL[$url]");
+##TEST##
+##TEST##        eval_ok(sub {download(cwd(), $url)},
+##TEST##            qr/App-Fetchware: download\(\) has been passed a full URL \*not\* only a path./,
+##TEST##            'checked download() url exception');
+##TEST##
+##TEST##        # manually set $CONFIG{TempDir} to cwd().
+##TEST##        my $cwd = cwd();
+##TEST##        config_replace('temp_dir', "$cwd");
+##TEST##
+##TEST##        # Determine $filename for is() test below.
+##TEST##        my ($scheme, $auth, $path, $query, $frag) = uri_split($url);
+##TEST##        # Be sure to define a mirror, because with just a path download() can't
+##TEST##        # work properly.
+##TEST##        config(mirror => uri_join($scheme, $auth, undef, undef, undef));
+##TEST##        
+##TEST##        my ($volume, $directories, $filename) = splitpath($path);
+##TEST##note("FILENAME[$filename]");
+##TEST##note("LASTURL[$url] CWD[$cwd]");
+##TEST##        # Remeber download() wants a $path not a $url.
+##TEST##        is(download($cwd, $path), catfile($cwd, $filename),
+##TEST##            'checked download() success.');
+##TEST##
+##TEST##        ok(-e $filename, 'checked download() file exists success');
+##TEST##        ok(unlink $filename, 'checked deleting downloaded file');
+##TEST##
+##TEST##    }
+##TEST##
+##TEST##};
 
 
-subtest 'test determine_package_path()' => sub {
-    skip_all_unless_release_testing();
-    my $cwd = cwd();
-    note("cwd[$cwd]");
-
-    ###BUGALERT### Brittle test!!!
-    is(determine_package_path($cwd, 'bin/fetchware'),
-        '/home/dly/Desktop/Code/App-Fetchware/bin/fetchware',
-        'checked determine_package_path() success');
-
-};
-
-
-subtest 'test download()' => sub {
-    skip_all_unless_release_testing();
-
-    for my $url ($ENV{FETCHWARE_FTP_DOWNLOAD_URL},
-        $ENV{FETCHWARE_HTTP_DOWNLOAD_URL}) {
-        # manually set $CONFIG{TempDir} to cwd().
-        my $cwd = cwd();
-        config_replace('temp_dir', "$cwd");
-
-        # Determine $filename for is() test below.
-        my ($scheme, $auth, $path, $query, $frag) = uri_split($url);
-        my ($volume, $directories, $filename) = splitpath($path);
-        is(download($cwd, $url), catfile($cwd, $filename),
-            'checked download() success.');
-
-        ok(-e $filename, 'checked download() file exists success');
-        ok(unlink $filename, 'checked deleting downloaded file');
-
-    }
-
-};
-
-
-subtest 'test download() local file success' => sub {
+#subtest 'test download() local file success' => sub {
     # manually set $CONFIG{TempDir} to cwd().
     my $cwd = cwd();
     config_replace('temp_dir', "$cwd");
@@ -109,27 +118,9 @@ subtest 'test download() local file success' => sub {
 
     ok(unlink($test_dist_path, $test_dist_md5),
         'checked cmd_list() delete temp files.');
-};
-
-
-
-subtest 'test overriding download()' => sub {
-    # switch to *not* being package fetchware, so that I can test download()'s
-    # behavior as if its being called from a Fetchwarefile to create a callback
-    # that download will later call back in package fetchware.
-    package main;
-    use App::Fetchware;
-
-    download sub { return 'Overrode download()!' };
-
-    # Switch back to being in package fetchware, so that download() will try out
-    # the callback I gave it in the download() call above.
-    package fetchware;
-    is(download('fake', 'args'), 'Overrode download()!',
-        'checked overiding download() success');
-};
+#};
 
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-#done_testing();
+done_testing();
