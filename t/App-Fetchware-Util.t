@@ -545,7 +545,6 @@ EOS
 
 subtest 'test download_file(file://)' => sub {
     my $test_dist_path = make_test_dist('test-dist', '1.00');
-    my $test_dist_md5 = md5sum_file($test_dist_path);
 
     my $got_filename;
     ok($got_filename = download_file('file://' . $test_dist_path),
@@ -553,6 +552,12 @@ subtest 'test download_file(file://)' => sub {
 
     is(file($got_filename)->basename, file($test_dist_path)->basename,
         'checked download_file(file://) filename success.');
+    ok(unlink($test_dist_path),
+        'checked download_file(file://) cleanup test file.');
+    # Also delete the $got_filename, because download_file() will "download"
+    # (copy the file).
+    ok(unlink($got_filename),
+        'checked download_file(file://) cleanup copied file.');
 };
 
 
@@ -593,10 +598,10 @@ subtest 'test make_test_dist()' => sub {
     is(file($retval)->basename(), "$file_name-$ver_num.fpkg",
         'check make_test_dist() success.');
 
-    ok(unlink $retval, 'checked make_test_dist() cleanup');
+    ok(unlink( $retval), 'checked make_test_dist() cleanup');
 
     # Test more than one call as used in t/bin-fetchware-upgrade-all.t
-    my @filenames = qw(test-dist test-dist);
+    my @filenames = qw(test-dist another-dist);
 
     my @retvals;
     for my $filename (@filenames) {
@@ -606,7 +611,7 @@ subtest 'test make_test_dist()' => sub {
         push @retvals, $retval;
     }
 
-    ok(unlink @retvals, 'checked make_test_dist() 2 calls cleanup');
+    ok(unlink(@retvals), 'checked make_test_dist() 2 calls cleanup');
 
     # Test make_test_dist()'s second destination directory argument.
     my $name = 'test-dist-1.00';
@@ -614,7 +619,7 @@ subtest 'test make_test_dist()' => sub {
     is($return_val, catfile(tmpdir(), "$name-$ver_num.fpkg"),
         'check make_test_dist() destination directory success.');
 
-    ok(unlink $return_val, 'checked make_test_dist() cleanup');
+    ok(unlink($return_val), 'checked make_test_dist() cleanup');
 };
 
 
