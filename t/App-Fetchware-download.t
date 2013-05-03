@@ -10,7 +10,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More ;#0.98 tests => '6'; #Update if this changes.
+use Test::More 0.98 tests => '5'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile);
 use URI::Split qw(uri_split uri_join);
@@ -36,67 +36,67 @@ my $class = 'App::Fetchware';
 
 
 
-##TEST##subtest 'OVERRIDE_DOWNLOAD exports what it should' => sub {
-##TEST##    my @expected_overide_download_exports = qw(
-##TEST##        determine_package_path
-##TEST##    );
-##TEST##    # sort them to make the testing their equality very easy.
-##TEST##    @expected_overide_download_exports = sort @expected_overide_download_exports;
-##TEST##    my @sorted_download_tag = sort @{$App::Fetchware::EXPORT_TAGS{OVERRIDE_DOWNLOAD}};
-##TEST##    ok(@expected_overide_download_exports ~~ @sorted_download_tag, 
-##TEST##        'checked for correct OVERRIDE_DOWNLOAD @EXPORT_TAG');
-##TEST##
-##TEST##};
-##TEST##
-##TEST##
-##TEST##subtest 'test determine_package_path()' => sub {
-##TEST##    my $cwd = cwd();
-##TEST##    note("cwd[$cwd]");
-##TEST##
-##TEST##    is(determine_package_path($cwd, 'bin/fetchware'),
-##TEST##        catfile(cwd(), 'bin/fetchware'),
-##TEST##        'checked determine_package_path() success');
-##TEST##
-##TEST##};
-##TEST##
+subtest 'OVERRIDE_DOWNLOAD exports what it should' => sub {
+    my @expected_overide_download_exports = qw(
+        determine_package_path
+    );
+    # sort them to make the testing their equality very easy.
+    @expected_overide_download_exports = sort @expected_overide_download_exports;
+    my @sorted_download_tag = sort @{$App::Fetchware::EXPORT_TAGS{OVERRIDE_DOWNLOAD}};
+    ok(@expected_overide_download_exports ~~ @sorted_download_tag, 
+        'checked for correct OVERRIDE_DOWNLOAD @EXPORT_TAG');
 
-##TEST##subtest 'test download()' => sub {
-##TEST##    skip_all_unless_release_testing();
-##TEST##
-##TEST##    for my $url ($ENV{FETCHWARE_FTP_DOWNLOAD_URL},
-##TEST##        $ENV{FETCHWARE_HTTP_DOWNLOAD_URL}) {
-##TEST##note("URL[$url]");
-##TEST##
-##TEST##        eval_ok(sub {download(cwd(), $url)},
-##TEST##            qr/App-Fetchware: download\(\) has been passed a full URL \*not\* only a path./,
-##TEST##            'checked download() url exception');
-##TEST##
-##TEST##        # manually set $CONFIG{TempDir} to cwd().
-##TEST##        my $cwd = cwd();
-##TEST##        config_replace('temp_dir', "$cwd");
-##TEST##
-##TEST##        # Determine $filename for is() test below.
-##TEST##        my ($scheme, $auth, $path, $query, $frag) = uri_split($url);
-##TEST##        # Be sure to define a mirror, because with just a path download() can't
-##TEST##        # work properly.
-##TEST##        config(mirror => uri_join($scheme, $auth, undef, undef, undef));
-##TEST##        
-##TEST##        my ($volume, $directories, $filename) = splitpath($path);
-##TEST##note("FILENAME[$filename]");
-##TEST##note("LASTURL[$url] CWD[$cwd]");
-##TEST##        # Remeber download() wants a $path not a $url.
-##TEST##        is(download($cwd, $path), catfile($cwd, $filename),
-##TEST##            'checked download() success.');
-##TEST##
-##TEST##        ok(-e $filename, 'checked download() file exists success');
-##TEST##        ok(unlink $filename, 'checked deleting downloaded file');
-##TEST##
-##TEST##    }
-##TEST##
-##TEST##};
+};
 
 
-#subtest 'test download() local file success' => sub {
+subtest 'test determine_package_path()' => sub {
+    my $cwd = cwd();
+    note("cwd[$cwd]");
+
+    is(determine_package_path($cwd, 'bin/fetchware'),
+        catfile(cwd(), 'bin/fetchware'),
+        'checked determine_package_path() success');
+
+};
+
+
+subtest 'test download()' => sub {
+    skip_all_unless_release_testing();
+
+    for my $url ($ENV{FETCHWARE_FTP_DOWNLOAD_URL},
+        $ENV{FETCHWARE_HTTP_DOWNLOAD_URL}) {
+note("URL[$url]");
+
+        eval_ok(sub {download(cwd(), $url)},
+            qr/App-Fetchware: download\(\) has been passed a full URL \*not\* only a path./,
+            'checked download() url exception');
+
+        # manually set $CONFIG{TempDir} to cwd().
+        my $cwd = cwd();
+        config_replace('temp_dir', "$cwd");
+
+        # Determine $filename for is() test below.
+        my ($scheme, $auth, $path, $query, $frag) = uri_split($url);
+        # Be sure to define a mirror, because with just a path download() can't
+        # work properly.
+        config(mirror => uri_join($scheme, $auth, undef, undef, undef));
+        
+        my ($volume, $directories, $filename) = splitpath($path);
+note("FILENAME[$filename]");
+note("LASTURL[$url] CWD[$cwd]");
+        # Remeber download() wants a $path not a $url.
+        is(download($cwd, $path), catfile($cwd, $filename),
+            'checked download() success.');
+
+        ok(-e $filename, 'checked download() file exists success');
+        ok(unlink $filename, 'checked deleting downloaded file');
+
+    }
+
+};
+
+
+subtest 'test download() local file success' => sub {
     # manually set $CONFIG{TempDir} to cwd().
     my $cwd = cwd();
     config_replace('temp_dir', "$cwd");
@@ -110,17 +110,20 @@ my $class = 'App::Fetchware';
     my ($volume, $directories, $filename) = splitpath($path);
     ###BUGALERT## Remove cwd(), and replace with temp dir, so tests can be run
     #in parallel to speed up development.
-    is(download($cwd, $url), catfile($cwd, $filename),
+    # I must create a lookup_url to tell download_file() that it's downloading a
+    # local file.
+    config(lookup_url => "file://$test_dist_path");
+    is(download($cwd, $path), catfile($cwd, $filename),
         'checked download() local file success.');
 
     ok(-e $filename, 'checked download() file exists success');
-    ok(unlink $filename, 'checked deleting downloaded file');
+    ok(unlink($filename), 'checked deleting downloaded file');
 
     ok(unlink($test_dist_path, $test_dist_md5),
         'checked cmd_list() delete temp files.');
-#};
+};
 
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-done_testing();
+#done_testing();

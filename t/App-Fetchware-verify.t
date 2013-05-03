@@ -19,7 +19,7 @@ use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '10'; #Update if this changes.
+use Test::More 0.98 tests => '9'; #Update if this changes.
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -53,23 +53,24 @@ subtest 'OVERRIDE_VERIFY exports what it should' => sub {
 
 
 
-my $download_url;
+my $download_path;
 my $package_path;
 subtest 'Do verify() prereqs.' => sub {
     skip_all_unless_release_testing();
     # Call start() to create & cd to a tempdir, so end() called later can delete
     # all of the files that will be downloaded.
     my $temp_dir = start();
-    # Use config subs to determine a $download_url based on the current version
+    # Use config subs to determine a $download_path based on the current version
     # of apache instead of updating this manually.
     lookup_url 'http://www.apache.org/dist/httpd';
+    mirror 'http://apache.mirrors.pair.com/';
     filter 'httpd-2.2';
-    $download_url = lookup();
-    $package_path = download($temp_dir, $download_url);
+    $download_path = lookup();
+    $package_path = download($temp_dir, $download_path);
 
     ok(-e $temp_dir,
         'checked successful start().');
-    ok(defined $download_url,
+    ok(defined $download_path,
         'checked successful lookup().');
     ok(-e $package_path,
         'checked successful download().');
@@ -83,11 +84,11 @@ subtest 'test digest_verify()' => sub {
         note("TYPE[$digest_type]");
 
 
-        ok(digest_verify($digest_type, $download_url, $package_path),
+        ok(digest_verify($digest_type, $download_path, $package_path),
             "checked digest_verify($digest_type) success.");
 
         eval_ok(sub {
-                digest_verify($digest_type, $download_url,
+                digest_verify($digest_type, $download_path,
                     './doesntexistunlessyoucreateitbutdontdothat');
         }, <<EOE, "checked digest_verify($digest_type) package path failure");
 App-Fetchware: run-time error. Fetchware failed to open the file it downloaded
@@ -112,7 +113,7 @@ EOE
             'checked tempfile creation to test digest_verify() failure()');
         print $tf_fh 'SOME CRAP TO ACTUALLY MD5/SHA1 SUM!!!!!';
         close $tf_fh;
-        is(digest_verify($digest_type, $download_url, $tf_name), undef,
+        is(digest_verify($digest_type, $download_path, $tf_name), undef,
             "checked digest_verify($digest_type) failure");
 
         eval_ok(sub {
@@ -134,24 +135,24 @@ EOE
 subtest 'test md5_verify()' => sub {
     skip_all_unless_release_testing();
 
-    ok(md5_verify($download_url, $package_path),
+    ok(md5_verify($download_path, $package_path),
         "checked md5_verify() success.");
 
     md5_url 'http://www.apache.org/dist/httpd/';
 
-    ok(md5_verify($download_url, $package_path),
+    ok(md5_verify($download_path, $package_path),
         'checked md5_verify() md5_url success.');
 };
 
 subtest 'test sha1_verify()' => sub {
     skip_all_unless_release_testing();
 
-    ok(sha1_verify($download_url, $package_path),
+    ok(sha1_verify($download_path, $package_path),
         "checked sha1_verify() success.");
 
     sha1_url 'http://www.apache.org/dist/httpd/';
 
-    ok(sha1_verify($download_url, $package_path),
+    ok(sha1_verify($download_path, $package_path),
         'checked sha1_verify() sha_url success.');
 };
 
@@ -163,17 +164,21 @@ subtest 'test gpg_verify()' => sub {
     # Clean the gunk of of %CONFIG.
     __clear_CONFIG();
 
-    lookup_url 'http://www.alliedquotes.com/mirrors/apache//httpd/';
+    # Test gpg_verify() success.
+    lookup_url 'http://www.apache.org/dist/httpd';
+note("DOWNLOADURL    [$download_path]");
+    ok(gpg_verify($download_path), 'checked gpg_verify() success');
 
-    gpg_sig_url 'http://www.alliedquotes.com/mirrors/apache//httpd/KEYS';
+    # Test gpg_verify() success using gpg_keys_url.
+    gpg_keys_url config('lookup_url') . '/KEYS';
 
-    ok(gpg_verify($download_url), 'checked gpg_verify() success');
+    ok(gpg_verify($download_path), 'checked gpg_verify() success');
 
     eval_ok(sub {
         gpg_verify('ftp://fake.url/will.fail');
         }, <<EOE, 'checked gpg_verify() download gpg_sig_url failure'); 
 App-Fetchware: Fetchware was unable to download the gpg_sig_url you specified or
-that fetchware tried appending asc, sig, or sign to [ftp://fake.url/will.fail]. It needs
+that fetchware tried appending asc, sig, or sign to [http://www.apache.org/will.fail.sign]. It needs
 to download this file to properly verify you software package. This is a fatal
 error, because failing to verify packages is a perferable default over
 potentially installing compromised ones. If failing to verify your software
@@ -194,7 +199,7 @@ subtest 'test verify()' => sub {
     # Specify a DownloadURL to test some gpg_verify() guessing magic.
     for my $verify_method (qw(gpg sha md5)) {
         config_replace('verify_method', "$verify_method");
-        eval {verify($download_url, $package_path)};
+        eval {verify($download_path, $package_path)};
 
         unless ($@) {
             pass("checked verify() verify_method $verify_method");
@@ -205,7 +210,7 @@ subtest 'test verify()' => sub {
 
 
     # test using copied gpg_verify setup from above.
-    eval {verify($download_url, $package_path)};
+    eval {verify($download_path, $package_path)};
     note("exe[$@]");
     unless ($@) {
         pass("checked verify() automatic method gpg");
@@ -225,10 +230,13 @@ subtest 'test verify()' => sub {
     # test using just a plain old md5sum.
     # Use postgressql to test for only a md5, though I should find a smaller
     # progject that packages up md5 correctly.
-    my $postgres_download_url =
-        'http://ftp.postgresql.org/pub/source/v9.1.2/postgresql-9.1.2.tar.bz2';
+    # Must temporarily change the lookup_url.
+    my $old_lookup = config('lookup_url');
+    config_replace(lookup_url => 'http://ftp.postgresql.org/pub/source/');
+    my $postgres_download_path =
+        'http://ftp.postgresql.org/pub/source/v9.2.4/postgresql-9.2.4.tar.bz2';
     eval {verify(
-        $postgres_download_url, download_file($postgres_download_url)
+        $postgres_download_path, download_file($postgres_download_path)
     )};
     unless ($@) {
         pass("checked verify() automatic method md5");
@@ -236,6 +244,7 @@ subtest 'test verify()' => sub {
         die $@;
         fail("checked verify() automatic method md5");
     }
+    config_replace(lookup_url => $old_lookup);
 
 
     # Clear CONFIG for next run.
@@ -260,7 +269,7 @@ EOE
 
     # Test an invalid verify_method.
     verify_method 'invalid';
-    eval_ok(sub {verify($download_url, $package_path)},
+    eval_ok(sub {verify($download_path, $package_path)},
         <<EOE, 'checked verify() invalid verify_method');
 App-Fetchware: run-time error. Your fetchware file specified a wrong
 verify_method option. The only supported types are 'gpg', 'sha', 'md5', but you
@@ -273,24 +282,6 @@ EOE
 
 ###BUGALERT###Add a subtest that uses make_test_dist() and md5sum_file() to test
 #verify() functionality on non FETCHWARE_RELEASE_TESTING systems.
-
-
-subtest 'test overriding verify()' => sub {
-    # switch to *not* being package fetchware, so that I can test verify()'s
-    # behavior as if its being called from a Fetchwarefile to create a callback
-    # that verify will later call back in package fetchware.
-    package main;
-    use App::Fetchware;
-
-    verify sub { return 'Overrode verify()!' };
-
-    # Switch back to being in package fetchware, so that verify() will try out
-    # the callback I gave it in the verify() call above.
-    package fetchware;
-    is(verify('fake', 'args'), 'Overrode verify()!',
-        'checked overiding verify() success');
-};
-
 
 
 subtest 'Call end() to clean up temporary directory.' => sub {

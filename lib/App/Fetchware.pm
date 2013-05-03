@@ -21,6 +21,7 @@ use Archive::Tar;
 use Archive::Zip qw(:ERROR_CODES :CONSTANTS);
 use Cwd 'cwd';
 use Sub::Mage;
+use URI::Split qw(uri_split uri_join);
 
 use App::Fetchware::Util ':UTIL';
 use App::Fetchware::Config ':CONFIG';
@@ -52,6 +53,7 @@ our @EXPORT = qw(
     install_commands
     lookup_url
     lookup_method
+    gpg_keys_url
     gpg_sig_url
     sha1_url
     md5_url
@@ -84,13 +86,13 @@ our %EXPORT_TAGS = (
         check_lookup_config
         get_directory_listing
         parse_directory_listing
-        determine_download_url
+        determine_download_path
         ftp_parse_filelist
         http_parse_filelist
         file_parse_filelist
         lookup_by_timestamp
         lookup_by_versionstring
-        lookup_determine_downloadurl
+        lookup_determine_downloadpath
     )],
     OVERRIDE_DOWNLOAD => [qw(
         determine_package_path
@@ -243,6 +245,7 @@ extension see the section L<CREATING A FETCHWARE EXTENSION>
         [ uninstall_commands => 'ONEARRREF' ],
         [ lookup_url => 'ONE' ],
         [ lookup_method => 'ONE' ],
+        [ gpg_keys_url => 'ONE' ],
         [ gpg_sig_url => 'ONE' ],
         [ sha1_url => 'ONE' ],
         [ md5_url => 'ONE' ],
@@ -251,6 +254,7 @@ extension see the section L<CREATING A FETCHWARE EXTENSION>
         [ no_install => 'BOOLEAN' ],
         [ verify_failure_ok => 'BOOLEAN' ],
         [ stay_root => 'BOOLEAN' ],
+        [ user_keyring => 'BOOLEAN' ],
     );
 
 
@@ -541,9 +545,9 @@ fetchware comand at the same time.
 =back
 
 Accesses C<lookup_url> as a http/ftp directory listing, and uses C<lookup_method>
-to determine what the newest version of the software is available, which it
-combines with the C<lookup_url> and returns it to caller for use as an argument
-to download().
+to determine what the newest version of the software is available. This is
+combined with the path given in C<lookup_url>, and return as $download_path for
+use by download().
 
 =over
 =item LIMITATIONS
@@ -553,6 +557,10 @@ listing must be a listing of all of the available versions of the program this
 Fetchwarefile belongs to.
 
 Only ftp://, http://, and file:// URL scheme's are supported.
+
+And the HTML directory listings Apache and other Web Server's return I<are>
+exactly what lookup() uses to determine what the latest version available for
+download is.
 
 =item drop_privs() NOTES
 
@@ -600,10 +608,11 @@ sub lookup {
         # same timestamp.
     # return $download_url, which is lookup_url . <latest version archive>
     vmsg 'Using parsed directory listing to determine download url.';
-    my $download_url = determine_download_url($filename_listing);
+    my $download_path = determine_download_path($filename_listing);
 
-    msg "Download url determined to be [$download_url]";
-    return $download_url;
+    vmsg "Download path determined to be [$download_path]";
+
+    return $download_path;
 }
 
 
@@ -721,24 +730,24 @@ sub parse_directory_listing {
 }
 
 
-=head3 determine_download_url()
+=head3 determine_download_path()
 
-    my $download_url = determine_download_url($filename_listing);
+    my $download_path = determine_download_path($filename_listing);
 
 Runs the C<lookup_method> to determine what the lastest filename is, and that
-one is then concatenated with C<lookup_url> to determine the $download_url,
+one is then concatenated with C<lookup_url> to determine the $download_path,
 which is then returned to the caller.
 
 =over
 =item SIDE EFFECTS
-determine_download_url(); returns $download_url to the URL that download() will
+determine_download_path(); returns $download_path the path that download() will
 use to download the archive of your program.
 
 =back
 
 =cut
 
-sub determine_download_url {
+sub determine_download_path {
     my $filename_listing = shift;
 
     # Base lookup algorithm on lookup_method configuration sub if it was
@@ -966,7 +975,7 @@ sub  lookup_by_timestamp {
     ###BUGALERT### Refactor this containing sub to call the sub below, and
     #another one called lookup_hacks() for example, or perhaps provide a
     #callback for this :)
-    return lookup_determine_downloadurl(\@sorted_listing);
+    return lookup_determine_downloadpath(\@sorted_listing);
 }
 
 
@@ -976,7 +985,7 @@ sub  lookup_by_timestamp {
 
 Determines the $download_url used by download() by cleverly C<split>ing the
 filenames on C</\D+/>, which will return a list of version numbers. Then
-they're just sorted normally. And lookup_determine_downloadurl() is used to
+they're just sorted normally. And lookup_determine_downloadpath() is used to
 take the sorted $file_listing, and determine the actual $download_url, which is
 returned.
 
@@ -1006,14 +1015,14 @@ sub  lookup_by_versionstring {
     #subroutine at least vmsg determine_downloadurl inside lookup().
     # Manage duplicate timestamps apropriately including .md5, .asc, .txt files.
     # And support some hacks to make lookup() more robust.
-    return lookup_determine_downloadurl($file_listing);
+    return lookup_determine_downloadpath($file_listing);
 }
 
 
 
-=head3 lookup_determine_downloadurl()
+=head3 lookup_determine_downloadpath()
 
-    my $download_url = lookup_determine_downloadurl($file_listing);
+    my $download_path = lookup_determine_downloadpath($file_listing);
 
 Given a $file_listing of files with the same timestamp or versionstring,
 determine which one is a downloadable archive, a tarball or zip file. And
@@ -1024,7 +1033,7 @@ files.
 
 =cut
 
-sub lookup_determine_downloadurl {
+sub lookup_determine_downloadpath {
     my $file_listing = shift;
 
     # First grep @$file_listing for $CONFIG{filter} if $CONFIG{filter} is defined.
@@ -1061,21 +1070,29 @@ sub lookup_determine_downloadurl {
     for my $fl (@$file_listing) {
         given ($fl->[0]) {
             when (/\.tar\.xz$/) {
-                return "@{[config('lookup_url')]}/$fl->[0]";
+                my $path = ( uri_split(config('lookup_url')) )[2];
+                return "$path/$fl->[0]";
             } when (/\.txz$/) {
-                return "@{[config('lookup_url')]}/$fl->[0]";
+                my $path = ( uri_split(config('lookup_url')) )[2];
+                return "$path/$fl->[0]";
             } when (/\.tar\.bz2$/) {
-                return "@{[config('lookup_url')]}/$fl->[0]";
+                my $path = ( uri_split(config('lookup_url')) )[2];
+                return "$path/$fl->[0]";
             } when (/\.tbz$/) {
-                return "@{[config('lookup_url')]}/$fl->[0]";
+                my $path = ( uri_split(config('lookup_url')) )[2];
+                return "$path/$fl->[0]";
             } when (/\.tar\.gz$/) {
-                return "@{[config('lookup_url')]}/$fl->[0]";
+                my $path = ( uri_split(config('lookup_url')) )[2];
+                return "$path/$fl->[0]";
             } when (/\.tgz$/) {
-                return "@{[config('lookup_url')]}/$fl->[0]";
+                my $path = ( uri_split(config('lookup_url')) )[2];
+                return "$path/$fl->[0]";
             } when (/\.zip$/) {
-                return "@{[config('lookup_url')]}/$fl->[0]";
+                my $path = ( uri_split(config('lookup_url')) )[2];
+                return "$path/$fl->[0]";
             } when (/\.fpkg$/) {
-                return "@{[config('lookup_url')]}/$fl->[0]";
+                my $path = ( uri_split(config('lookup_url')) )[2];
+                return "$path/$fl->[0]";
             }
         }
 ##DELME##        if (config('lookup_url') =~ m!^file://!) {
@@ -1138,11 +1155,23 @@ Under drop_privs() download() is executed in the child with reduced privileges.
 =cut
 
 sub download {
-    my ($temp_dir, $download_url) = @_;
+    my ($temp_dir, $download_path) = @_;
 
-    msg "Downloading from url [$download_url] to temp dir [$temp_dir]";
+    # Ensure we're passed just a path, and *not* a full URL.
+    die <<EOD if $download_path =~ m!(?:http|ftp|file)://!;
+App-Fetchware: download() has been passed a full URL *not* only a path.
+download() should only be called with a path never a full URL. The URL you
+specified was [$download_path]
+EOD
 
-    my $downloaded_file_path = download_file($download_url);
+    vmsg <<EOM;
+Using [$download_path] as basis for determined our download_url using the user
+supplied mirrors.
+EOM
+
+    msg "Downloading from url [$download_path] to temp dir [$temp_dir]";
+
+    my $downloaded_file_path = download_file(PATH => $download_path);
     vmsg "Downloaded file to [$downloaded_file_path]";
 
     my $package_path = determine_package_path($temp_dir, $downloaded_file_path);
@@ -1236,7 +1265,7 @@ Under drop_privs() verify() is executed in the child with reduced privileges.
 =cut
 
 sub verify {
-    my ($download_url, $package_path) = @_;
+    my ($download_path, $package_path) = @_;
 
     msg "Verifying the downloaded package [$package_path]";
 
@@ -1248,7 +1277,7 @@ sub verify {
             # md5 and if it fails die
             msg 'Trying to use gpg to cyptographically verify downloaded package.';
             my ($gpg_err, $sha_err, $md5_err);
-            eval {$retval = gpg_verify($download_url)};
+            eval {$retval = gpg_verify($download_path)};
             $gpg_err = $@;
             if ($gpg_err) {
                 msg <<EOM;
@@ -1260,7 +1289,7 @@ EOM
                 msg <<EOM;
 Trying SHA1 verification of downloaded package.
 EOM
-                eval {$retval = sha1_verify($download_url, $package_path)};
+                eval {$retval = sha1_verify($download_path, $package_path)};
                 $sha_err = $@;
                 if ($sha_err) {
                     msg <<EOM;
@@ -1272,7 +1301,7 @@ EOM
                     msg <<EOM;
 Trying MD5 verification of downloaded package.
 EOM
-                    eval {$retval = md5_verify($download_url, $package_path)};
+                    eval {$retval = md5_verify($download_path, $package_path)};
                     $md5_err = $@;
                     if ($md5_err) {
                         msg <<EOM;
@@ -1308,7 +1337,7 @@ EOM
             vmsg <<EOM;
 You selected gpg cryptographic verification. Verifying now.
 EOM
-            gpg_verify($download_url)
+            gpg_verify($download_path)
                 or die <<EOD unless config('verify_failure_ok');
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
 package with gpg or openpgp, but they both failed. See the warning above for
@@ -1318,7 +1347,7 @@ EOD
             vmsg <<EOM;
 You selected SHA1 checksum verification. Verifying now.
 EOM
-            sha1_verify($download_url, $package_path)
+            sha1_verify($download_path, $package_path)
                 or die <<EOD unless config('verify_failure_ok');
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
 package with sha, but it failed. See the warning above for their error message.
@@ -1328,7 +1357,7 @@ EOD
             vmsg <<EOM;
 You selected MD5 checksum verification. Verifying now.
 EOM
-            md5_verify($download_url, $package_path)
+            md5_verify($download_path, $package_path)
                 or die <<EOD unless config('verify_failure_ok');
 App-Fetchware: run-time error. You asked fetchware to only try to verify your
 package with md5, but it failed. See the warning above for their error message.
@@ -1362,58 +1391,104 @@ App::Fetchware to extend it!
 
 =head3 gpg_verify()
 
-    'Package Verified' = gpg_verify($download_url);
+    'Package Verified' = gpg_verify($download_path);
 
-Verifies the downloaded source code distribution using the command line program
-gpg.
+Uses the command-line program C<gpg> to cryptographically verify that the file
+you download is the same as the file the author uploaded. It uses public-key
+priviate-key cryptography. The author signs his software package using gpg or
+some other OpenPGP compliant program creating a digital signature file with the
+same filename as the software package, but usually with a C<.asc> file name
+extension. gpg_verify() downloads the author's keys, imports them into
+fetchware's own keyring unless the user sets C<user_keyring> to true in his
+Fetchwarefile. Then Fetchware downloads a the digital signature that usually
+ends in C<.asc>. Afterwards, fetchware uses the gpg command line program to
+verify the digital signature. gpg_verify returns true if successful, and throws
+an exception otherwise.
+
+You can use C<gpg_keys_url> to specify the URL of a file where the author has
+uploaded his keys. And the C<gpg_sig_url> can be used to setup an alternative
+location of where the C<.asc> digital signature is stored.
+
 =cut
 
 sub gpg_verify {
-    my $download_url = shift;
+    my $download_path = shift;
 
-    my $keys_file;
-    # Obtain a KEYS file listing everyone's key that signs this distribution.
-##DELME##    if (defined $CONFIG{gpg_key_url}) {
-##DELME##        $keys_file = download_file($CONFIG{gpg_key_url});
-##DELME##    } else {
-##DELME##        eval {
-##DELME##            $keys_file = download_file("$CONFIG{lookup_url}/KEYS");
-##DELME##        }; 
-##DELME##        if ($@ and not defined $CONFIG{verify_failure_ok}) {
-##DELME##            die <<EOD;
-##DELME##App-Fetchware: Fetchware was unable to download the gpg_key_url you specified or
-##DELME##that fetchware tried appending asc, sig, or sign to [$CONFIG{DownloadUrl}]. It needs
-##DELME##to download this file to properly verify you software package. This is a fatal
-##DELME##error, because failing to verify packages is a perferable default over
-##DELME##potentially installing compromised ones. If failing to verify your software
-##DELME##package is ok to you, then you may disable verification by adding
-##DELME##verify_failure_ok 'On'; to your Fetchwarefile. See perldoc App::Fetchware.
-##DELME##EOD
-##DELME##        }
-##DELME##    }
+
+    # Determine @gpg_options for use when running gpg.
+    my @gpg_options;
+    push @gpg_options, '--homedir', '.' unless config('user_keyring');
+
+    ## Attempt to download KEYS file in lookup_url's containing directory.
+    ## If that fails, try gpg_keys_url if defined.
+    ## Import downloaded KEYS file into a local gpg keyring using gpg command.
+    ## Determine what URL to use to download the signature file *only* from
+    ## lookup_url's host, so that we only download the signature from the
+    ## project's main mirror.
+    ## Download it.
+    # gpg verify the sig using the downloaded and imported keys in our local
+    # keyring.
+
+    # Skip downloading and importing keys if we're called from inside a
+    # fetchware package, which should already have a copy of our package's KEYS
+    # file.
+    unless (-e './pubring.gpg' and -e './secring.gpg') {
+        # Obtain a KEYS file listing everyone's key that signs this distribution.
+        my $keys_file;
+        if (defined config('gpg_keys_url')) {
+            $keys_file = no_mirror_download_file(config('gpg_keys_url'));
+        } else {
+            eval {
+                $keys_file = no_mirror_download_file(config('lookup_url'). '/KEYS');
+            }; 
+                die <<EOD if $@;
+App-Fetchware: Fetchware was unable to download the gpg_key_url you specified or
+that fetchware tried appending asc, sig, or sign to [@{[config('lookup_url')]}].
+It needs to download this file to properly verify you software package. This is
+a fatal error, because failing to verify packages is a perferable default over
+potentially installing compromised ones. If failing to verify your software
+package is ok to you, then you may disable verification by adding
+verify_failure_ok 'On'; to your Fetchwarefile. See perldoc App::Fetchware.
+EOD
+        }
+
+        # Import downloaded KEYS file into a local gpg keyring using gpg command.
+        eval {
+            run_prog('gpg', @gpg_options, '--import', $keys_file);
+            1;
+        } or msg <<EOM;
+App-Fetchware: Warning: gpg exits nonzero when importing large KEY files such as
+Apache's. However, despite exiting nonzero gpg still manages to import most of
+the keys into its keyring. It only exits nonzero, because some of the keys in
+the KEYS file had errors, and these key's errors were enough to cause gpg to
+exit nonzero, but not enough to cause it to completely fail importing the keys.
+EOM
+    }
 
     # Download Signature using lookup_url.
     my $sig_file;
-    ###BUGALERT### Should the eval{} be inside the for loop, so that the code
-    #will actually try multiple times instead of exiting the loop on the first
-    #failure, and not even trying the other two.
-    eval {
-        for my $ext (qw(asc sig sign)) {
-            $sig_file = download_file("$download_url.$ext");
+    my (undef, undef, $path, undef, undef) = uri_split($download_path);
+    my ($scheme, $auth, undef, undef, undef) = uri_split(config('lookup_url'));
+    my $sig_url;
+    for my $ext (qw(asc sig sign)) {
+        eval {
+            $sig_url = uri_join($scheme, $auth, "$path.$ext", undef, undef);
+            $sig_file = no_mirror_download_file($sig_url);
 
-            # If the file was downloaded successfully stop trying other extensions.
-            last if defined $sig_file;
-        }
-        1;
-    } or die <<EOD;
+        };
+        # If the file was downloaded stop trying other extensions.
+        last if defined $sig_file;
+    }
+    die <<EOD if not defined $sig_file;
 App-Fetchware: Fetchware was unable to download the gpg_sig_url you specified or
-that fetchware tried appending asc, sig, or sign to [$download_url]. It needs
+that fetchware tried appending asc, sig, or sign to [$sig_url]. It needs
 to download this file to properly verify you software package. This is a fatal
 error, because failing to verify packages is a perferable default over
 potentially installing compromised ones. If failing to verify your software
 package is ok to you, then you may disable verification by adding
 verify_failure_ok 'On'; to your Fetchwarefile. See perldoc App::Fetchware.
 EOD
+
 
 ###BUGALERT###    # Use Crypt::OpenPGP if its installed.
 ###BUGALERT###    if (eval {use Crypt::OpenPGP}) {
@@ -1463,12 +1538,12 @@ EOD
         #have keys cached inside the fetchware package does that mean that I
         #should open up this as an API for fetchware extensions????? I don't
         #know. I'll have to think more about this issue.
-        run_prog('gpg', '--keyserver', 'pool.sks-keyservers.net',
-            '--keyserver-options', 'auto-key-retrieve=1',
-            '--homedir', '.',  "$sig_file");
+        #run_prog('gpg', '--keyserver', 'pool.sks-keyservers.net',
+        #    '--keyserver-options', 'auto-key-retrieve=1',
+        #    '--homedir', '.',  "$sig_file");
 
         # Verify sig.
-#        run_prog('gpg', '--homedir', '.', '--verify', "$sig_file");
+        run_prog('gpg', @gpg_options, '--verify', "$sig_file");
 ###BUGALERT###    }
 
     # Return true indicating the package was verified.
@@ -1478,8 +1553,8 @@ EOD
 
 =head3 sha1_verify()
 
-    'Package verified' = sha1_verify($download_url, $package_path);
-    undef = sha1_verify($download_url, $package_path);
+    'Package verified' = sha1_verify($download_path, $package_path);
+    undef = sha1_verify($download_path, $package_path);
 
 Verifies the downloaded software archive's integrity using the SHA Digest
 specified by the C<sha_url 'ftp://sha.url/package.sha'> config option. Returns
@@ -1504,16 +1579,16 @@ Fetchwarefile.
 =cut 
 
 sub sha1_verify {
-    my ($download_url, $package_path) = @_;
+    my ($download_path, $package_path) = @_;
 
-    return digest_verify('SHA-1', $download_url, $package_path);
+    return digest_verify('SHA-1', $download_path, $package_path);
 }
 
 
 =head3 md5_verify()
 
-    'Package verified' = md5_verify($download_url, $package_path);
-    undef = md5_verify($download_url, $package_path);
+    'Package verified' = md5_verify($download_path, $package_path);
+    undef = md5_verify($download_path, $package_path);
 
 Verifies the downloaded software archive's integrity using the MD5 Digest
 specified by the C<md5_url 'ftp://sha.url/package.sha'> config option. Returns
@@ -1538,16 +1613,16 @@ Fetchwarefile.
 =cut 
 
 sub md5_verify {
-    my ($download_url, $package_path) = @_;
+    my ($download_path, $package_path) = @_;
 
-    return digest_verify('MD5', $download_url, $package_path);
+    return digest_verify('MD5', $download_path, $package_path);
 }
 
 
 =head3 digest_verify()
 
-    'Package verified' = digest_verify($digest_type, $download_url, $package_path);
-    undef = digest_verify($digest_type, $download_url, $package_path);
+    'Package verified' = digest_verify($digest_type, $download_path, $package_path);
+    undef = digest_verify($digest_type, $download_path, $package_path);
 
 Verifies the downloaded software archive's integrity using the specified
 $digest_type, which also determines the
@@ -1584,7 +1659,7 @@ C<$digest_type_url 'master.mirror/package.$digest_type';>' in your Fetchwarefile
 =cut 
 
 sub digest_verify {
-    my ($digest_type, $download_url, $package_path) = @_;
+    my ($digest_type, $download_path, $package_path) = @_;
 
     # Turn SHA-1 into sha1 & MD5 into md5.
     my $digest_ext = $digest_type;
@@ -1599,15 +1674,28 @@ sub digest_verify {
         config_replace(lookup_url => config("${digest_ext}_url"));
         ###BUGALERT### This is crap! Rip lookup()'s fetchware out, and have this
         #subroutine call a new library function instead!
+        ###BUGALERT### the package fetchware; crap is not needed after the great
+        #override refactor. Or is it???
         package fetchware; # Pretend to be bin/fetchware.
-        my $lookuped_download_url = lookup();
+        my $lookuped_download_path = lookup();
         package App::Fetchware; # Switch back.
         # Should I implement config_local() :)
         config_replace(lookup_url => $old_lookup_url);
-        $digest_file = download_file("$lookuped_download_url.$digest_ext");
+        my ($scheme, $auth, undef, undef, undef) =
+            uri_split(config("${digest_ext}_url"));
+        my $digest_url =
+            uri_join($scheme, $auth, $lookuped_download_path, undef, undef);
+        msg "Downloading $digest_ext digest using [$digest_url.$digest_ext]";
+        $digest_file =
+            no_mirror_download_file("$digest_url.$digest_ext");
     } else {
         eval {
-            $digest_file = download_file("$download_url.$digest_ext");
+            my (undef, undef, $path, undef, undef) = uri_split($download_path);
+            my ($scheme, $auth, undef, undef, undef) =
+                uri_split(config('lookup_url'));
+            my $digest_url = uri_join($scheme, $auth, $path, undef, undef);
+            msg "Downloading $digest_ext digest using [$digest_url.$digest_ext]";
+            $digest_file = no_mirror_download_file("$digest_url.$digest_ext");
         };
         if ($@) {
             die <<EOD;
@@ -3472,9 +3560,9 @@ L<FETCHWAREFILE API SUBROUTINES>.
 
 =item L<OVERRIDE_LOOKUP|lookup() API REFERENCE> - L</check_lookup_config()>,
 L</get_directory_listing()>, L</parse_directory_listing()>,
-L</determine_download_url()>, L</ftp_parse_filelist()>, L</http_parse_filelist()>,
+L</determine_download_path()>, L</ftp_parse_filelist()>, L</http_parse_filelist()>,
 L</file_parse_filelist()>, L</lookup_by_timestamp()>,
-L</lookup_by_versionstring()>, L</lookup_determine_downloadurl()>
+L</lookup_by_versionstring()>, L</lookup_determine_downloadpath()>
 
 =item L<OVERRIDE_DOWNLOAD|download() API REFERENCE> -
 L</determine_package_path()>
