@@ -48,6 +48,7 @@ use Text::Wrap 'wrap';
 use Data::Dumper;
 use Fcntl ':flock';
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
+use Sub::Mage;
 
 # Setup exports, which are only meant to ease testing.
 use Exporter 'import';
@@ -2284,7 +2285,7 @@ EOD
 
     # Ensure the $fetchwarefile has a use App::Fetchware somewhere in it. And be
     # sure to support fetchware extensions such as App::Fetchware::HTMLPageSync.
-    die <<EOD unless $$fetchwarefile =~/^\s*use\s+App::Fetchware/m;
+    die <<EOD unless $$fetchwarefile =~ /^\s*use\s+App::FetchwareX?(::)?/m;
 fetchware: The fetchwarefile you provided did not have a [use App::Fetchware]
 line in it. This line is required, because it is an important part of how
 fetchware uses Perl for its configuration file. Your fetchware file was.
@@ -2296,8 +2297,6 @@ EOD
     #
     # safe_open() is used to ensure that the file the user provides is "safe" to
     # use, and is the limit of fetchware's safty features.
-    #Can Archvie::Tar take a $fh instead of a filename???
-    # Yep, read() can take a $fh too!!!!!!!
     eval $$fetchwarefile;
 
     die <<EOD if $@;
@@ -2310,15 +2309,15 @@ EOD
     # Ensure that the specified App::Fetchware implementation exports the proper
     # subroutines.
     my %api_subs = (
-        start => 'who cares',
-        lookup => 'who cares',
-        download => 'who cares',
-        verify => 'who cares',
-        unarchive => 'who cares',
-        build => 'who cares',
-        install => 'who cares',
-        uninstall => 'who cares',
-        end => 'who cares',
+        start => 1,
+        lookup => 1,
+        download => 1,
+        verify => 1,
+        unarchive => 1,
+        build => 1,
+        install => 1,
+        uninstall => 1,
+        end => 1,
     );
 
     # Determine if all of the @api_subs are in sublist, the list of all subs in
@@ -2329,12 +2328,25 @@ EOD
         $union{$element}++ && $intersection{$element}++;
     }
 
-    die <<EOD unless grep {$api_subs{$_} eq $intersection{$_}} keys %api_subs;
+    unless ( (grep {exists $api_subs{$_} and exists $intersection{$_}
+                and $api_subs{$_} eq $intersection{$_}} keys %api_subs) == 9) {
+        my @missing_api_subs;
+        for my $api_sub (keys %api_subs) {
+            if (not exists $intersection{$api_sub}
+                or not defined $intersection{$api_sub}
+                or ($intersection{$api_sub} == 0)
+            ) {
+                push @missing_api_subs, $api_sub;
+            }
+        }
+        die <<EOD;
 fetchware: The App::Fetchware module you choose in your fetchwarefile does not
 properly export the necessary subroutines fetchware needs it to. These include:
-start(), lookup(), download(), verify, unarchive(), build(), install(), and
-uninstall().
+start(), lookup(), download(), verify, unarchive(), build(), install(),
+uninstall(), and end().
+The missing subroutines are [@missing_api_subs].
 EOD
+    }
 
     return 'Evaled config file successfully';
 }

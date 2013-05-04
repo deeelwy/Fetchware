@@ -86,6 +86,32 @@ EOS
         qr/fetchware failed to execute the Fetchwarefile/,
         'checked parse_fetchwarefile() failed to execute Fetchwarefile');
 
+    # Cleanup previous calls.
+    __clear_CONFIG();
+
+    my $api_subs_exported = <<EOS;
+use App::Fetchware;
+
+program 'who cares';
+lookup_url 'none://';
+
+# Use extra perl code to "delete" some of the API subs to test that they weren't
+# exported.
+use Sub::Mage;
+withdraw('lookup');
+withdraw('install');
+EOS
+
+    eval_ok(sub {parse_fetchwarefile(\$api_subs_exported)},
+        <<EOE, 'checked parse_fetchwarefile() failed to export api subs.');
+fetchware: The App::Fetchware module you choose in your fetchwarefile does not
+properly export the necessary subroutines fetchware needs it to. These include:
+start(), lookup(), download(), verify, unarchive(), build(), install(),
+uninstall(), and end().
+The missing subroutines are [install lookup].
+EOE
+
+
 };
 
 
@@ -267,7 +293,7 @@ subtest 'check copy_fpkg_to_fpkg_database()' => sub {
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-done_testing();
+#done_testing();
 
 
 sub test_config {
