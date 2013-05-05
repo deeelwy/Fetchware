@@ -10,7 +10,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More;# 0.98 tests => '14'; #Update if this changes.
+use Test::More 0.98 tests => '13'; #Update if this changes.
 use File::Spec::Functions qw(rel2abs);
 use Test::Deep;
 
@@ -37,13 +37,13 @@ subtest 'OVERRIDE_LOOKUP exports what it should' => sub {
         check_lookup_config
         get_directory_listing
         parse_directory_listing
-        determine_download_url
+        determine_download_path
         ftp_parse_filelist
         http_parse_filelist
         file_parse_filelist
         lookup_by_timestamp
         lookup_by_versionstring
-        lookup_determine_downloadurl
+        lookup_determine_downloadpath
     );
     # sort them to make the testing their equality very easy.
     @expected_overide_lookup_exports = sort @expected_overide_lookup_exports;
@@ -79,6 +79,46 @@ option to lookup_method. lookup_method only supports the options 'timestamp' and
 'versionstring'. All others are wrong. See man App::Fetchware.
 EOS
 
+    # Now test the other exceptions.
+    config_delete('lookup_method');
+    # must also specify a program name, a mirror, and a way to verify it.
+    # Test no program name.
+    eval_ok(sub {check_lookup_config()},
+        <<EOE, 'checked check_lookup_config() no program');
+App-Fetchware: You failed to specify a [program] configuration option. This
+option is mandatory, and gives the program your Fetchwarefile manages a name.
+Please add a [program 'your program's name here';] configuration option to your
+Fetchwarefile.
+EOE
+    program 'just testing';
+    # Test no mirror.
+    eval_ok(sub {check_lookup_config()},
+        <<EOE, 'checked check_lookup_config() no mirror');
+App-Fetchware: You failed to specify a [mirror] configuration option. This
+option is mandatory, and is used by fetchware to download a new version of your
+program to install that is looked up using the [lookup_url]. Please add a
+[mirror 'scheme://some.url';] configuration option to your Fetchwarefile.
+EOE
+    mirror 'ftp://fake.url/too';
+    # Test no verify method specified.
+    eval_ok(sub {check_lookup_config()},
+        <<EOE, 'checked check_lookup_config() no verify method specified');
+App-Fetchware: You failed to specify a method of verifying downloaded archives
+of your program. This is mandatory to ensure that the software that you download
+is the same as the software the author actually uploaded. Please specify a
+[gpg_keys_url] that points to the KEYS file that lists the author's gpg keys. If
+the author does not maintain such a file, then specify a [sha1_url] that
+specifies a directory where SHA-1 digests can be downloaded from. And if SHA-1
+digests are not availabe, then fall back on MD5 digests using [md5_url]. If not
+even MD5 digest verification is available from your software's author, you may
+specify the [verification_failure 'On';] configuration option to force fetchware
+to build and install your software even though it can not be verified. This
+option should not be enabled lightly, because mirrors do sometimes get hacked,
+and some times malware is injected.
+EOE
+    gpg_keys_url 'ftp://fake.url/as/well';
+
+
     # Change lookup_method to test the other 2 branches of the check_method failure
     # code.
     config_replace('lookup_method', 'timestamp');
@@ -100,6 +140,10 @@ subtest 'test get_directory_listing()' => sub {
         # Set download type.
         # Make this a FETCHWARE_FTP_REMOTE env var in frt().
         lookup_url $lookup_url;
+        # Must also specify a program config option.
+        program 'testin';
+        mirror $lookup_url;
+        verify_failure_ok 'On';
 
         # Do needed operations before I can test get_directory_listing().
         check_lookup_config();
@@ -135,16 +179,16 @@ note explain $filename_listing;
 
 subtest 'test http_parse_filelist()' => sub {
 
-##TEST##    my $expected_filename_listing = [
-##TEST##        [ 'httpd-2.0.64.tar.bz2', '201010180432' ],
-##TEST##        [ 'httpd-2.0.64.tar.gz', '201010180432' ],
-##TEST##        [ 'httpd-2.2.21.tar.bz2', '201109121302' ],
-##TEST##        [ 'httpd-2.2.21.tar.gz', '201109121302' ],
-##TEST##        [ 'httpd-2.3.15-beta-deps.tar.bz2', '201111131437' ],
-##TEST##        [ 'httpd-2.3.15-beta-deps.tar.gz', '201111131437' ],
-##TEST##        [ 'httpd-2.3.15-beta.tar.bz2', '201111131437' ],
-##TEST##        [ 'httpd-2.3.15-beta.tar.gz', '201111131437' ]
-##TEST##    ];
+##DELME##    my $expected_filename_listing = [
+##DELME##        [ 'httpd-2.0.64.tar.bz2', '201010180432' ],
+##DELME##        [ 'httpd-2.0.64.tar.gz', '201010180432' ],
+##DELME##        [ 'httpd-2.2.21.tar.bz2', '201109121302' ],
+##DELME##        [ 'httpd-2.2.21.tar.gz', '201109121302' ],
+##DELME##        [ 'httpd-2.3.15-beta-deps.tar.bz2', '201111131437' ],
+##DELME##        [ 'httpd-2.3.15-beta-deps.tar.gz', '201111131437' ],
+##DELME##        [ 'httpd-2.3.15-beta.tar.bz2', '201111131437' ],
+##DELME##        [ 'httpd-2.3.15-beta.tar.gz', '201111131437' ]
+##DELME##    ];
     __clear_CONFIG();
     lookup_url $ENV{FETCHWARE_HTTP_LOOKUP_URL};
 
@@ -178,12 +222,16 @@ subtest 'test file_parse_filelist()' => sub {
 
 
 subtest 'test parse_directory_listing()' => sub {
-    skip_all_unless_release_testing(); ##TEST##
+    skip_all_unless_release_testing();
     # Clear App::Fetchware's %CONFIG variable.
-    __clear_CONFIG(); ##TEST##
+    __clear_CONFIG();
     ###BUGALERT### Add loop after http_parse_listing() is finished to test this
     #sub's http functionality too.
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    # Must also specify program, mirror, and a verify method.
+    program 'testin';
+    mirror $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    verify_failure_ok 'On';
 
     # Do the stuff parse_directory_listing() depends on.
     check_lookup_config();
@@ -198,17 +246,21 @@ subtest 'test parse_directory_listing()' => sub {
 
 
 
-subtest 'test lookup_determine_downloadurl()' => sub {
+subtest 'test lookup_determine_downloadpath()' => sub {
 
     # Clear App::Fetchware's %CONFIG variable.
     __clear_CONFIG();
     
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    # Must also specify program, mirror, and a verify method.
+    program 'testin';
+    mirror $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    verify_failure_ok 'On';
 
     # Select one of the different apache versions 'httpd-2.{0,2,3}'.
     filter 'httpd-2.2';
 
-    # Test lookup_determine_downloadurl() with 'CURRENT_IS_VER_NO' in the
+    # Test lookup_determine_downloadpath() with 'CURRENT_IS_VER_NO' in the
     # file listing.
     ###BUGALERT### Refactor out static crap like $current_file_list.
     my $current_file_list =
@@ -221,21 +273,21 @@ subtest 'test lookup_determine_downloadurl()' => sub {
         [ 'httpd-2.2.21.tar.gz', '999909121702' ],
         [ 'httpd-2.2.21.tar.gz.asc', '999909121702' ],
     ];
-    is(lookup_determine_downloadurl($current_file_list),
-        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
-        'checked lookup_determine_downloadurl() success.');
+    is(lookup_determine_downloadpath($current_file_list),
+        '/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+        'checked lookup_determine_downloadpath() success.');
 
         my $no_current_file_list;
         @$no_current_file_list =
             grep { $_->[0] !~ /^(:?latest|current)[_-]is(.*)$/i } @$current_file_list;
 
-    is(lookup_determine_downloadurl($no_current_file_list),
-        'ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.21.tar.bz2',
-        'checked lookup_determine_downloadurl() success.');
+    is(lookup_determine_downloadpath($no_current_file_list),
+        '/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+        'checked lookup_determine_downloadpath() success.');
 
     # The weird argument below needs to be a array of arrays.
-    eval_ok(sub {lookup_determine_downloadurl([ ['doesntend.right', 'fake timestamp'] ])},
-        <<EOS, 'checked lookup_determine_downloadurl() failure');
+    eval_ok(sub {lookup_determine_downloadpath([ ['doesntend.right', 'fake timestamp'] ])},
+        <<EOS, 'checked lookup_determine_downloadpath() failure');
 App-Fetchware: run-time error. Fetchware failed to determine what URL it should
 use to download your software. This URL is based on the lookup_url you
 specified. See perldoc App::Fetchware.
@@ -245,24 +297,36 @@ EOS
 
 
 subtest 'test lookup_by_timestamp()' => sub {
+    __clear_CONFIG();
+
+    config(lookup_url => $ENV{FETCHWARE_FTP_LOOKUP_URL});
+    config(filter => '2.2');
 
     like(lookup_by_timestamp(test_filename_listing('no current')),
-        qr{ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
+        qr{/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
         'check lookup_by_timestamp() success.');
 
+    config_delete('lookup_url');
+    config_delete('filter');
 };
 
 
 subtest 'test lookup_by_versionstring()' => sub {
+    __clear_CONFIG();
+
+    config(lookup_url => $ENV{FETCHWARE_FTP_LOOKUP_URL});
+    config(filter => '2.2');
 
     like(lookup_by_versionstring(test_filename_listing('no current')),
-        qr{ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
+        qr{/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
         'check lookup_by_versionstring() success.');
 
+    config_delete('lookup_url');
+    config_delete('filter');
 }; 
 
 
-subtest 'test determine_download_url()' => sub {
+subtest 'test determine_download_path()' => sub {
     skip_all_unless_release_testing();
 
     # Clear App::Fetchware's %CONFIG variable.
@@ -273,14 +337,18 @@ subtest 'test determine_download_url()' => sub {
 
     # Set needed config variables.
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    # Must also specify program, mirror, and a verify method.
+    program 'testin';
+    mirror $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    verify_failure_ok 'On';
 
     check_lookup_config();
     my $directory_listing = get_directory_listing();
     my $filename_listing = parse_directory_listing($directory_listing);
     
-    like(determine_download_url($filename_listing),
-        qr{ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
-        'checked lookup_determine_downloadurl() success.');
+    like(determine_download_path($filename_listing),
+        qr{/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
+        'checked determine_download_path() success.');
     
     # Clear App::Fetchware's %CONFIG variable so I can test it with custom
     # lookup_methods.
@@ -291,6 +359,10 @@ subtest 'test determine_download_url()' => sub {
 
     # Set needed config variables.
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    # Must also specify program, mirror, and a verify method.
+    program 'testin';
+    mirror $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    verify_failure_ok 'On';
 
     lookup_method 'versionstring';
 
@@ -298,9 +370,9 @@ subtest 'test determine_download_url()' => sub {
     $directory_listing = get_directory_listing();
     $filename_listing = parse_directory_listing($directory_listing);
     
-    like(determine_download_url($filename_listing),
-        qr{ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
-        'checked lookup_determine_downloadurl() success.');
+    like(determine_download_path($filename_listing),
+        qr{/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
+        'checked determine_download_path() success.');
 
 };
 
@@ -317,35 +389,22 @@ subtest 'test lookup()' => sub {
 
     # Set needed config variables.
     lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    # Must also specify program, mirror, and a verify method.
+    program 'testin';
+    mirror $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    verify_failure_ok 'On';
 
     like(lookup(),
-        qr{ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
+        qr{/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
         'checked lookup_determine_downloadurl() success.');
 
 };
 
 
 
-subtest 'test overriding lookup()' => sub {
-    # switch to *not* being package fetchware, so that I can test lookup()'s
-    # behavior as if its being called from a Fetchwarefile to create a callback
-    # that lookup will later call back in package fetchware.
-    package main;
-    use App::Fetchware;
-
-    lookup sub { return 'Overrode lookup()!' };
-
-    # Switch back to being in package fetchware, so that lookup() will try out
-    # the callback I gave it in the lookup() call above.
-    package fetchware;
-    is(lookup(), 'Overrode lookup()!',
-        'checked overiding lookup() success');
-};
-
-
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-done_testing();
+#done_testing();
 
 
 # Testing subroutine only used in this test file.
