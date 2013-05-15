@@ -1,6 +1,6 @@
 #!perl
 # bin-fetchware-new.t tests bin/fetchware's cmd_new() subroutine, which
-# interactively creates new Fetchwarefiles, and optionall initially installs
+# interactively creates new Fetchwarefiles, and optionally initially installs
 # them as fetchware packages.
 use strict;
 use warnings;
@@ -9,7 +9,7 @@ use 5.010001;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '13'; #Update if this changes.
+use Test::More 0.98 tests => '17'; #Update if this changes.
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
@@ -105,8 +105,6 @@ subtest 'test download_lookup_url() success' => sub {
     # Create test Term::UI object.
     my $term = Term::ReadLine->new('fetchware');
 
-###BUGALERT### Replace every is_deeply() with Test::Deep!!! It's so awesome it's
-#worth having it as a dependency!!!
     cmp_deeply(download_lookup_url($term, $ENV{FETCHWARE_HTTP_LOOKUP_URL}),
         array_each(
             re(qr/[-\w\d\._]+/),
@@ -120,14 +118,16 @@ subtest 'test download_lookup_url() test-dist success' => sub {
     # Create test Term::UI object.
     my $term = Term::ReadLine->new('fetchware');
 
+    ###Use download_dirlist() instead of get_directory_listing, which takes *NO*
+    #params!!!!!!!!!!!!!!!!!!!!!!
     eval_ok(sub {download_lookup_url($term, 'badschem://fake.url')},
         <<EOE, 'checked download_lookup_url() test-dist exception');
 fetchware: run-time error. The lookup_url you provided [] is not a
 usable lookup_url because of the error below:
-[App-Fetchware: run-time syntax error: the url parameter your provided in
-your call to download_dirlist() [] does not have a supported URL scheme (the
-http:// or ftp:// part). The only supported download types, schemes, are FTP and
-HTTP. See perldoc App::Fetchware.
+[App-Fetchware-Util: Failed to download the specifed URL [] or path
+[] using the included hostname in the url you specifed or any
+mirrors. The mirrors are []. And the urls
+that fetchware tried to download were [ ].
 ]
 Please see perldoc App::Fetchware for troubleshooting tips and rerun
 fetchware new.
@@ -136,33 +136,36 @@ EOE
 };
 
 
-subtest 'test analyze_lookup_listing() success' => sub {
-    # Create test Term::UI object.
-    my $term = Term::ReadLine->new('fetchware');
 
-    # Test CURRENT/LATEST branch.
-    my $current_filename_listing = [
-        ['CURRENT_IS_2.4', 'timestamp is ignored'],
-        ['just need current line above', 'fake timestamp'],
-    ];
-    is(analyze_lookup_listing($term, $current_filename_listing), undef,
-        'checked get_lookup_url() success');
-
-    # Test main else branch.
-    my $filename_listing = [
-        ['fake-prog-2.2.tar.gz', 'timestamp is ignored'],
-        ['whocares', 'fake timestamp'],
-    ];
-    is(analyze_lookup_listing($term, $filename_listing), undef,
-        'checked get_lookup_url() success');
-};
-
+#skip for now!!!!
+##TODO##subtest 'test analyze_lookup_listing() success' => sub {
+##TODO##    # Create test Term::UI object.
+##TODO##    my $term = Term::ReadLine->new('fetchware');
+##TODO##
+##TODO##    # Test CURRENT/LATEST branch.
+##TODO##    my $current_filename_listing = [
+##TODO##        ['CURRENT_IS_2.4', 'timestamp is ignored'],
+##TODO##        ['just need current line above', 'fake timestamp'],
+##TODO##    ];
+##TODO##    is(analyze_lookup_listing($term, $current_filename_listing), undef,
+##TODO##        'checked get_lookup_url() success');
+##TODO##
+##TODO##    # Test main else branch.
+##TODO##    my $filename_listing = [
+##TODO##        ['fake-prog-2.2.tar.gz', 'timestamp is ignored'],
+##TODO##        ['whocares', 'fake timestamp'],
+##TODO##    ];
+##TODO##    is(analyze_lookup_listing($term, $filename_listing), undef,
+##TODO##        'checked get_lookup_url() success');
+##TODO##};
+##TODO##
 
 subtest 'test append_to_fetchwarefile() success' => sub {
     my $fetchwarefile;
 
-    is(append_to_fetchwarefile(\$fetchwarefile,
-            'program', 'test-dist', 'A meaningless test example.'),
+    append_to_fetchwarefile(\$fetchwarefile,
+        'program', 'test-dist', 'A meaningless test example.');
+    is($fetchwarefile,
         <<EOE, 'checked append_to_fetchwarefile() success.');
 
 
@@ -173,10 +176,11 @@ EOE
     undef $fetchwarefile;
 
     # Test a description with more than 80 chars.
-    is(append_to_fetchwarefile(\$fetchwarefile,
-            'program', 'test-dist',
-        q{test with more than 80 chars to test the logic that chops it up into lines that are only 80 chars long. Do you think it will work?? Well, let's hope so!
-        }),
+    append_to_fetchwarefile(\$fetchwarefile,
+                'program', 'test-dist',
+            q{test with more than 80 chars to test the logic that chops it up into lines that are only 80 chars long. Do you think it will work?? Well, let's hope so!
+    });
+    is($fetchwarefile,
         <<EOE, 'checked append_to_fetchwarefile() success.');
 
 
@@ -252,21 +256,260 @@ EOS
 
 
 subtest 'test add_mirrors() success' => sub {
-    # Create test Term::UI object.
-    my $term = Term::ReadLine->new('fetchware');
+    skip_all_unless_release_testing();
+#    plan(skip_all => 'Optional FETCHWARE_INTERACTIVE_TESTS disabled by default.')
+#        unless $ENV{FETCHWARE_INTERACTIVE_TESTS}
+#            eq 'Yes!!! I want this test to stop and wait for me to answer questions!!!';
+    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+        unless eval {use Test::Expect; 1;};
 
-    my $fetchwarefile = '# Just testing.';
+    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
+    # something crazy like Test::Expect, this will have to be tested "manually."
+    local $Term::UI::AUTOREPLY = 0;
+    # Fix the "out of orderness" thanks to Test::Builder messing with
+    # STD{OUT,ERR}.
+    local $| = 1;
 
-    my $expected_fetchwarefile = $fetchwarefile;
+    # Have Expect tell me what it's doing for easier debugging.
+    #$Expect::Exp_Internal = 1;
 
-    ###BUGALERT### Note this test is really lame. Add real interactive tests in
-    #xt/!!!
-    add_mirrors($term, \$fetchwarefile);
-    is($fetchwarefile, $expected_fetchwarefile,
-        'check add_mirrors() success');
+    expect_run(
+        command => 't/bin-fetchware-new-add_mirrors',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC"
+    );
 
+    # First test that the command produced the correct outout.
+    expect_like(qr/Fetchware requires you to please provide a mirror. This mirror is required,/,
+        'checked add_mirror() received correct mirror prompt');
+
+    # Have Expect print an example URL.
+    expect_send('http://who.cares/whatever/',
+        'check add_mirror() sent mirror URL.');
+
+    # Check if upon receiving the URL the command prints out the next correct
+    # prompt.
+    expect_like(qr/Would you like to add any additional mirrors?/,
+        'checked add_mirrors() received more mirrors prompt.');
+
+    expect_send('N', 'checked add_mirrors() say No to more mirrors.');
+
+    expect_quit();
+
+    # Test answering Yes for more mirrors.
+
+    expect_run(
+        command => 't/bin-fetchware-new-add_mirrors',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC"
+    );
+
+    # First test that the command produced the correct outout.
+    expect_like(qr/Fetchware requires you to please provide a mirror. This mirror is required,/,
+        'checked add_mirror() received correct mirror prompt');
+
+    # Have Expect print an example URL.
+    expect_send('http://who.cares/whatever/',
+        'check add_mirror() sent mirror URL.');
+
+    # Check if upon receiving the URL the command prints out the next correct
+    # prompt.
+    expect_like(qr/Would you like to add any additional mirrors?/,
+        'checked add_mirrors() received more mirrors prompt.');
+
+    expect_send('Y', 'checked add_mirrors() say No to more mirrors.');
+
+    expect_like(qr!\[y/N\]|Type in URL of mirror or done to continue!,
+        'checked add_mirrors() received prompt to enter a mirror.');
+
+    expect_send('ftp://afakemirror.blah/huh?',
+        'checked add_mirrors() sent another mirror URL.');
+
+    expect_like(qr/Type in URL of mirror or done to continue/,
+        'checked add_mirrors() received prompt to enter a mirror.');
+
+    expect_send('ftp://anotherfake.mirror/kasdjlfkjd',
+        'checked add_mirrors() sent another mirror URL.');
+
+    expect_like(qr/Type in URL of mirror or done to continue/,
+        'checked add_mirrors() received prompt to enter a mirror.');
+
+    expect_send('done',
+        'checked add_mirrors() sent done.');
+
+    expect_quit();
 };
 
+
+subtest 'test add_verification() success' => sub {
+    skip_all_unless_release_testing();
+#    plan(skip_all => 'Optional FETCHWARE_INTERACTIVE_TESTS disabled by default.')
+#        unless $ENV{FETCHWARE_INTERACTIVE_TESTS}
+#            eq 'Yes!!! I want this test to stop and wait for me to answer questions!!!';
+    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+        unless eval {use Test::Expect; 1;};
+
+    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
+    # something crazy like Test::Expect, this will have to be tested "manually."
+    local $Term::UI::AUTOREPLY = 0;
+    # Fix the "out of orderness" thanks to Test::Builder messing with
+    # STD{OUT,ERR}.
+    local $| = 1;
+
+    # Have Expect tell me what it's doing for easier debugging.
+    #$Expect::Exp_Internal = 1;
+
+    expect_run(
+        command => 't/bin-fetchware-new-add_verification',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC"
+    );
+
+    # First test that the command produced the correct outout.
+    expect_like(qr/Automatic KEYS file discovery failed. Fetchware needs the/,
+        'checked add_verification() received correct mirror prompt');
+
+    # Have Expect print an example URL.
+    expect_send('Y',
+        'check add_verification() sent manual KEYS file Y.');
+
+    expect_like(qr<\[y/N\]|Automatic verification of your fetchware package has failed!>,
+        'check add_verification() received no verify prompt.');
+
+    expect_send('Y',
+        'checked add_verification() sent no verify Y.');
+
+
+    expect_quit();
+
+    ###BUGALERT### Add tests for add_verification()'s other branches.
+};
+
+
+subtest 'test determine_mandatory_options() success' => sub {
+    skip_all_unless_release_testing();
+#    plan(skip_all => 'Optional FETCHWARE_INTERACTIVE_TESTS disabled by default.')
+#        unless $ENV{FETCHWARE_INTERACTIVE_TESTS}
+#            eq 'Yes!!! I want this test to stop and wait for me to answer questions!!!';
+    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+        unless eval {use Test::Expect; 1;};
+
+    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
+    # something crazy like Test::Expect, this will have to be tested "manually."
+    local $Term::UI::AUTOREPLY = 0;
+    # Fix the "out of orderness" thanks to Test::Builder messing with
+    # STD{OUT,ERR}.
+    local $| = 1;
+
+    # Have Expect tell me what it's doing for easier debugging.
+    #$Expect::Exp_Internal = 1;
+
+    expect_run(
+        command => 't/bin-fetchware-new-mandatory_options',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC" # CTRL-C
+    );
+
+    expect_like(qr/Fetchware requires you to please provide a mirror. This mirror/,
+        'checked add_verification() received correct mirror prompt');
+
+    expect_send('http://somefakemirror.who/cares',
+        'check determine_mandatory_options() provided mirror.');
+
+    expect_like(qr!\[y/N\]|In addition to the one required mirror that you must!,
+        'check determine_mandatory_options() received addional mirrors prompt.');
+
+    expect_send('N',
+        'checked add_verification() sent no verify Y.');
+
+    expect_like(qr!\[y/N\]|Would you like to import the author's key yourself !,
+        'checked determine_mandatory_options() received manual import of KEYS.');
+
+    expect_send('Y',
+        'checked determine_mandatory_options() sent Yes to user_keyring option');
+
+    expect_quit();
+};
+
+
+subtest 'test determine_filter_option() success' => sub {
+    skip_all_unless_release_testing();
+#    plan(skip_all => 'Optional FETCHWARE_INTERACTIVE_TESTS disabled by default.')
+#        unless $ENV{FETCHWARE_INTERACTIVE_TESTS}
+#            eq 'Yes!!! I want this test to stop and wait for me to answer questions!!!';
+    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+        unless eval {use Test::Expect; 1;};
+
+    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
+    # something crazy like Test::Expect, this will have to be tested "manually."
+    local $Term::UI::AUTOREPLY = 0;
+    # Fix the "out of orderness" thanks to Test::Builder messing with
+    # STD{OUT,ERR}.
+    local $| = 1;
+
+    # Have Expect tell me what it's doing for easier debugging.
+    #$Expect::Exp_Internal = 1;
+
+    expect_run(
+        command => 't/bin-fetchware-new-filter_option',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC" # CTRL-C
+    );
+
+    expect_like(qr/Analyzing the lookup_url you provided to determine if fetchware/,
+        'checked determine_filter_option() received correct filter prompt');
+
+    expect_send('httpd-2.2',
+        'check determine_filter_option() provided filter.');
+
+    expect_quit();
+};
+
+
+subtest 'test analyze_lookup_listing() success' => sub {
+    skip_all_unless_release_testing();
+#    plan(skip_all => 'Optional FETCHWARE_INTERACTIVE_TESTS disabled by default.')
+#        unless $ENV{FETCHWARE_INTERACTIVE_TESTS}
+#            eq 'Yes!!! I want this test to stop and wait for me to answer questions!!!';
+    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+        unless eval {use Test::Expect; 1;};
+
+    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
+    # something crazy like Test::Expect, this will have to be tested "manually."
+    local $Term::UI::AUTOREPLY = 0;
+    # Fix the "out of orderness" thanks to Test::Builder messing with
+    # STD{OUT,ERR}.
+    local $| = 0;
+
+    # Have Expect tell me what it's doing for easier debugging.
+    #$Expect::Exp_Internal = 1;
+
+    expect_run(
+        command => 't/bin-fetchware-new-analyze_lookup_listing',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC" # CTRL-C
+    );
+
+    expect_like(qr/Fetchware requires you to please provide a mirror. This mirror/,
+        'checked analyze_lookup_listing() received correct filter prompt');
+
+    expect_send('http://kdjfkldjfkdj',
+        'check analyze_lookup_listing() provided mirror.');
+
+    expect_like(qr/In addition to the one required mirror that you must define/,
+        'checked analyze_lookup_listing() received more mirrors prompt.');
+
+    expect_send('N',
+        'checked analyze_lookup_listing() sent No for more mirrors.');
+
+    expect_like(qr!\[y/N\]|gpg digital signatures found. Using gpg verification.!,
+        'checked analyze_lookup_listing() received KEYS question.');
+
+    expect_send('Y',
+        'checked analyze_lookup_listing() sent Y to user_keyring');
+
+    expect_quit();
+};
 
 
 subtest 'test edit_manually() success' => sub {
@@ -286,6 +529,55 @@ subtest 'test edit_manually() success' => sub {
 };
 
 
+subtest 'test check_fetchwarefile() success' => sub {
+    eval_ok(sub {check_fetchwarefile(\'')},
+        <<EOE, 'checked check_fetchwarefile() lookup_url exception');
+fetchware: The Fetchwarefile fetchware generated for you does not have a
+lookup_url configuration option. Please add a lookup_url configuration file such
+as [lookup_url 'My Program';] The generated Fetchwarefile was [
+
+]
+EOE
+
+    eval_ok(sub {check_fetchwarefile(\q{lookup_url 'http://a.url/';})},
+        <<EOE, 'checked check_fetchwarefile() mirror exception');
+fetchware: The Fetchwarefile fetchware generated for you does not have a mirror
+configuration option. Please add a mirror configuration file such as
+[mirror 'My Program';] The generated Fetchwarefile was [
+lookup_url 'http://a.url/';
+]
+EOE
+
+
+    my $fetchwarefile = <<EOF;
+lookup_url 'http://a.url/';
+mirror 'ftp://who.cares/blah/blah/blacksheep/';
+EOF
+    eval_ok(sub {check_fetchwarefile(\$fetchwarefile)},
+        <<EOE, 'checked check_fetchwarefile() program exception');
+fetchware: The Fetchwarefile fetchware generated for you does not have a program
+configuration option. Please add a program configuration file such as
+[program 'My Program';] The generated Fetchwarefile was [
+lookup_url 'http://a.url/';
+mirror 'ftp://who.cares/blah/blah/blacksheep/';
+
+]
+EOE
+    $fetchwarefile .= q{program 'program';};
+    print_ok(sub {check_fetchwarefile(\$fetchwarefile)},
+        <<EOE, 'checked check_fetchwarefile() verify exception');
+Checking your Fetchwarefile to ensure it has all of the mandatory configuration
+options properly configured.
+Warning: gpg verification is *not* enabled. Please switch to gpg verification if
+possible, because it is more secure against hacked 3rd party mirrors.
+EOE
+
+    $fetchwarefile .= q{gpg_keys_url 'ftp://gpg.keys.urk/dir'};
+    ok(check_fetchwarefile(\$fetchwarefile),
+        'checked check_fetchwarefile() success.');
+
+};
+
 subtest 'test ask_to_install_now_to_test_fetchwarefile success' => sub {
     skip_all_unless_release_testing();
 
@@ -297,7 +589,11 @@ use App::Fetchware;
 
 program 'Apache 2.2';
 
-lookup_url '$ENV{FETCHWARE_FTP_LOOKUP_URL}';
+lookup_url '$ENV{FETCHWARE_HTTP_LOOKUP_URL}';
+
+mirror '$ENV{FETCHWARE_FTP_MIRROR_URL}';
+
+gpg_keys_url "$ENV{FETCHWARE_HTTP_LOOKUP_URL}/KEYS";
 
 filter 'httpd-2.2';
 EOF
@@ -319,6 +615,8 @@ note("$fetchwarefile");
 
 };
 
+
+###BUGALERT### Actually implement this test.
 #subtest 'test cmd_new() success' => sub {
     #skip_all_unless_release_testing();
     ###BUGALERT### Move this test to xt/, and actually implement it. Use
