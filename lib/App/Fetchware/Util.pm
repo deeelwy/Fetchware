@@ -668,11 +668,14 @@ EOD
         delete $opts{PATH};
     # Otherwise, we should add lookup_url's hostname to the list of mirrors, but
     # be sure to push it onto @urls so that it is used last.
-    } else {
+    #
+    # But only if lookup_url is defined.
+    } elsif (defined config('lookup_url')) {
         my ($scheme, $auth, undef, undef, undef) =
             uri_split(config('lookup_url'));
         push @urls, uri_join($scheme, $auth, undef, undef, undef);
     }
+
     if (exists $opts{PATH}
         and defined $opts{PATH}
         and $opts{PATH}) {
@@ -681,10 +684,48 @@ EOD
         # Therefore, we append $url, because the PATH option means it's actually
         # just a path, so we append it to each @url.
         for my $mirror_url (@urls) {
-            # Use URI to replace the current path with the one the caller
-            # specified in the $url parameter.
-            my ($scheme, $auth, undef, undef, undef) = uri_split($mirror_url);
-            $mirror_url = uri_join($scheme, $auth, $opts{PATH}, undef, undef);
+            # If the $mirror_url has no path...
+            my ($scheme, $auth, $path, $query, $frag) =
+                uri_split($mirror_url);
+            # Skip messing with the path if $path eq $opts{PATH}, which means the
+            # current $mirror_url is $url, so we shouldn't add its own path to
+            # itself--we should skip it instead.
+            next if $path eq $opts{PATH};
+            if ($path eq '') {
+                #...then append $url's path.
+                ###BUGALERT## As shown before I was using URI's much nicer
+                #interface, but it was deleting the path instead of replacing
+                #the path! I tried reproducing this with a small test file, but
+                #it worked just fine in the small test file. So, it must be some
+                #really weird bug to fail here, but work in a smaller test file.
+                #I don't know try replacing all of the URI::Split calls with the
+                #equivelent URI->path() calls, and you'll get the weird bug.
+                #$mirror_url->path($opts{PATH});
+                ###Add an unless ($opts{PATH} eq '')
+                $mirror_url =
+                    uri_join($scheme, $auth, $opts{PATH}, $query, $frag);
+            # But if the $mirror_url does have a path...
+            } else {
+                #...Then keep the mirrors path intact.
+                #
+                # Because if you specify a path when you define that mirror
+                # chances are you did it, because that mirror stores it in a
+                # different directory. For example Apache is /apache on some
+                # mirrors, but apache.hostname on other mirrors.
+                #
+                #Except add $path's basename, because otherwise we'll ask
+                #for a dirlisting or try to download a directory as a file.
+                unless ($path =~ m!/$!) {
+                    $mirror_url = 
+                        uri_join($scheme, $auth, $path . '/'
+                            . file($opts{PATH})->basename(), $query, $frag);
+                # Skip adding a '/' if ones already there at the end.
+                } else {
+                    $mirror_url = 
+                        uri_join($scheme, $auth, $path
+                            . file($opts{PATH})->basename(), $query, $frag);
+                }
+            }
         }
     } elsif (defined $url
         and $url) {
@@ -698,8 +739,12 @@ EOD
         my $url_path = ( uri_split($url) )[2];
         for my $mirror_url (@urls) {
             # If the $mirror_url has no path...
-                my ($scheme, $auth, $path, $query, $frag) =
-                    uri_split($mirror_url);
+            my ($scheme, $auth, $path, $query, $frag) =
+                uri_split($mirror_url);
+            # Skip messing with the path if $path eq $url_path, which means the
+            # current $mirror_url is $url, so we shouldn't add its own path to
+            # itself--we should skip it instead.
+            next if $path eq $url_path;
             if ($path eq '') {
                 #...then append $url's path.
                 ###BUGALERT## As shown before I was using URI's much nicer
@@ -710,6 +755,7 @@ EOD
                 #I don't know try replacing all of the URI::Split calls with the
                 #equivelent URI->path() calls, and you'll get the weird bug.
                 #$mirror_url->path($url_path);
+                ###Add an unless ($url_path eq '')
                 $mirror_url =
                     uri_join($scheme, $auth, $url_path, $query, $frag);
             # But if the $mirror_url does have a path...
@@ -720,6 +766,19 @@ EOD
                 # chances are you did it, because that mirror stores it in a
                 # different directory. For example Apache is /apache on some
                 # mirrors, but apache.hostname on other mirrors.
+                #
+                #Except add $path's basename, because otherwise we'll ask
+                #for a dirlisting or try to download a directory as a file.
+                unless ($path =~ m!/$!) {
+                    $mirror_url = 
+                        uri_join($scheme, $auth, $path . '/'
+                            . file($url_path)->basename(), $query, $frag);
+                # Skip adding a '/' if ones already there at the end.
+                } else {
+                    $mirror_url = 
+                        uri_join($scheme, $auth, $path
+                            . file($url_path)->basename(), $query, $frag);
+                }
             }
         }
     }

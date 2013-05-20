@@ -23,8 +23,7 @@ use Getopt::Long qw(:config bundling pass_through);
 #already created the temp directory!!!!!!
 use App::Fetchware qw(parse_directory_listing);
 use App::Fetchware::Config qw(config __clear_CONFIG config_replace);
-use App::Fetchware::Util qw(msg vmsg run_prog safe_open drop_privs
-    cleanup_tempdir pipe_write_newline pipe_read_newline download_dirlist);
+use App::Fetchware::Util qw(:UTIL);
 use Archive::Tar;
 use File::Copy qw(mv cp);
 use File::Spec::Functions qw(curdir catdir catfile catpath tmpdir splitpath
@@ -50,7 +49,6 @@ use Sub::Mage;
 use Exporter 'import';
 our %EXPORT_TAGS  = (
     TESTING => [qw(
-        create_test_fetchwarefile
         parse_fetchwarefile    
         create_fetchware_package
         fetchware_database_path
@@ -3212,47 +3210,6 @@ corresponding fetchware package from its database Os error [$!].
 EOD
 }
 
-
-=head2 create_test_fetchwarefile()
-
-    my $fetchwarefile_path = create_test_fetchwarefile($fetchwarefile_content);
-
-Writes the provided $fetchwarefile_content to a C<Fetchwarefile> inside a
-File::Temp::tempfile(), and returns that file's path, $fetchwarefile_path.
-
-=cut
-
-sub create_test_fetchwarefile {
-    my $fetchwarefile_content = shift;
-
-    # Use a temp dir outside of the installation directory 
-    my ($fh, $fetchwarefile_path)
-        =
-        tempfile("fetchware-$$-XXXXXXXXXXXXXX", TMPDIR => 1, UNLINK => 1);
-
-    # Chmod 644 to ensure a possibly dropped priv child can still at least read
-    # the file. It doesn't need write access just read.
-    unless (chmod 0644, $fetchwarefile_path
-        and
-        # Only Unix drops privs. Nonunix does not.
-        is_os_type('Unix')
-    ) {
-        die <<EOD;
-fetchware: Failed to chmod 0644, [$fetchwarefile_path]! This is a fatal error,
-because if the file is not chmod()ed, then fetchware cannot access the file if
-it was created by root, and then tried to read it, but root on Unix dropped
-privs. OS error [$!].
-EOD
-    }
-
-    # Put test stuff in Fetchwarefile.
-    print $fh "$fetchwarefile_content";
-
-    # Close the file in case it bothers Archive::Tar reading it.
-    close $fh;
-
-    return $fetchwarefile_path;
-}
 
 
 1;

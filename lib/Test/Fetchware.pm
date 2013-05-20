@@ -12,9 +12,11 @@ use Archive::Tar;
 use Path::Class;
 use Digest::MD5;
 use Fcntl ':flock';
+use Perl::OSType 'is_os_type';
+use File::Temp 'tempfile';
 
 use App::Fetchware::Util ':UTIL';
-use App::Fetchware::Config '__clear_CONFIG';
+use App::Fetchware::Config ':CONFIG';
 
 # Enable Perl 6 knockoffs, and use 5.10.1, because smartmatching and other
 # things in 5.10 were changed in 5.10.1+.
@@ -44,6 +46,8 @@ our %EXPORT_TAGS = (
         verbose_on
         export_ok
         end_ok
+        add_prefix_if_nonroot
+        create_test_fetchwarefile
     )],
 );
 # *All* entries in @EXPORT_TAGS must also be in @EXPORT_OK.
@@ -263,6 +267,9 @@ Returns the full path to the created test-dist fetchwware package.
 
 =cut
 
+###BUGALERT### make_test_dist() only works properly on Unix, because of its
+#dependencies on the shell and make, just replace those commands with perl
+#itself, which we can pretty much guaranteed to be installed.
 sub make_test_dist {
     my $file_name = shift;
     my $ver_num = shift;
@@ -289,9 +296,6 @@ sub make_test_dist {
 # $file_name is a fake "test distribution" mean for testing fetchware's basic installing, upgrading, and
 # so on functionality.
 use App::Fetchware;
-
-# Delme!!!!!!!!!!!!!!
-stay_root 'On';
 
 program '$file_name';
 
@@ -348,6 +352,26 @@ EOF
     $test_dist_files{'./Fetchwarefile'}
         .= 
         "lookup_url 'file://$destination_directory';";
+
+    # I must also add a mirror, which in make_test_dist()'s case is the same
+    # things as $destination_directory.
+    $test_dist_files{'./Fetchwarefile'}
+        .= 
+        "mirror 'file://$destination_directory';";
+
+
+    # Be sure to add a prefix to the generated Fetchwarefile if fetchware is not
+    # running as root to ensure that our test installs succeed.
+    my $prefix = add_prefix_if_nonroot(sub {
+        my $prefix_dir = tempdir("fetchware-test-$$-XXXXXXXXXX",
+            TMPDIR => 1, CLEANUP => 1);
+        $test_dist_files{'./Fetchwarefile'}
+            .= 
+            "prefix '$prefix_dir';";
+        return $prefix_dir;
+        }
+    );
+
 
     # Create a temp dir to create or test-dist-1.$ver_num directory in.
     # Must be done before original_cwd() is used to set $destination_directory,
@@ -454,10 +478,20 @@ EOD
 
 =head2 expected_filename_listing()
 
-    my $expected_filename_listing = expected_filename_listing()
+    cmd_deeply($got_filelisting, eval(expected_filename_listing()),
+        'test name');
 
 Returns a crazy string meant for use with Test::Deep for testing that Apache
 directory listings have been parsed correctly by lookup().
+
+You must surround expected_filename_listing() with an eval, because Test::Deep's
+crazy subroutines for creating complex data structure tests are actual
+subroutines that need to be executed they are not strings that can just be
+returned by expected_filename_listing(), and then forwarded along to Test::Deep,
+they must be executed:
+
+    cmd_deeply($got_filelisting, eval(expected_filename_listing()),
+        'test name');
 
 =cut
 
@@ -493,7 +527,7 @@ sub expected_filename_listing {
                     |
                     patches
                 /x),
-                re(qr/\d{12}/)
+                re(qr/\d{10,12}/)
                 ) # end any
             )
         );
@@ -579,6 +613,110 @@ sub end_ok {
     ok(close $fh_sem,
         'checked cleanup_tempdir() released fetchware lock file success.');
 }
+
+
+=head2 add_prefix_if_nonroot()
+
+    my $prefix = add_prefix_if_nonroot();
+
+    my $callbacks_return_value = add_prefix_if_nonroot(sub { a callback });
+
+fetchware is designed to be run as root, and to install system software in
+system directories requiring root privileges. But, fetchware is flexible enough
+to let you specifiy where you want the software you're going to install be
+installed via the prefix configuration option. This subroutine when run creates
+a temporary directory in File::Spec's tmpdir(), and then it directly runs
+config() itself to create this config option for you.
+
+However, if you supply a coderef, add_prefix_if_nonroot() will instead call your
+coderef instead of using config() directly. If your callback returns a scalar
+such as the temporary directory that add_prefix_if_nonroot() normally returns,
+this scalar is also returned back to the caller.
+
+It returns the path of the prefix that it configured for use, or it returns
+false if it's conditions were not met causing it not to add a prefix.
+
+=cut
+
+sub add_prefix_if_nonroot {
+    my $callback = shift;
+    my $prefix;
+    if (not is_os_type('Unix') or $> != 0 ) {
+        if (not defined $callback) {
+            $prefix = tempdir("fetchware-test-$$-XXXXXXXXXX",
+                TMPDIR => 1, CLEANUP => 1);
+            note("Running as nonroot or nonunix using prefix temp dir [$prefix]");
+            config(prefix => $prefix);
+        } else {
+            ok(ref $callback eq 'CODE', <<EOD);
+Received callback that is a proper coderef [$callback].
+EOD
+            $prefix = $callback->();
+        }
+        
+        # Return the prefix that will be used.
+        return $prefix;
+    } else {
+        # Return undef meaning no prefix was added.
+        return;
+    }
+}
+
+
+=head2 create_test_fetchwarefile()
+
+    my $fetchwarefile_path = create_test_fetchwarefile($fetchwarefile_content);
+
+Writes the provided $fetchwarefile_content to a C<Fetchwarefile> inside a
+File::Temp::tempfile(), and returns that file's path, $fetchwarefile_path.
+
+=cut
+
+sub create_test_fetchwarefile {
+    my $fetchwarefile_content = shift;
+
+    # Use a temp dir outside of the installation directory 
+    my ($fh, $fetchwarefile_path)
+        =
+        tempfile("fetchware-$$-XXXXXXXXXXXXXX", TMPDIR => 1, UNLINK => 1);
+
+    # Chmod 644 to ensure a possibly dropped priv child can still at least read
+    # the file. It doesn't need write access just read.
+    unless (chmod 0644, $fetchwarefile_path
+        and
+        # Only Unix drops privs. Nonunix does not.
+        is_os_type('Unix')
+    ) {
+        die <<EOD;
+fetchware: Failed to chmod 0644, [$fetchwarefile_path]! This is a fatal error,
+because if the file is not chmod()ed, then fetchware cannot access the file if
+it was created by root, and then tried to read it, but root on Unix dropped
+privs. OS error [$!].
+EOD
+    }
+
+    # Be sure to add a prefix to the generated Fetchwarefile if fetchware is not
+    # running as root to ensure that our test installs succeed.
+    #
+    # Prepend a newline to ensure that prefix is not added to an existing line.
+    add_prefix_if_nonroot(sub {
+            my $prefix_dir = tempdir("fetchware-test-$$-XXXXXXXXXX",
+                TMPDIR => 1, CLEANUP => 1);
+            $fetchwarefile_content
+            .= 
+            "\nprefix '$prefix_dir';";
+        }
+    );
+
+    # Put test stuff in Fetchwarefile.
+    print $fh "$fetchwarefile_content";
+
+    # Close the file in case it bothers Archive::Tar reading it.
+    close $fh;
+
+    return $fetchwarefile_path;
+}
+
 
 
 ###BUGALERT### Create a frt() subroutine to mirror my frt bash function that

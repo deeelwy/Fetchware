@@ -8,6 +8,7 @@ use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
 use Test::More 0.98 tests => '25'; #Update if this changes.
+use Test::Deep;
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir rootdir);
 use URI::Split 'uri_split';
@@ -19,6 +20,7 @@ use Path::Class;
 use Perl::OSType 'is_os_type';
 use Fcntl ':flock';
 use URI::Split qw(uri_split uri_join);
+use App::Fetchware 'http_parse_filelist';
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -176,7 +178,7 @@ http:// or ftp:// part). The only supported download types, schemes, are FTP and
 HTTP. See perldoc App::Fetchware.
 EOS
 
-    ok(no_mirror_download_dirlist($ENV{FETCHWARE_FTP_LOOKUP_URL}),
+    ok(no_mirror_download_dirlist($ENV{FETCHWARE_HTTP_LOOKUP_URL}),
         'check no_mirror_download_dirlist() ftp success');
 
     ok(no_mirror_download_dirlist($ENV{FETCHWARE_HTTP_LOOKUP_URL}),
@@ -231,19 +233,28 @@ EOS
     # Clear previous mirror.
     config_delete('mirror');
 
-    # Determine what we download should look like.
-    my $expected_output;
-    ok($expected_output = download_dirlist($ENV{FETCHWARE_FTP_LOOKUP_URL}),
-        'check download_dirlist() expected ftp success');
 
     # Setup a mirror that should succeed, but a $url that should fail.
-    config(mirror => $ENV{FETCHWARE_FTP_LOOKUP_URL});
+    config(mirror => $ENV{FETCHWARE_HTTP_LOOKUP_URL});
     my $got_output = download_dirlist($url);
     ok($got_output,
-        'check download_dirlist() ftp mirror success');
+        'check download_dirlist() http mirror success');
 
-    # Compare what no mirror gets to what a failed try with one mirror gets.
-    is_deeply($got_output, $expected_output,
+    # parse $expected_output, because I can't use eq to test if $got_output eq
+    # $expected_output anymore, because www.apache.org uses round-robin DNS or
+    # ANYCAST or just multiple servers that more importantly have different time
+    # stamps, and these different time stamps cause the eq test to fail. Instead
+    # I must use http_parse_filelist() to parse the $got_output, and
+    # then use Test::Deep to see if it matches a the right regexes.
+
+    # Parse $got_output, creating $got_filelisting to be able to check its
+    # structure below using Test::Deep for corectness.
+    my $got_filelisting = http_parse_filelist($got_output);
+    ok(ref $got_filelisting eq 'ARRAY',
+        'checked download_dirlist() parsed output.');
+
+    # Use Test::Deep to see if $got_output's data structure matches the right regexs.
+    cmp_deeply($got_filelisting, eval(expected_filename_listing()),
         'check download_dirlist() proper output');
 
     # Now try multiple mirrors.
@@ -256,39 +267,42 @@ EOS
     config(mirror => $url);
     config(mirror => $url);
     config(mirror => $url);
-    config(mirror => $ENV{FETCHWARE_FTP_LOOKUP_URL});
+    config(mirror => $ENV{FETCHWARE_HTTP_LOOKUP_URL});
 
     # Test multiple mirrors.
     ok($got_output = download_dirlist($url),
-        'check download_dirlist() multi-mirror ftp success');
+        'check download_dirlist() multi-mirror http success');
 
-    # Compare what no mirror gets to what a failed try with one mirror gets.
-    is_deeply($got_output, $expected_output,
-        'check download_dirlist() proper output');
+    # Parse $got_output, creating $got_filelisting to be able to check its
+    # structure below using Test::Deep for corectness.
+    my $got_filelisting = http_parse_filelist($got_output);
+    ok(ref $got_filelisting eq 'ARRAY',
+        'checked download_dirlist() multi-mirror parsed output.');
+
+    # Use Test::Deep to see if $got_output's data structure matches the right regexs.
+    cmp_deeply($got_filelisting, eval(expected_filename_listing()),
+        'check download_dirlist() multi-mirror proper output');
 
     # Test download_dirlist(PATH => $path) support.
     __clear_CONFIG();
-    # Set up the mirror so that it has no path.
-    my ($scheme, $auth, $path, $query, $frag) =
-        uri_split($ENV{FETCHWARE_FTP_LOOKUP_URL});
-    config(mirror => uri_join($scheme, $auth, undef, undef, undef));
-
-    # Then test download_dirlist() with what would normally be the mirror's
-    # path.
-    ok($got_output = download_dirlist(PATH => $path),
-        'checked download_dirlists(PATH) ftp success.');
-    is_deeply($got_output, $expected_output,
-        'check download_dirlist(PATH) ftp proper output');
+###BUGALERT### Apache does not have a ftp main, author's mirror, so I cannot
+#actually test this over ftp any more.
+##CANTTEST##    # Set up the mirror so that it has no path.
+##CANTTEST##    my ($scheme, $auth, $path, $query, $frag) =
+##CANTTEST##        uri_split($ENV{FETCHWARE_FTP_LOOKUP_URL});
+##CANTTEST##    config(mirror => uri_join($scheme, $auth, undef, undef, undef));
+##CANTTEST##
+##CANTTEST##    # Then test download_dirlist() with what would normally be the mirror's
+##CANTTEST##    # path.
+##CANTTEST##    ok($got_output = download_dirlist(PATH => $path),
+##CANTTEST##        'checked download_dirlists(PATH) ftp success.');
+##CANTTEST##    is_deeply($got_output, $expected_output,
+##CANTTEST##        'check download_dirlist(PATH) ftp proper output');
 
 
     # Clean up mirrors again.
     config_delete('mirror');
 
-
-    # Change $expected_output to http, which is a scalar ref instead of a
-    # arrayref.
-    ok($expected_output = download_dirlist($ENV{FETCHWARE_HTTP_LOOKUP_URL}),
-        'check download_dirlist() expected http success');
 
     # Set up mirrors that will fail, and one final mirror that should succeed.
     config(mirror => $url);
@@ -300,14 +314,21 @@ EOS
     # Test multiple mirrors.
     ok($got_output = download_dirlist($url),
         'check download_dirlist() multi-mirror http success');
-    # Compare what no mirror gets to what a failed try with one mirror gets.
-    is_deeply($got_output, $expected_output,
-        'check download_dirlist() proper output');
+
+    # Parse $got_output, creating $got_filelisting to be able to check its
+    # structure below using Test::Deep for corectness.
+    my $got_filelisting = http_parse_filelist($got_output);
+    ok(ref $got_filelisting eq 'ARRAY',
+        'checked download_dirlist() multi-mirror parsed output.');
+
+    # Use Test::Deep to see if $got_output's data structure matches the right regexs.
+    cmp_deeply($got_filelisting, eval(expected_filename_listing()),
+        'check download_dirlist() multi-mirror proper output');
 
     # Test download_dirlist(PATH => $path) support.
     __clear_CONFIG();
     # Set up the mirror so that it has no path.
-    ($scheme, $auth, $path, $query, $frag) =
+    my ($scheme, $auth, $path, $query, $frag) =
         uri_split($ENV{FETCHWARE_HTTP_LOOKUP_URL});
     config(mirror => uri_join($scheme, $auth, undef, undef, undef));
 
@@ -315,8 +336,16 @@ EOS
     # path.
     ok($got_output = download_dirlist(PATH => $path),
         'checked download_dirlists(PATH) http success.');
-    is_deeply($got_output, $expected_output,
-        'check download_dirlist(PATH) http proper output');
+
+    # Parse $got_output, creating $got_filelisting to be able to check its
+    # structure below using Test::Deep for corectness.
+    my $got_filelisting = http_parse_filelist($got_output);
+    ok(ref $got_filelisting eq 'ARRAY',
+        'checked download_dirlist(PATH) parsed output.');
+
+    # Use Test::Deep to see if $got_output's data structure matches the right regexs.
+    cmp_deeply($got_filelisting, eval(expected_filename_listing()),
+        'check download_dirlist(PATH) proper output');
 
     # Clean up after ourselves.
     __clear_CONFIG();
@@ -456,21 +485,21 @@ defined mirrors download_file() cannot determine from what host to download your
 file. Please specify a mirror and try again.
 EOE
 
-    my $url = 'invalidscheme://fake.url';
+    my $url = 'invalidscheme://fake.url/KEYS';
     # Setup a fake mirror to test the mirror failing too.
     config(mirror => $url);
     eval_ok(sub {download_file($url)}, <<EOS, 'checked download_file() invalid url scheme');
-App-Fetchware-Util: Failed to download the specifed URL [invalidscheme://fake.url] or path
+App-Fetchware-Util: Failed to download the specifed URL [invalidscheme://fake.url/KEYS] or path
 [] using the included hostname in the url you specifed or any
-mirrors. The mirrors are [invalidscheme://fake.url]. And the urls
-that fetchware tried to download were [invalidscheme://fake.url invalidscheme://fake.url ].
+mirrors. The mirrors are [invalidscheme://fake.url/KEYS]. And the urls
+that fetchware tried to download were [invalidscheme://fake.url/KEYS invalidscheme://fake.url/KEYS].
 EOS
     # Clear previous mirror.
     config_delete('mirror');
 
     # Setup a mirror that should succeed, but a $url that should fail.
     my $filename;
-    config(mirror => "$ENV{FETCHWARE_FTP_LOOKUP_URL}/KEYS");
+    config(mirror => "$ENV{FETCHWARE_HTTP_LOOKUP_URL}");
     ok($filename = download_file($url),
         'check download_file() ftp mirror success');
     ok(-e $filename, 'checked download_file() ftp filename success');
@@ -486,7 +515,7 @@ EOS
     config(mirror => $url);
     config(mirror => $url);
     config(mirror => $url);
-    config(mirror => "$ENV{FETCHWARE_FTP_LOOKUP_URL}/KEYS");
+    config(mirror => "$ENV{FETCHWARE_HTTP_LOOKUP_URL}");
 
     # Test multiple mirrors.
     ok($filename = download_file($url),
@@ -498,8 +527,10 @@ EOS
     __clear_CONFIG();
     # Set up the mirror so that it has no path.
     my ($scheme, $auth, $path, $query, $frag) =
-        uri_split($ENV{FETCHWARE_FTP_LOOKUP_URL});
+        uri_split($ENV{FETCHWARE_HTTP_LOOKUP_URL});
     config(mirror => uri_join($scheme, $auth, undef, undef, undef));
+    # Strip $path's ending / if present.
+    $path =~ s!/$!!;
 
     # Then test download_dirlist() with what would normally be the mirror's
     # path.
@@ -511,25 +542,29 @@ EOS
     # Clean up mirrors again.
     config_delete('mirror');
 
-    # Set up mirrors that will fail, and one final mirror that should succeed.
-    config(mirror => $url);
-    config(mirror => $url);
-    config(mirror => $url);
-    config(mirror => $url);
-    config(mirror => "$ENV{FETCHWARE_HTTP_LOOKUP_URL}/KEYS");
-
-    # Test multiple mirrors.
-    ok($filename = download_file($url),
-        'check download_file() http multi-mirror success');
-    ok(-e $filename, 'checked download_file() http multi-mirror filename success');
-    ok(unlink $filename, 'checked deleting downloaded file');
+###BUGALERT### Can't test this anymore, because apache does not provide a "main
+    #author mirror that supports FTP. The main mirror only supports HTTP.
+##CANTTEST##    # Set up mirrors that will fail, and one final mirror that should succeed.
+##CANTTEST##    config(mirror => $url);
+##CANTTEST##    config(mirror => $url);
+##CANTTEST##    config(mirror => $url);
+##CANTTEST##    config(mirror => $url);
+##CANTTEST##    config(mirror => "$ENV{FETCHWARE_FTP_LOOKUP_URL}");
+##CANTTEST##
+##CANTTEST##    # Test multiple mirrors.
+##CANTTEST##    ok($filename = download_file($url),
+##CANTTEST##        'check download_file() ftp multi-mirror success');
+##CANTTEST##    ok(-e $filename, 'checked download_file() http multi-mirror filename success');
+##CANTTEST##    ok(unlink $filename, 'checked deleting downloaded file');
 
     # Test download_file(PATH => $path) support.
     __clear_CONFIG();
     # Set up the mirror so that it has no path.
     my ($scheme, $auth, $path, $query, $frag) =
-        uri_split($ENV{FETCHWARE_FTP_LOOKUP_URL});
+        uri_split($ENV{FETCHWARE_HTTP_LOOKUP_URL});
     config(mirror => uri_join($scheme, $auth, undef, undef, undef));
+    # Strip $path's ending / if present.
+    $path =~ s!/$!!;
 
     # Then test download_dirlist() with what would normally be the mirror's
     # path.
@@ -578,7 +613,7 @@ subtest 'test no_mirror_download_file' => sub {
     skip_all_unless_release_testing();
 
     my $url = 'invalidscheme://fake.url';
-    eval_ok(sub {no_mirror_download_file($url)}, <<EOS, 'checked download_file() invalid url scheme');
+    eval_ok(sub {no_mirror_download_file($url)}, <<EOS, 'checked no_mirror_download_file() invalid url scheme');
 App-Fetchware: run-time syntax error: the url parameter your provided in
 your call to download_file() [invalidscheme://fake.url] does not have a supported URL scheme (the
 http:// or ftp:// part). The only supported download types, schemes, are FTP and
@@ -588,7 +623,7 @@ EOS
     # Add /KEYS to the lookup URLs, because download_file() must download an
     # actual file *not* a worthless dirlist. This makes tests brittle.
     my $filename;
-    ok($filename = no_mirror_download_file("$ENV{FETCHWARE_FTP_LOOKUP_URL}/KEYS"),
+    ok($filename = no_mirror_download_file("$ENV{FETCHWARE_HTTP_LOOKUP_URL}/KEYS"),
         'check download_file() ftp success');
     ok(-e $filename, 'checked download_ftp_url return success');
     ok(unlink $filename, 'checked deleting downloaded file');

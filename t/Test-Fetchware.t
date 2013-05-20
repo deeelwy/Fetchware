@@ -7,12 +7,15 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '6'; #Update if this changes.
+use Test::More 0.98 tests => '7'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir);
 use Path::Class;
 use URI::Split 'uri_split';
 use Cwd 'cwd';
+use File::Temp 'tempdir';
+
+use App::Fetchware::Config ':CONFIG';
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -41,6 +44,10 @@ subtest 'TESTING export what they should' => sub {
         md5sum_file
         expected_filename_listing
         verbose_on
+        export_ok
+        end_ok
+        add_prefix_if_nonroot
+        create_test_fetchwarefile
     );
     # sort them to make the testing their equality very easy.
     @expected_testing_exports = sort @expected_testing_exports;
@@ -154,6 +161,33 @@ subtest 'test verbose_on()' => sub {
     # Test if $fetchware::verbose has been set to true.
     ok($fetchware::verbose,
         'checked verbose_on() success.');
+};
+
+
+subtest 'test add_prefix_if_nonroot() success' => sub {
+    # Clear out any other use of config().
+    __clear_CONFIG();
+
+    my $prefix = add_prefix_if_nonroot();
+    ok(-e (config('prefix')),
+        'checked add_prefix_if_nonroot() tempfile creation.');
+    ok(-e $prefix,
+        'checked add_prefix_if_nonroot() prefix existence.');
+
+    # Clear prefix between test runs.
+    __clear_CONFIG();
+
+    $prefix = add_prefix_if_nonroot(sub {
+            $prefix = tempdir("fetchware-test-$$-XXXXXXXXXX",
+                TMPDIR => 1, CLEANUP => 1);
+            config(prefix => $prefix);
+            return $prefix;
+        }
+    );
+    ok(-e (config('prefix')),
+        'checked add_prefix_if_nonroot() tempfile creation.');
+    ok(-e $prefix,
+        'checked add_prefix_if_nonroot() prefix existence.');
 };
 
 
