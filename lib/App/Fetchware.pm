@@ -715,10 +715,11 @@ program to install that is looked up using the [lookup_url]. Please add a
 EOD
 
     unless (config('gpg_keys_url')
+            or config('gpg_sig_url')
             or config('md5_url')
             or config('sha1_url')
     ) {
-        die <<EOD unless config('verify_failure_ok');
+        msg <<EOD unless config('verify_failure_ok');
 App-Fetchware: You failed to specify a method of verifying downloaded archives
 of your program. This is mandatory to ensure that the software that you download
 is the same as the software the author actually uploaded. Please specify a
@@ -1180,7 +1181,7 @@ EOD
 
 =head2 download()
 
-    my $package_path = download($download_url);
+    my $package_path = download($temp_dir, $download_path);
 
 =over
 
@@ -1194,8 +1195,9 @@ EOD
 
 =back
 
-Downloads $download_url to C<tempdir 'whatever/you/specify';> or to
-whatever File::Spec's tempdir() method tries. Supports ftp and http URLs.
+Downloads $download_path to C<tempdir 'whatever/you/specify';> or to
+whatever File::Spec's tempdir() method tries. Supports ftp and http URLs as well
+as local files specified like in browsers using C<file://>
 
 Also, returns $package_path, which is used by unarchive() as the path to the
 archive for unarchive() to untar or unzip.

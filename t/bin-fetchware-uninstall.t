@@ -40,16 +40,20 @@ my $fetchware_package_path;
 subtest 'test cmd_uninstall() success' => sub {
     skip_all_unless_release_testing();
 
+# Changed from FETCHWARE_HTTP_LOOKUP_URL, because Apache does *not* have a make # uninstall, which fetchware needs for automatic package uninstalltion.
+my ($vol, $dirs, $file) = splitpath("$ENV{FETCHWARE_LOCAL_BUILD_URL}");
+note("VOL[$vol][$dirs][$file]");
+my $lookup_url =  "file://$dirs";
+note("LOOKUPURL[$lookup_url]");
 my $fetchwarefile = <<EOF;
 use App::Fetchware;
 
 program 'ctags';
 
-# Changed from FETCHWARE_FTP_LOOKUP_URL, because Apache does *not* have a make
-# uninstall, which fetchware needs for automatic package uninstalltion.
-# Fetchwarefiles are perl :)
-my (\$vol, \$dirs, \$file) = splitpath('$ENV{FETCHWARE_LOCAL_BUILD_URL}');
-lookup_url "file://\$dirs";
+lookup_url '$lookup_url';
+
+# Must provide a mirror as well, so just use the same thing as the lookup_url.
+mirror '$lookup_url';
 
 filter 'ctags';
 ###BUGALERT### Add local verification for this.

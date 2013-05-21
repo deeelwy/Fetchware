@@ -623,6 +623,9 @@ no_mirror_download_file().
 
 =cut
 
+###BUGALERT###I'm a 190 line disaster! Please refactor me. Oh, and
+#download_dirlist() too please, because I'm just a copy and paste of that
+#subroutine!
 sub download_file {
     my %opts;
     my $url;
@@ -642,7 +645,7 @@ sub download_file {
     } else {
         PATHERROR: die <<EOD;
 App-Fetchware-Util: You can only specify either PATH or URL never both. Only
-specify one or the other when you call download_dirlist().
+specify one or the other when you call download_file().
 EOD
     }
 

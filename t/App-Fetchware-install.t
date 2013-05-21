@@ -10,11 +10,12 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '10'; #Update if this changes.
+use Test::More 0.98 tests => '9'; #Update if this changes.
 use File::Copy 'cp';
 use File::Temp 'tempdir';
 use File::Spec::Functions 'tmpdir';
 use Cwd 'cwd';
+use Perl::OSType 'is_os_type';
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
@@ -77,16 +78,26 @@ subtest 'test chdir_unless_already_at_path() success' => sub {
 
 
 
-###BUGALERT### Needs to fail gracefully or su to root when run as non-root.
-# I have to unarchive the package before I can build it.
 my $build_path;
 subtest 'do prerequisites' => sub {
     skip_all_unless_release_testing();
 
-    # Needed my all other subtests.
+    # Needed by all other subtests.
     my $package_path = $ENV{FETCHWARE_LOCAL_BUILD_URL};
     fail("FETCHWARE environment vars not set!!! Run frt()")
         if not defined $package_path;
+
+    # Because these tests call App::Fetchware's API subs directly, and even skip
+    # some steps such as verification, I need to add a prefix configuration
+    # option manually with config(). This option enabled only when run non-root
+    # causes fetchware to install its program to a different writable directory
+    # other than the system ones, which are only writable by root. Also, do this
+    # when running on an OS other than Unix.
+    if (not is_os_type('Unix') or $> != 0 ) {
+        my $temp_dir = tempdir("fetchware-test-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+        note("Running as nonroot or nonunix using prefix temp dir [$temp_dir]");
+        config(prefix => $temp_dir);
+    }
 
     # Call start() to create & cd to a tempdir, so end() called later can delete all
     # of the files that will be downloaded.
@@ -130,8 +141,6 @@ subtest 'test install() install_commands success' => sub {
 };
 
 
-##BUGALERT###Add a make_test_dist() based test for regular users.
-
 subtest 'test install() no_install success' => sub {
     no_install 'True';
 
@@ -140,29 +149,15 @@ subtest 'test install() no_install success' => sub {
 };
 
 
-
-subtest 'test overriding install()' => sub {
-    # switch to *not* being package fetchware, so that I can test install()'s
-    # behavior as if its being called from a Fetchwarefile to create a callback
-    # that install will later call back in package fetchware.
-    package main;
-    use App::Fetchware;
-
-    install sub { return 'Overrode install()!' };
-
-    # Switch back to being in package fetchware, so that install() will try out
-    # the callback I gave it in the install() call above.
-    package fetchware;
-    is(install($build_path), 'Overrode install()!',
-        'checked overiding install() success');
-};
-
-
 subtest 'Call end() to delete temporary directory.' => sub {
     # Call end() to delete temp dir created by start().
     ok(end(),
         'ran end() to delete temp dir.');
 };
+
+
+# Clear %config between real install() test and fake make_test_dist() one.
+__clear_CONFIG();
 
 
 # Remove this or comment it out, and specify the number of tests, because doing

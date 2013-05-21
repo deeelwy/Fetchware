@@ -431,9 +431,23 @@ EOD
     sub { 
         my $write_pipe = shift;
 
-        # "Download" the package using a local file:// URL.
-        my $fetchware_url = "file://$fetchware_package_path";
-        my $package_path = download($temp_dir, $fetchware_url);
+        # "Download" the package using File::Copy's cp().
+        my $package_path;
+        if (cp($fetchware_package_path, $temp_dir)) {
+            # Determine the output file that cp() used.
+            ###BUGALERT### Open the file for cp(), and provide cp() with a
+            #filehandle to write the data to to ensure the filename is exactly
+            #what it needs to be.
+            $package_path = catfile($temp_dir,
+                file($fetchware_package_path)->basename());
+        } else {
+            die <<EOD;
+fetchware: Fetchware failed to copy the file [$fetchware_package_path] to the
+destination directory [$temp_dir]. OS error [$!].
+EOD
+        }
+
+
         vmsg "Copied installed package to temporary directory at [$package_path]";
 
         $P_build_path = unarchive($package_path);

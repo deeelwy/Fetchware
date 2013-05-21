@@ -16,6 +16,7 @@ use Cwd 'cwd';
 use File::Copy 'mv';
 use File::Spec::Functions qw(catfile splitpath tmpdir);
 use Path::Class;
+use File::Temp 'tempdir';
 
 
 # Set PATH to a known good value.
@@ -42,11 +43,11 @@ subtest 'test cmd_install(Fetchwarefile)' => sub {
 my $fetchwarefile = <<EOF;
 use App::Fetchware;
 
-stay_root 'On';
-
 program 'Apache 2.2';
 
-lookup_url '$ENV{FETCHWARE_FTP_LOOKUP_URL}';
+lookup_url '$ENV{FETCHWARE_HTTP_LOOKUP_URL}';
+
+mirror '$ENV{FETCHWARE_FTP_MIRROR_URL}';
 
 filter 'httpd-2.2';
 EOF
@@ -82,7 +83,9 @@ subtest 'test cmd_install(*.fpkg)' => sub {
     # It must be a dir with the sticky bit set or owned by the user running the
     # program to pass safe_open()'s security tests.
     note("FPP[$fetchware_package_path]");
-    mv($fetchware_package_path, tmpdir())
+    my $temp_dir = tempdir("fetchware-test-$$-XXXXXXXXXXXX",
+        TMPDIR => 1, CLEANUP => 1);
+    mv($fetchware_package_path, $temp_dir)
         ? pass("checked cmd_install() *.fpkg move fpkg.")
         : fail("Failed to cp [$fetchware_package_path] to cwd os error [$!].");
 
@@ -90,7 +93,7 @@ subtest 'test cmd_install(*.fpkg)' => sub {
     my $new_fetchware_package_path
         =
         cmd_install(
-            catfile(tmpdir(), ( splitpath($fetchware_package_path) )[2] )
+            catfile($temp_dir, ( splitpath($fetchware_package_path) )[2] )
         );
 
     is($new_fetchware_package_path, $fetchware_package_path,
@@ -99,7 +102,6 @@ subtest 'test cmd_install(*.fpkg)' => sub {
 
 
 subtest 'test test-dist.fpkg cmd_install' => sub {
-
     # Clear App::Fetchware's internal configuration information, which I must do
     # if I parse more than one Fetchwarefile in a running of fetchware.
     __clear_CONFIG();
@@ -122,23 +124,23 @@ subtest 'test test-dist.fpkg cmd_install' => sub {
 };
 
 
-##TEST##
-##TEST##subtest 'test cmd_install(else)' => sub {
-##TEST##    skip_all_unless_release_testing();
-##TEST##
-##TEST##    eval_ok(sub {cmd_install()}, <<EOE, 'checked cmd_install() no args');
-##TEST##fetchware: You called fetchware install incorrectly. You must also specify
-##TEST##either a Fetchwarefile or a fetchware package that ends with [.fpkg].
-##TEST##EOE
-##TEST##
-##TEST##    eval_ok(sub {cmd_install('fetchware-test' . rand(3739929293))},
-##TEST##        <<EOE, 'checked cmd_install() file existence');
-##TEST##fetchware: You called fetchware install incorrectly. You must also specify
-##TEST##either a Fetchwarefile or a fetchware package that ends with [.fpkg].
-##TEST##EOE
-##TEST##
-##TEST##
-##TEST##};
+
+subtest 'test cmd_install(else)' => sub {
+    skip_all_unless_release_testing();
+
+    eval_ok(sub {cmd_install()}, <<EOE, 'checked cmd_install() no args');
+fetchware: You called fetchware install incorrectly. You must also specify
+either a Fetchwarefile or a fetchware package that ends with [.fpkg].
+EOE
+
+    eval_ok(sub {cmd_install('fetchware-test' . rand(3739929293))},
+        <<EOE, 'checked cmd_install() file existence');
+fetchware: You called fetchware install incorrectly. You must also specify
+either a Fetchwarefile or a fetchware package that ends with [.fpkg].
+EOE
+
+
+};
 
 
 # Remove this or comment it out, and specify the number of tests, because doing
