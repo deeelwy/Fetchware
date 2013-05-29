@@ -50,7 +50,9 @@ use App::Fetchware;
 
 program 'Apache 2.2';
 
-lookup_url '$ENV{FETCHWARE_FTP_LOOKUP_URL}';
+lookup_url '$ENV{FETCHWARE_HTTP_LOOKUP_URL}';
+
+mirror '$ENV{FETCHWARE_FTP_MIRROR_URL}';
 
 filter 'httpd-2.2';
 EOF

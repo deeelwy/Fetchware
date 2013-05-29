@@ -10,7 +10,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '3'; #Update if this changes.
+use Test::More 0.98 tests => '2'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile);
 use URI::Split 'uri_split';
@@ -65,25 +65,6 @@ subtest 'test start()' => sub {
     chdir();
 
 };
-
-
-
-subtest 'test overriding start()' => sub {
-    # switch to *not* being package fetchware, so that I can test start()'s
-    # behavior as if its being called from a Fetchwarefile to create a callback
-    # that start will later call back in package fetchware.
-    package main;
-    use App::Fetchware;
-
-    start sub { return 'Overrode start()!' };
-
-    # Switch back to being in package fetchware, so that start() will try out
-    # the callback I gave it in the start() call above.
-    package fetchware;
-    is(start(), 'Overrode start()!',
-        'checked overiding start() success');
-};
-
 
 
 

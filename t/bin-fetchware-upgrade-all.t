@@ -35,21 +35,17 @@ BEGIN {
     ok(defined $INC{$fetchware}, 'checked bin/fetchware loading and import')
 }
 
+# Set FETCHWARE_DATABASE_PATH to a tempdir, so that this test uses a different
+# path for your fetchware database than the one fetchware normally uses after it
+# is installed. This is to avoid any conflicts--especially because this test
+# file upgrades everything in your fetchware database path, so we need to ensure
+# that there are just simple testing packages in ther, and not something more
+# annoying.
+$ENV{FETCHWARE_DATABASE_PATH} = tempdir("fetchware-test-$$-XXXXXXXXXX",
+    CLEANUP => 1, TMPDIR => 1); 
+
 subtest 'test cmd_upgrade_all() success' => sub {
     skip_all_unless_release_testing();
-
-    # upgrade_all: Delete ctags packages too!
-    # Delete all existing httpd fetchware packages in fetchware_database_path(),
-    # which will screw up the installation and upgrading of httpd below.
-    for my $fetchware_package (glob catfile(fetchware_database_path(), '*')) {
-        # Clean up $fetchware_package.
-        if ($fetchware_package =~
-            /httpd|ctags|test-dist|another-dist|App-Fetchware/) {
-            ok((unlink $fetchware_package),
-                'checked cmd_upgrade() clean up fetchware database path')
-                if -e $fetchware_package
-        }
-    }
 
     my $apache_fetchwarefile = <<EOF;
 use App::Fetchware;
@@ -57,6 +53,8 @@ use App::Fetchware;
 program 'Apache 2.2';
 
 lookup_url '$ENV{FETCHWARE_LOCAL_UPGRADE_URL}';
+
+mirror '$ENV{FETCHWARE_LOCAL_UPGRADE_URL}';
 
 filter 'httpd-2.2';
 EOF
@@ -68,6 +66,8 @@ use App::Fetchware;
 program 'ctags';
 
 lookup_url '$ENV{FETCHWARE_LOCAL_UPGRADE_URL}';
+
+mirror '$ENV{FETCHWARE_LOCAL_UPGRADE_URL}';
 
 filter 'ctags';
 
@@ -167,18 +167,6 @@ __clear_CONFIG();
 
 subtest 'test cmd_upgrade_all() test-dist' => sub {
     # Actually test during user install!!!
-
-    # Delete all existing httpd fetchware packages in fetchware_database_path(),
-    # which will screw up the installation and upgrading of httpd below.
-    for my $fetchware_package (glob catfile(fetchware_database_path(), '*')) {
-        # Delete *only* ctags, httpd, and the test-dists.
-        if ($fetchware_package =~ /ctags|httpd|test-dist|another-dist/) {
-            # Clean up $fetchware_package.
-            ok((unlink $fetchware_package),
-                'checked cmd_upgrade() clean up fetchware database path')
-                if -e $fetchware_package;
-        }
-    }
 
     # Create a $temp_dir for make_test_dist() to use. I need to do this, so that
     # both the old and new test dists can be in the same directory.

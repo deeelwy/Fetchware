@@ -1814,7 +1814,7 @@ EOD
         }
     }
     
-###subify calc_sum()
+###BUGALERT###subify calc_sum()
     # Open the downloaded software archive for reading.
     my $package_fh = safe_open($package_path, <<EOD);
 App-Fetchware: run-time error. Fetchware failed to open the file it downloaded

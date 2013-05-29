@@ -1,18 +1,17 @@
 #!perl
 # App-Fetchware-end.t tests App::Fetchware's end() subroutine, which
 # determines if a new version of your program is available.
-# Pretend to be bin/fetchware, so that I can test App::Fetchware as though
-# bin/fetchware was calling it.
-package fetchware;
 use strict;
 use warnings;
 use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '3'; #Update if this changes.
+use Test::More 0.98 tests => '2'; #Update if this changes.
 
 use File::Temp 'tempdir';
+use Fcntl ':flock';
+use File::Spec::Functions 'catfile';
 
 use Test::Fetchware ':TESTING';
 
@@ -36,36 +35,20 @@ my $class = 'App::Fetchware';
 subtest 'test end()' => sub {
     skip_all_unless_release_testing();
 
-    my $tempdir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
-    note("td[$tempdir]");
+    my $tempdir = start();
 
-    ok(-e $tempdir, 'checked end() tempdir creationg');
+    ok(-e $tempdir, 'checked end() tempdir creation');
 
     end();
 
-    ok( (not -e $tempdir) , 'checked end() success');
+    ok((open my $fh_sem, '>', catfile($tempdir, 'fetchware.sem')),
+        'checked end() open fetchware semaphore file');
+
+    ok((flock $fh_sem, LOCK_EX | LOCK_NB),
+        'checked end() flock() fetchware semaphore file');
 
     done_testing();
 };
-
-
-
-subtest 'test overriding end()' => sub {
-    # switch to *not* being package fetchware, so that I can test end()'s
-    # behavior as if its being called from a Fetchwarefile to create a callback
-    # that end will later call back in package fetchware.
-    package main;
-    use App::Fetchware;
-
-    end sub { return 'Overrode end()!' };
-
-    # Switch back to being in package fetchware, so that end() will try out
-    # the callback I gave it in the end() call above.
-    package fetchware;
-    is(end(), 'Overrode end()!',
-        'checked overiding end() success');
-};
-
 
 
 # Remove this or comment it out, and specify the number of tests, because doing

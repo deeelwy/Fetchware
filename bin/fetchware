@@ -24,6 +24,7 @@ use Getopt::Long qw(:config bundling pass_through);
 use App::Fetchware qw(parse_directory_listing);
 use App::Fetchware::Config qw(config __clear_CONFIG config_replace);
 use App::Fetchware::Util qw(:UTIL);
+use Test::Fetchware 'create_test_fetchwarefile';
 use Archive::Tar;
 use File::Copy qw(mv cp);
 use File::Spec::Functions qw(curdir catdir catfile catpath tmpdir splitpath
@@ -2044,7 +2045,7 @@ install it, then please enter 'yes' or just press <Enter>.
 EOP
         )
     ) {
-        # Abuse create_test_fetchwarfile(). This is not for testing, but this
+        # Abuse create_test_fetchwarefile(). This is not for testing, but this
         # subroutine does exactly what I need one to do :) It even deletes this
         # fetchwarefile when the program exists.
         my $fetchwarefile_filename = create_test_fetchwarefile($$fetchwarefile);
@@ -2631,7 +2632,18 @@ EOD
         # I annoying must open the file before I can see if I can lock it or
         # not.
         my $sem_lock_file = catfile($temp_dir, 'fetchware.sem');
-        open my $fh_sem, '>', $sem_lock_file or die <<EOD;
+        my $fh_sem;
+        if (open $fh_sem, '>', $sem_lock_file) {
+            vmsg "Successfully created [fetchware.sem] semaphore lock file.";
+        } else {
+            # Test if the lockfile has the same owner uid as this running perl
+            # process, and if they differ skip deleting this one, because we
+            # lack the perms to do it anyway.
+            if ($> != (stat($sem_lock_file))[4]) {
+                msg "Skipping file [$sem_lock_file], because a different user created it.";
+                next;
+            } else {
+                die <<EOD;
 App-Fetchware-Util: Failed to create [$sem_lock_file] semaphore lock file! This
 should not happen, because fetchware is creating this file in a brand new
 directory that only fetchware should be accessing. You simply shouldn't see this
@@ -2639,7 +2651,8 @@ error unless some one is messing with fetchware, or perphaps there actually is a
 bug? I don't know, but this just shouldn't happen. It's so hard to trigger it to
 happen, it can't easily be tested in fetchware's test suite. OS error [$!].
 EOD
-        vmsg "Successfully created [fetchware.sem] semaphore lock file.";
+            }
+        }
         # Now flock 'fetchware.sem.' This should
         # Use LOCK_NB so flock won't stupidly wait forever and ever until 
         # he lock becomes available.
@@ -2986,9 +2999,23 @@ EOD
 Returns the correct path for the fetchware package database based on operating
 system and if super user or not.
 
+Also, supports user customizable fetchware database paths via the
+C<FETCHWARE_DATABASE_PATH> environment variable, and the
+C<fetchware_database_path> Fetchwarefile configuration file. If both are
+specified C<fetchware_database_path> is prefered over
+C<FETCHWARE_DATABASE_PATH>.
+
 =cut
 
 sub fetchware_database_path {
+    # If user specifically specifies their own fetchware database path in their
+    # fetchwarefile use it instead of the default one.
+    return config('fetchware_database_path')
+        if defined config('fetchware_database_path');
+    # Otherwise use $ENV{FETCHWARE_DATABASE_PATH} if it's been defined.
+    return $ENV{FETCHWARE_DATABASE_PATH}
+        if defined $ENV{FETCHWARE_DATABASE_PATH};
+
     my $fetchware_database_path;
     if (is_os_type('Unix', $^O)) {
         # If we're effectively root use a "system" directory.

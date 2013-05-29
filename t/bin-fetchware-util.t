@@ -129,15 +129,16 @@ note("CFPsFPPFPPFPPFPP[$fetchwarefile]");
     # above.
     my $cwd = dir(cwd());
     my $cwd_parent = $cwd->parent();
+    my $cwd_lastdir = $cwd->dir_list(-1, 1);
     is(create_fetchware_package(\$fetchwarefile, cwd()),
-        catfile($cwd_parent, 'App-Fetchware.fpkg'),
+        catfile($cwd_parent, "$cwd_lastdir.fpkg"),
         'checked create_fetchware_package() success');
 
     is(cwd(), $cwd,
         'checked create_fetchware_package() chdir back to base directory');
 
     # Delete generated files.
-    ok(unlink(catfile($cwd_parent,'App-Fetchware.fpkg')) == 1,
+    ok(unlink(catfile($cwd_parent,"$cwd_lastdir.fpkg")) == 1,
         'checked create_fetchware_package() delete generated files');
 
 ##CANNOTTEST## Can't test anymore, because the doesntexist.ever-anywhere file
@@ -190,7 +191,27 @@ subtest 'check fetchware_database_path()' => sub {
             ###BUGALERT### Add support for everything else too!!!
             fail('Must add support for your OS!!!');
     }
-    
+
+    # Test fetchware_database_path() when the fetchware_database_path
+    # configuration option has been specified.
+    config(fetchware_database_path => cwd());
+    is(fetchware_database_path(), cwd(),
+        'check fetchware_database_path() config option success.');
+    config_delete('fetchware_database_path');
+
+    # Test FETCHWARE_DATABASE_PATH too.
+    $ENV{FETCHWARE_DATABASE_PATH} = cwd();
+    is(fetchware_database_path(), cwd(),
+        'check fetchware_database_path() ENV option success.');
+
+    # Now test both of them together.
+    config(fetchware_database_path => dir(cwd())->parent());
+    is(fetchware_database_path(), dir(cwd())->parent(),
+        'check fetchware_database_path() both options success.');
+
+    # Clean up after ourselves.
+    delete $ENV{FETCHWARE_DATABASE_PATH};
+    config_delete('fetchware_database_path');
 };
 
 
@@ -254,7 +275,7 @@ note("CEFsFPPFPPFPPFPPFPP[$fetchwarefile]");
     is(${extract_fetchwarefile($fetchware_package_path)},
         $fetchwarefile, 'checked extract_fetchwarefile() success');
 
-    my $temp_fpkg = catfile(tmpdir(), 'App-Fetchware.fpkg');
+    my $temp_fpkg = catfile(tmpdir(), "$last_dir.fpkg");
 
     # Test existence of generated files.
     ok(-e $temp_fpkg,
@@ -285,8 +306,13 @@ subtest 'check copy_fpkg_to_fpkg_database()' => sub {
     ###BUGALERT### Use Sub::Override to override fetchware_package_path(), so I
     #can override its behavior and test this subroutine for failure.
 
+    # Figure out what the create_fetchware_package() named its file.
+    my $cwd = dir(cwd());
+    my $cwd_parent = $cwd->parent();
+    my $cwd_lastdir = $cwd->dir_list(-1, 1);
+
     # Delete generated files.
-    ok(unlink('../Fetchwarefile', '../App-Fetchware.fpkg'),
+    ok(unlink("../Fetchwarefile", "../$cwd_lastdir.fpkg"),
         'checked extract_fetchwarefile() delete generated files');
 };
 

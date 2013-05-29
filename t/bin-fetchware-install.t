@@ -117,10 +117,10 @@ subtest 'test test-dist.fpkg cmd_install' => sub {
 
     # Now uninstall the useless test dist.
     ok(cmd_uninstall('test-dist-1.00'),
-        'checked cmd_list() clean up installed test-dist.');
+        'checked cmd_install() clean up installed test-dist.');
 
     ok(unlink($test_dist_path, $test_dist_md5),
-        'checked cmd_list() delete temp files.');
+        'checked cmd_install() delete temp files.');
 };
 
 

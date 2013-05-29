@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '25'; #Update if this changes.
+use Test::More 0.98 tests => '23'; #Update if this changes.
 use Test::Deep;
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir rootdir);
@@ -275,7 +275,7 @@ EOS
 
     # Parse $got_output, creating $got_filelisting to be able to check its
     # structure below using Test::Deep for corectness.
-    my $got_filelisting = http_parse_filelist($got_output);
+    $got_filelisting = http_parse_filelist($got_output);
     ok(ref $got_filelisting eq 'ARRAY',
         'checked download_dirlist() multi-mirror parsed output.');
 
@@ -317,7 +317,7 @@ EOS
 
     # Parse $got_output, creating $got_filelisting to be able to check its
     # structure below using Test::Deep for corectness.
-    my $got_filelisting = http_parse_filelist($got_output);
+    $got_filelisting = http_parse_filelist($got_output);
     ok(ref $got_filelisting eq 'ARRAY',
         'checked download_dirlist() multi-mirror parsed output.');
 
@@ -339,7 +339,7 @@ EOS
 
     # Parse $got_output, creating $got_filelisting to be able to check its
     # structure below using Test::Deep for corectness.
-    my $got_filelisting = http_parse_filelist($got_output);
+    $got_filelisting = http_parse_filelist($got_output);
     ok(ref $got_filelisting eq 'ARRAY',
         'checked download_dirlist(PATH) parsed output.');
 
@@ -363,11 +363,7 @@ subtest 'test download_dirlist(file://)' => sub {
 subtest 'test download_ftp_url()' => sub {
     skip_all_unless_release_testing();
 
-    download_ftp_url($ENV{FETCHWARE_FTP_DOWNLOAD_URL});
-    my $url_path = $ENV{FETCHWARE_FTP_DOWNLOAD_URL};
-    $url_path =~ s!^ftp://!!;
-    my ($scheme, $auth, $path, $query, $frag) = uri_split($ENV{FETCHWARE_FTP_DOWNLOAD_URL});
-    my ($volume, $directories, $filename) = splitpath($path);
+    my $filename = download_ftp_url($ENV{FETCHWARE_FTP_DOWNLOAD_URL});
     ok(-e $filename, 'checked download_ftp_url success');
 
     ok(unlink $filename, 'checked deleting downloaded file');
@@ -389,7 +385,8 @@ EOS
 ##HOWTOTEST##domain [$site]. The ftp error was [@{[$ftp->message]}]. See man App::Fetchware.
 ##HOWTOTEST##EOS
     
-
+    my ($scheme, $auth, $path, $query, $frag) =
+        uri_split($ENV{FETCHWARE_FTP_DOWNLOAD_URL});
     eval_ok( sub {download_ftp_url("$scheme://$auth/doesnt/exist/anywhere")},
         <<EOS, 'check download_ftp_url() failed to chdir');
 App-Fetchware: run-time error. fetchware failed to cwd() to [/doesnt/exist/anywhere] on site
@@ -397,11 +394,10 @@ App-Fetchware: run-time error. fetchware failed to cwd() to [/doesnt/exist/anywh
 ]. See perldoc App::Fetchware.
 EOS
 
-    eval_ok(sub {download_ftp_url("$scheme://$auth/$directories/filedoesntexist")},
+    eval_ok(sub {download_ftp_url("$scheme://$auth/$path/filedoesntexist")},
         <<EOS, 'checked download_ftp_url() cant Net::FTP->get() file');
-App-Fetchware: run-time error. fetchware failed to download the file [filedoesntexist]
-from path [//pub/apache/httpd//filedoesntexist] on server [carroll.cac.psu.edu]. The ftp error message was
-[Failed to open file.
+App-Fetchware: run-time error. fetchware failed to cwd() to [//pub/apache/httpd/httpd-2.2.24.tar.bz2/filedoesntexist] on site
+[carroll.cac.psu.edu]. The ftp error was [Failed to change directory.
 ]. See perldoc App::Fetchware.
 EOS
     
@@ -464,17 +460,17 @@ subtest 'test download_file()' => sub {
     eval_ok(sub {download_file()},
         <<EOE, 'checked download_file() no params exception.');
 App-Fetchware-Util: You can only specify either PATH or URL never both. Only
-specify one or the other when you call download_dirlist().
+specify one or the other when you call download_file().
 EOE
     eval_ok(sub {download_file('one', 'two', 'three')},
         <<EOE, 'checked download_file() too many exception.');
 App-Fetchware-Util: You can only specify either PATH or URL never both. Only
-specify one or the other when you call download_dirlist().
+specify one or the other when you call download_file().
 EOE
     eval_ok(sub {download_file('fake url who cares', PATH => 'fake/path')},
         <<EOE, 'checked download_file() wrong param exception.');
 App-Fetchware-Util: You can only specify either PATH or URL never both. Only
-specify one or the other when you call download_dirlist().
+specify one or the other when you call download_file().
 EOE
 
     eval_ok(sub {download_file(PATH => 'fake/path')},
@@ -560,7 +556,7 @@ EOS
     # Test download_file(PATH => $path) support.
     __clear_CONFIG();
     # Set up the mirror so that it has no path.
-    my ($scheme, $auth, $path, $query, $frag) =
+    ($scheme, $auth, $path, $query, $frag) =
         uri_split($ENV{FETCHWARE_HTTP_LOOKUP_URL});
     config(mirror => uri_join($scheme, $auth, undef, undef, undef));
     # Strip $path's ending / if present.
@@ -633,70 +629,6 @@ EOS
     ok(-e $filename, 'checked download_http_url return success');
     ok(unlink $filename, 'checked deleting downloaded file');
 
-};
-
-
-subtest 'test make_test_dist()' => sub {
-    ###HOWTOTEST### How do I test for mkdir() failure, open() failure, and
-    #Archive::Tar->create_archive() failure?
-
-    my $file_name = 'test-dist';
-    my $ver_num = '1.00';
-    my $retval = make_test_dist($file_name, $ver_num);
-    is(file($retval)->basename(), "$file_name-$ver_num.fpkg",
-        'check make_test_dist() success.');
-
-    ok(unlink( $retval), 'checked make_test_dist() cleanup');
-
-    # Test more than one call as used in t/bin-fetchware-upgrade-all.t
-    my @filenames = qw(test-dist another-dist);
-
-    my @retvals;
-    for my $filename (@filenames) {
-        my $retval = make_test_dist($file_name, $ver_num);
-        is(file($retval)->basename, "$file_name-$ver_num.fpkg",
-            'check make_test_dist() 2 calls  success.');
-        push @retvals, $retval;
-    }
-
-    ok(unlink(@retvals), 'checked make_test_dist() 2 calls cleanup');
-
-    # Test make_test_dist()'s second destination directory argument.
-    my $name = 'test-dist-1.00';
-    my $return_val = make_test_dist($name, $ver_num, tmpdir());
-    is($return_val, catfile(tmpdir(), "$name-$ver_num.fpkg"),
-        'check make_test_dist() destination directory success.');
-
-    ok(unlink($return_val), 'checked make_test_dist() cleanup');
-};
-
-
-subtest 'test md5sum_file()' => sub {
-    ###HOWTOTEST### How do I test open(), close(), and Digest::MD5 failing?
-
-    my $filename = 'test-dist';
-    my $ver_num = '1.00';
-    my $test_dist = make_test_dist($filename, $ver_num);
-    my $test_dist_md5 = md5sum_file($test_dist);
-
-    ok(-e $test_dist_md5, 'checked md5sum_file() file creation');
-
-    open(my $fh, '<', $test_dist_md5)
-        or fail("Failed to open [$test_dist_md5] for testing md5sum_file()[$!]");
-
-    my $got_md5sum = do { local $/; <$fh> };
-
-    close $fh
-        or fail("Failed to close [$test_dist_md5] for testing md5sum_file() [$!]");
-
-    # The generated fetchware package is different each time probably because of
-    # formatting in tar and gzip.
-    like($got_md5sum, qr/[0-9a-f]{32}  test-dist-1.00.fpkg/,
-        'checked md5sum_file() success');
-
-    # Clean up junk temp files.
-    ok(unlink($test_dist, $test_dist_md5),
-        'cleaned up test md5sum_file()');
 };
 
 

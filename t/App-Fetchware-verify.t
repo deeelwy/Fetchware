@@ -62,6 +62,7 @@ subtest 'Do verify() prereqs.' => sub {
     my $temp_dir = start();
     # Use config subs to determine a $download_path based on the current version
     # of apache instead of updating this manually.
+    program 'httpd-2.2';
     lookup_url 'http://www.apache.org/dist/httpd';
     mirror 'http://apache.mirrors.pair.com/';
     filter 'httpd-2.2';

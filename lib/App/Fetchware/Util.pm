@@ -868,6 +868,7 @@ Uses Net::FTP to download the specified FTP URL using binary mode.
 sub download_ftp_url {
     my $ftp_url = shift;
 
+    ###BUGALERT### Replace custom regex with URI::Split's regex.
     $ftp_url =~ m!^ftp://([-a-z,A-Z,0-9,\.]+)(/.*)?!;
     my $site = $1;
     my $path = $2;
@@ -1032,9 +1033,23 @@ sub download_file_url {
 
     # Download the file:// URL to the current directory, which should already be
     # in $temp_dir, because of start()'s chdir().
-    cp($url, cwd()) or die <<EOD;
+    #
+    # Don't forget to clear taint. Fetchware does *not* run in taint mode, but
+    # for some reason, bug?, File::Copy checks if data is tainted, and then
+    # retaints it if it is already tainted, but for some reason I get "Insecure
+    # dependency" taint failure exceptions when drop priving. The fix is to
+    # always untaint my data as done below.
+    ###BUGALERT### Investigate this as a possible taint bug in perl or just
+    #File::Copy. Perhaps the cause is using File::Copy::cp(copy) after drop
+    #priving with data from root?
+    $url =~ /(.*)/;
+    my $untainted_url = $1;
+    my $cwd = cwd();
+    $cwd =~ /(.*)/;
+    my $untainted_cwd = $1;
+    cp($untainted_url, $untainted_cwd) or die <<EOD;
 App::Fetchware: run-time error. Fetchware failed to copy the download URL
-[$url] to the working directory [@{[cwd()]}]. Os error [$!].
+[$untainted_url] to the working directory [$untainted_cwd]. Os error [$!].
 EOD
 
     # Return just file filename of the downloaded file.
@@ -1406,8 +1421,54 @@ EOM
         return $dont_drop_privs->($child_code);
     }
 
-    # Only for on Unix-like systems, or we're root.
+    # Only for on Unix-like systems and we're root.
     if (is_os_type('Unix') and ($< == 0 or $> == 0)) {
+        # Ensure that $user_temp_dir can be accessed by my drop priv'd child.
+        # And only try to change perms to 0755 only if perms are not 0755 already.
+        my $perms = ( stat(cwd()) )[2];
+        $perms = S_IMODE($perms); # Ditch the file type garbage.
+        unless ($perms & 0755) {
+            chmod 0755, cwd() or die <<EOD;
+App-Fetchware-Util: Fetchware failed to change the permissions of the current
+temporary directory [@{[cwd()]} to 0755. The OS error was [$!].
+EOD
+        }
+        # Create a new tempdir for the droped prive user to use, and be sure to
+        # chown it so they can actually write to it as well.
+        #
+        # $new_temp_dir does not have a semaphore file, but its parent directory
+        # does, which will still keep fetchware clean from deleting this
+        # directory out from underneath us.
+        my $new_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
+            DIR => cwd(), CLEANUP => 1);
+        # Determine /etc/passwd entry for the "effective" uid of the
+        # current fetchware process. I should use the "effective" uid
+        # instead of the "real" uid, because effective uid is used to
+        # determine what each uid can do, and the real uid is only
+        # really used to track who the original user was in a setuid
+        # program.
+        my ($name, $useless, $uid, $gid, $quota, $comment, $gcos, $dir,
+            $shell, $expire)
+            = getpwnam(config('user') // 'nobody');
+        chown($uid, $gid, $new_temp_dir) or die <<EOD;
+App-Fetchware-Util: Fetchware failed to chown [$new_temp_dir] to the user it is
+dropping privileges to. This just shouldn't happen, and might be a bug, or
+perhaps your system temporary directory is full. The OS error was [$!].
+EOD
+        chmod(0700, $new_temp_dir) or die <<EOD;
+App-Fetchware-Util: Fetchware failed to change the permissions of its new
+temporary directory [$new_temp_dir] to 0700 that it created, because its
+dropping privileges.  This just shouldn't happen, and is bug, or perhaps your
+system temporary directory is full. The OS error is [$!].
+EOD
+        # And of course chdir() to $new_temp_dir, because everything assumes
+        # that the cwd() is where everything should be saved and done.
+        chdir($new_temp_dir) or die <<EOD;
+App-Fetchware-Util: Fetchware failed to chdir() to its new temporary directory
+[$new_temp_dir]. This shouldn't happen, and is most likely a bug, or perhaps
+your system temporary directory is full. The OS error was [$!].
+EOD
+
         # Open a pipe to allow the child to talk back the parent.
         pipe(READONLY, WRITEONLY) or die <<EOD;
 App-Fetchware-Util: Fetchware failed to create a pipe to allow the forked
@@ -1429,7 +1490,7 @@ has been received or not; therefore, we're just playing it safe and die()ing.
 EOD
         };
 
-        # Code below bassed on a cool forking idiom by Aristotle.
+        # Code below based on a cool forking idiom by Aristotle.
         # (http://blogs.perl.org/users/aristotle/2012/10/concise-fork-idiom.html)
         given ( scalar fork ) {
             # Fork failed.
@@ -1464,13 +1525,9 @@ EOD
                 # be done to prevent File::Temp's END{} block from attempting to
                 # delete the temp directory that the parent still needs to
                 # finish installing or uninstalling. The parent's END{} block's
-                # will still be called, so this just turns of the child deleting
-                # the temp dir not the parent.
+                # will still be called, so this just turns off the child
+                # deleting the temp dir not the parent.
                 _exit 0;
-
-                ###BUGALERT### Should I setup a pipe to communicate changes to
-                #%CONFIG and $child_code's return value back to caller??? It
-                #perhaps has security implications.
 
             # Fork succeeded, parent code goes here.
             } default {
@@ -1776,29 +1833,38 @@ sub create_tempdir {
         # Call tempdir() with the @args I've built.
         $temp_dir = tempdir(@args);
 
-        # Must chmod 700 so gpg's localized keyfiles are good.
-        chmod 0700, $temp_dir;
-
-        # And if run as root, I must chown the directory to the same user that
-        # fetchware will drop_privs() too, but only on *nix, because only *nix
-        # will drop_privs(). Avoid chown()ing when run stay_root is in effect,
-        # because that setting will keep drop_privs() from dropping privs.
-        if (not config('stay_root')) {
-            if (not defined $opts{NoChown}
-                and is_os_type('Unix') and ($< == 0 or $> == 0)
-            ) {
-                # Determine /etc/passwd entry for the "effective" uid of the
-                # current fetchware process. I should use the "effective" uid
-                # instead of the "real" uid, because effective uid is used to
-                # determine what each uid can do, and the real uid is only
-                # really used to track who the original user was in a setuid
-                # program.
-                my ($name, $useless, $uid, $gid, $quota, $comment, $gcos, $dir,
-                    $shell, $expire)
-                    = getpwnam(config('user') // 'nobody');
-                chown($uid, $gid, $temp_dir);
-            }
+        # Only when we do *not* drop privs...
+        if (config('stay_root')
+                or ($< != 0 or $> != 0)
+        ) {
+            # ...Must chmod 700 so gpg's localized keyfiles are good.
+            chmod(0700, $temp_dir) or die <<EOD;
+App-Fetchware-Util: Fetchware failed to change the permissions of its temporary
+directory [$temp_dir] to 0700. This should not happen, and is a bug, or perhaps
+your system's temporary directory is full. The OS error was [$!].
+EOD
         }
+
+##DELME##        # And if run as root, I must chown the directory to the same user that
+##DELME##        # fetchware will drop_privs() too, but only on *nix, because only *nix
+##DELME##        # will drop_privs(). Avoid chown()ing when run stay_root is in effect,
+##DELME##        # because that setting will keep drop_privs() from dropping privs.
+##DELME##        if (not config('stay_root')) {
+##DELME##            if (not defined $opts{NoChown}
+##DELME##                and is_os_type('Unix') and ($< == 0 or $> == 0)
+##DELME##            ) {
+##DELME##                # Determine /etc/passwd entry for the "effective" uid of the
+##DELME##                # current fetchware process. I should use the "effective" uid
+##DELME##                # instead of the "real" uid, because effective uid is used to
+##DELME##                # determine what each uid can do, and the real uid is only
+##DELME##                # really used to track who the original user was in a setuid
+##DELME##                # program.
+##DELME##                my ($name, $useless, $uid, $gid, $quota, $comment, $gcos, $dir,
+##DELME##                    $shell, $expire)
+##DELME##                    = getpwnam(config('user') // 'nobody');
+##DELME##                chown($uid, $gid, $temp_dir);
+##DELME##            }
+##DELME##        }
 
         $exception = $@;
         1; # return true unless an exception is thrown.

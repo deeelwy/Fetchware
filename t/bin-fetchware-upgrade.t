@@ -69,6 +69,8 @@ program 'Apache 2.2';
 
 lookup_url '$ENV{FETCHWARE_LOCAL_UPGRADE_URL}';
 
+mirror '$ENV{FETCHWARE_LOCAL_UPGRADE_URL}';
+
 filter 'httpd-2.2';
 EOF
 

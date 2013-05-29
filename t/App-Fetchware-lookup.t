@@ -101,7 +101,7 @@ program to install that is looked up using the [lookup_url]. Please add a
 EOE
     mirror 'ftp://fake.url/too';
     # Test no verify method specified.
-    eval_ok(sub {check_lookup_config()},
+    print_ok(sub {check_lookup_config()},
         <<EOE, 'checked check_lookup_config() no verify method specified');
 App-Fetchware: You failed to specify a method of verifying downloaded archives
 of your program. This is mandatory to ensure that the software that you download

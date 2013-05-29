@@ -11,7 +11,7 @@ use Cwd;
 use Archive::Tar;
 use Path::Class;
 use Digest::MD5;
-use Fcntl ':flock';
+use Fcntl qw(:flock :mode);
 use Perl::OSType 'is_os_type';
 use File::Temp 'tempfile';
 
@@ -250,6 +250,7 @@ sub make_clean {
 
     my $test_dist_path = make_test_dist($file_name, $ver_num, rel2abs($destination_directory));
 
+
 Makes a C<$filename-$ver_num.fpkg> fetchware package that can be used for
 testing fetchware's functionality without actually installing anything.
 
@@ -270,16 +271,32 @@ Returns the full path to the created test-dist fetchwware package.
 ###BUGALERT### make_test_dist() only works properly on Unix, because of its
 #dependencies on the shell and make, just replace those commands with perl
 #itself, which we can pretty much guaranteed to be installed.
+###BUGALERT### 5 arguments!!! Just go full named parameters.
+###BUGALERT### Leave this undocumented, because I instead want to just take this
+#whole subroutine to use named parameters.
+###    # You can also specify a Fetchwarefile, but that makes specifying the
+###    # $destination_directory *mandatory*. This limitation will be fixed in a
+###    # later version by making all of this subroutines arguments named
+###    # parameters, but until then it's mandatory. If you don't want to customize
+###    # the $destination_directory, then just specify the default of
+###    # File::Spec::tmpdir().
+###    my $test_dist_path = make_test_dist($file_name, $ver_num,
+###        rel2abs($destination_directory), Fetchwarefile => $fetchwarefile);
+###    # Or specify AppendOption, but never both, and AppendOption also requires
+###    # that you specify the $destination_directory too.
+###    my $test_dist_path = make_test_dist($file_name, $ver_num,
+###        rel2abs($destination_directory), AppendOption => $config_option);
 sub make_test_dist {
     my $file_name = shift;
     my $ver_num = shift;
-
 
     # Set optional 3 argument to be the destination directory.
     # If that option was not provided set the destination directory to be a
     # a new temporary directory.
     my $destination_directory = shift
         || tempdir("fetchware-$$-XXXXXXXXXXX", TMPDIR => 1, UNLINK => 1);
+    # Support other options such as Fetchwarefile and AppendOption.
+    my %opts = @_;
 
     # Append $ver_num to $file_name to complete the dist's name.
     my $dist_name = "$file_name-$ver_num";
@@ -288,13 +305,11 @@ sub make_test_dist {
 
     my $test_dist_filename = catfile($destination_directory, "$dist_name.fpkg");
 
-
-
     my $configure_path = catfile($dist_name, 'configure');
     my %test_dist_files = (
         './Fetchwarefile' => <<EOF
-# $file_name is a fake "test distribution" mean for testing fetchware's basic installing, upgrading, and
-# so on functionality.
+# $file_name is a fake "test distribution" meant for testing fetchware's basic
+# installing, upgrading, and so on functionality.
 use App::Fetchware;
 
 program '$file_name';
@@ -351,27 +366,38 @@ EOF
     # this generated test dist.
     $test_dist_files{'./Fetchwarefile'}
         .= 
-        "lookup_url 'file://$destination_directory';";
+        "lookup_url 'file://$destination_directory';\n";
 
     # I must also add a mirror, which in make_test_dist()'s case is the same
     # things as $destination_directory.
     $test_dist_files{'./Fetchwarefile'}
         .= 
-        "mirror 'file://$destination_directory';";
+        "mirror 'file://$destination_directory';\n";
 
 
     # Be sure to add a prefix to the generated Fetchwarefile if fetchware is not
     # running as root to ensure that our test installs succeed.
-    my $prefix = add_prefix_if_nonroot(sub {
+    add_prefix_if_nonroot(sub {
         my $prefix_dir = tempdir("fetchware-test-$$-XXXXXXXXXX",
             TMPDIR => 1, CLEANUP => 1);
         $test_dist_files{'./Fetchwarefile'}
             .= 
             "prefix '$prefix_dir';";
-        return $prefix_dir;
         }
     );
 
+    # You can only specify Fetchwarefile or AppendOption never both.
+    die <<EOD if exists $opts{Fetchwarefile} and exists $opts{AppendOption};
+fetchware: Run-time error. make_test_dist() can only be called with the
+Fetchwarefile option *or* the AppendOption named parameters never both. Only
+specify one.
+EOD
+    # Replace the default Fetchwarefile with the one the caller specified.
+    $test_dist_files{'./Fetchwarefile'} = $opts{Fetchwarefile}
+        if exists $opts{Fetchwarefile};
+    # Or append AppendOption onto the generated Fetchwarefile.
+    $test_dist_files{'./Fetchwarefile'} .= "\n$opts{AppendOption}\n"
+        if exists $opts{AppendOption};
 
     # Create a temp dir to create or test-dist-1.$ver_num directory in.
     # Must be done before original_cwd() is used to set $destination_directory,

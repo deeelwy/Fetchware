@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '5'; #Update if this changes.
+use Test::More 0.98 tests => '4'; #Update if this changes.
 
 use Test::Fetchware ':TESTING';
 use App::Fetchware::Config '__clear_CONFIG';
@@ -248,33 +248,6 @@ note("PACKAGE[@{[caller]}]");
 
     # Clear %CONFIG since its global.
     __clear_CONFIG();
-};
-
-
-subtest 'Test _add_export() success.' => sub {
-    package TestPackage7;
-    use App::Fetchware::Util ':UTIL';
-
-    sub a_sub {
-        return 'nothing';
-    }
-    # Avoid running caller(), because inside a subtest the caller is
-    # Test::Builder not TestPackage5, so just use a variable to fake it.
-    my $caller = 'TestPackage7';
-    App::Fetchware::Util::_add_export(a_sub => $caller);
-    package main;
-
-    is($TestPackage7::EXPORT[0], 'a_sub',
-        'checked _add_export() success.');
-
-    eval_ok(sub {App::Fetchware::Util::_add_export(whocares =>
-                'doesntexistever238920893ur03')},
-        <<EOE, 'checked _add_export() exception');
-App-Fetchware-Util: Huh?!? For some reason fetchware failed to create the
-necessary \@EXPORT variable in the specified caller's package [doesntexistever238920893ur03]. This
-just shouldn't happen, and is probably an internal bug in fetchware. Perhaps
-the package specified in [doesntexistever238920893ur03] has not been defined.
-EOE
 };
 
 

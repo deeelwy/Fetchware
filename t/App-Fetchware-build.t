@@ -10,7 +10,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '12'; #Update if this changes.
+use Test::More 0.98 tests => '11'; #Update if this changes.
 use File::Copy 'cp';
 use Path::Class;
 use File::Spec::Functions 'rel2abs';
@@ -268,23 +268,6 @@ subtest 'test build() make_options success' => sub {
 
     # Clear $CONFIG of configure_options for next subtest.
     config_delete('make_options');
-};
-
-
-subtest 'test overriding build()' => sub {
-    # switch to *not* being package fetchware, so that I can test build()'s
-    # behavior as if its being called from a Fetchwarefile to create a callback
-    # that build will later call back in package fetchware.
-    package main;
-    use App::Fetchware;
-
-    build sub { return 'Overrode build()!' };
-
-    # Switch back to being in package fetchware, so that build() will try out
-    # the callback I gave it in the build() call above.
-    package fetchware;
-    is(build('fake arg'), 'Overrode build()!',
-        'checked overiding build() success');
 };
 
 

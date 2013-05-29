@@ -124,6 +124,28 @@ subtest 'test make_test_dist()' => sub {
         'check make_test_dist() temp_dir destination directory success.');
 
     ok(unlink $rv, 'checked make_test_dist() cleanup');
+
+
+    # Test the Fetchwarefile optional named parameter.
+    $name2 = 'test-dist';
+    my $fetchwarefile = '# A useless testing Fetchwarefile.';
+    $rv = make_test_dist($name2, $ver_num, tmpdir(),
+        Fetchwarefile => $fetchwarefile);
+    is(file($rv)->basename(), "$name2-$ver_num.fpkg",
+        'check make_test_dist() temp_dir destination directory success.');
+
+    ok(unlink $rv, 'checked make_test_dist() cleanup');
+
+
+    # Test the AppendOption optional named parameter.
+    $name2 = 'test-dist';
+    my $fetchwarefile_option = q{fetchware_option 'some value';};
+    $rv = make_test_dist($name2, $ver_num, tmpdir(),
+        AppendOption => $fetchwarefile_option);
+    is(file($rv)->basename(), "$name2-$ver_num.fpkg",
+        'check make_test_dist() temp_dir destination directory success.');
+
+    ok(unlink $rv, 'checked make_test_dist() cleanup');
 };
 
 

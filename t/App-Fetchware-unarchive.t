@@ -10,10 +10,11 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '9'; #Update if this changes.
-use File::Spec::Functions 'devnull';
+use Test::More 0.98 tests => '8'; #Update if this changes.
+use File::Spec::Functions qw(devnull catfile);
 
 use Test::Fetchware ':TESTING';
+use App::Fetchware::Util ':UTIL';
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -37,9 +38,11 @@ my $temp_dir = start();
 
 subtest 'OVERRIDE_UNARCHIVE exports what it should' => sub {
     my @expected_overide_unarchive_exports = qw(
-        check_archive_files
+        check_archive_files    
+        list_files
         list_files_tar
         list_files_zip
+        unarchive_package
         unarchive_tar
         unarchive_zip
     );
@@ -57,7 +60,8 @@ subtest 'test list_files_tar()' => sub {
     skip_all_unless_release_testing();
 
     # download() an example tar file to list its files.
-    $tar_package_path = download($temp_dir, $ENV{FETCHWARE_LOCAL_URL});
+    $tar_package_path = download_file_url($ENV{FETCHWARE_LOCAL_URL});
+    $tar_package_path = catfile($temp_dir, $tar_package_path);
     ok(-e $tar_package_path,
         'checked list_files_tar() download tar file successful.');
 
@@ -80,7 +84,8 @@ subtest 'test list_files_zip()' => sub {
 
 
     # download() an example tar file to list its files.
-    $zip_package_path = download($temp_dir, $ENV{FETCHWARE_LOCAL_ZIP_URL});
+    $zip_package_path = download_file_url($ENV{FETCHWARE_LOCAL_ZIP_URL});
+    $zip_package_path = catfile($temp_dir, $zip_package_path);
     ok(-e $zip_package_path,
         'checked list_files_zip() download zip file successful.');
 
@@ -181,23 +186,6 @@ subtest 'test unarchive()' => sub {
     ok(unarchive($package_path), 'checked unarchive() success');
 };
 
-
-
-subtest 'test overriding unarchive()' => sub {
-    # switch to *not* being package fetchware, so that I can test unarchive()'s
-    # behavior as if its being called from a Fetchwarefile to create a callback
-    # that unarchive will later call back in package fetchware.
-    package main;
-    use App::Fetchware;
-
-    unarchive sub { return 'Overrode unarchive()!' };
-
-    # Switch back to being in package fetchware, so that unarchive() will try out
-    # the callback I gave it in the unarchive() call above.
-    package fetchware;
-    is(unarchive('fake arg'), 'Overrode unarchive()!',
-        'checked overiding unarchive() success');
-};
 
 
 # Call end() to delete temp dir created by start().
