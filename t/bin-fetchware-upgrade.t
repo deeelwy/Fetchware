@@ -150,6 +150,7 @@ subtest 'test cmd_upgrade() test-dist' => sub {
         }
     }
 
+
     # Create a $temp_dir for make_test_dist() to use. I need to do this, so that
     # both the old and new test dists can be in the same directory.
     my $upgrade_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",

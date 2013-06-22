@@ -188,18 +188,28 @@ sub print_ok {
 
 Skips all tests in your test file or subtest() if fetchware's testing
 environment variable, C<FETCHWARE_RELEASE_TESTING>, is not set to its proper
-value. Furthermore, other C<FETCHWARE_*> environment variables must also be set
-for C<FETCHWARE_RELEASE_TESTING> to work properly. See L<Where ever that will be
-when I write it>
+value. See L<App::Fetchware/2. Call skip_all_unless_release_testing() as needed>
+for more information.
 
+=over
 
-###BUGALERT## Expand with how to actually use this.
+=item WARNING
+
+If you call skip_all_unless_release_testing() in your main test file without
+being enclosed inside a subtest, then skip_all_unless_release_testing() will
+skip all of your test from that point on till then end of the file, so be
+careful where you use it, or just I<only> use it in subtests to be safe.
+
+=back
 
 =cut
 
 sub skip_all_unless_release_testing {
-    if ($ENV{FETCHWARE_RELEASE_TESTING}
+    if (not exists $ENV{FETCHWARE_RELEASE_TESTING}
+        or not defined $ENV{FETCHWARE_RELEASE_TESTING}
+        or $ENV{FETCHWARE_RELEASE_TESTING}
         ne '***setting this will install software on your computer!!!!!!!***'
+
         # Enforce having *all* other FETCHWARE_* env vars set too to make it
         # even harder to easily enable FETCHWARE_RELEASE_TESTING. This is
         # because FETCHWARE_RELEASE_TESTING *installs* software on your
@@ -209,22 +219,8 @@ sub skip_all_unless_release_testing {
         # FETCHWARE_RELEASE_TESTING to work properly, so without them being set,
         # then FETCHWARE_RELEASE_TESTING will not work properly, because these
         # env vars will be undef; therefore, check to see if they're enabled.
-        and
-        defined $ENV{FETCHWARE_FTP_LOOKUP_URL}
-        and
-        defined $ENV{FETCHWARE_HTTP_LOOKUP_URL}
-        and
-        defined $ENV{FETCHWARE_FTP_DOWNLOAD_URL}
-        and
-        defined $ENV{FETCHWARE_HTTP_DOWNLOAD_URL}
-        and
-        defined $ENV{FETCHWARE_LOCAL_URL}
-        and
-        defined $ENV{FETCHWARE_LOCAL_BUILD_URL}
-        and
-        defined $ENV{FETCHWARE_LOCAL_UPGRADE_URL}
     ) {
-        plan skip_all => 'Not testing for release.'
+        plan skip_all => 'Not testing for release.';
     }
 }
 
@@ -289,12 +285,31 @@ Returns the full path to the created test-dist fetchwware package.
 sub make_test_dist {
     my $file_name = shift;
     my $ver_num = shift;
+    my $destination_directory = shift;
+
+use Test::More;
+note("MTDUID[$<]EUID[$>]");
 
     # Set optional 3 argument to be the destination directory.
     # If that option was not provided set the destination directory to be a
     # a new temporary directory.
-    my $destination_directory = shift
-        || tempdir("fetchware-$$-XXXXXXXXXXX", TMPDIR => 1, UNLINK => 1);
+    if (not defined $destination_directory) {
+        $destination_directory
+            = tempdir("fetchware-test-$$-XXXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+
+    }
+
+    # If you're running the test suite as root, then $destination_directory
+    # should be 755 instead of 700 so that the droped priv child can still
+    # access it.
+    if ($> == 0) {
+        chmod 0755, $destination_directory or die <<EOD;
+Test-Fetchware: Fetchware failed to change the permissions of it's testing
+destination directory [$destination_directory] this shouldn't happen, and is
+perhaps a bug. The OS error was [$!].
+EOD
+    }
+
     # Support other options such as Fetchwarefile and AppendOption.
     my %opts = @_;
 
@@ -302,6 +317,7 @@ sub make_test_dist {
     my $dist_name = "$file_name-$ver_num";
 
     $destination_directory = rel2abs($destination_directory);
+
 
     my $test_dist_filename = catfile($destination_directory, "$dist_name.fpkg");
 

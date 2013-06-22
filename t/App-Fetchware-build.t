@@ -248,9 +248,8 @@ EOD
 
 
 
-# Clean up after previous build() run.
-# Commented out, because previous test didn't actually pollute make!
-#make_clean();
+# Do *not* clean up after previous build() run, because make was not actually
+# run.
 
 
 subtest 'test build() make_options success' => sub {
@@ -277,6 +276,10 @@ subtest 'Call end() to delete temporary directory.' => sub {
     ok(end(),
         'checked calling end() to delete tempdir');
 };
+
+
+###BUGALERT### Add a build() test that uses make_test_dist to test building when
+#FETCHWARE_RELEASE_TESTING is not set.
 
 
 # Remove this or comment it out, and specify the number of tests, because doing

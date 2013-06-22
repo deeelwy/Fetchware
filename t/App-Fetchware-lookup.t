@@ -59,6 +59,7 @@ subtest 'OVERRIDE_LOOKUP exports what it should' => sub {
 
 
 ###BUGALERT### Make check_lookup_config() support App::Fetchware "subclasses."
+# Do this by simply adding a syntax_check() subroutine to App::Fetchware's API.
 subtest 'test check_lookup_config()' => sub {
     # check for when lookup_url is *not* providied.
     eval_ok(sub {check_lookup_config()}, <<EOS, 'checked check_lookup_config no lookup_url');
@@ -139,10 +140,10 @@ subtest 'test get_directory_listing()' => sub {
         __clear_CONFIG();
         # Set download type.
         # Make this a FETCHWARE_FTP_REMOTE env var in frt().
-        lookup_url $lookup_url;
+        lookup_url "$lookup_url";
         # Must also specify a program config option.
         program 'testin';
-        mirror $lookup_url;
+        mirror "$lookup_url";
         verify_failure_ok 'On';
 
         # Do needed operations before I can test get_directory_listing().
@@ -178,17 +179,18 @@ note explain $filename_listing;
 
 
 subtest 'test http_parse_filelist()' => sub {
+    skip_all_unless_release_testing();
 
-##DELME##    my $expected_filename_listing = [
-##DELME##        [ 'httpd-2.0.64.tar.bz2', '201010180432' ],
-##DELME##        [ 'httpd-2.0.64.tar.gz', '201010180432' ],
-##DELME##        [ 'httpd-2.2.21.tar.bz2', '201109121302' ],
-##DELME##        [ 'httpd-2.2.21.tar.gz', '201109121302' ],
-##DELME##        [ 'httpd-2.3.15-beta-deps.tar.bz2', '201111131437' ],
-##DELME##        [ 'httpd-2.3.15-beta-deps.tar.gz', '201111131437' ],
-##DELME##        [ 'httpd-2.3.15-beta.tar.bz2', '201111131437' ],
-##DELME##        [ 'httpd-2.3.15-beta.tar.gz', '201111131437' ]
-##DELME##    ];
+#    my $expected_filename_listing = [
+#        [ 'httpd-2.0.64.tar.bz2', '201010180432' ],
+#        [ 'httpd-2.0.64.tar.gz', '201010180432' ],
+#        [ 'httpd-2.2.21.tar.bz2', '201109121302' ],
+#        [ 'httpd-2.2.21.tar.gz', '201109121302' ],
+#        [ 'httpd-2.3.15-beta-deps.tar.bz2', '201111131437' ],
+#        [ 'httpd-2.3.15-beta-deps.tar.gz', '201111131437' ],
+#        [ 'httpd-2.3.15-beta.tar.bz2', '201111131437' ],
+#        [ 'httpd-2.3.15-beta.tar.gz', '201111131437' ]
+#    ];
     __clear_CONFIG();
     lookup_url $ENV{FETCHWARE_HTTP_LOOKUP_URL};
 
@@ -244,17 +246,23 @@ subtest 'test parse_directory_listing()' => sub {
 };
 
 
-
+# lookup_determine_downloadpath() needs lookup_url and mirror defined, but it
+# does not actually use them to download anything, so define a variable that
+# will contain a set string when the FETCHWARE_* env vars are undef during user
+# testing.
+my $test_lookup_url = $ENV{FETCHWARE_FTP_LOOKUP_URL}
+    // 'ftp://carroll.cac.psu.edu/pub/apache/httpd';
 
 subtest 'test lookup_determine_downloadpath()' => sub {
+    skip_all_unless_release_testing();
 
     # Clear App::Fetchware's %CONFIG variable.
     __clear_CONFIG();
     
-    lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    lookup_url "$test_lookup_url";
     # Must also specify program, mirror, and a verify method.
     program 'testin';
-    mirror $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    mirror "$test_lookup_url";
     verify_failure_ok 'On';
 
     # Select one of the different apache versions 'httpd-2.{0,2,3}'.
@@ -299,7 +307,7 @@ EOS
 subtest 'test lookup_by_timestamp()' => sub {
     __clear_CONFIG();
 
-    config(lookup_url => $ENV{FETCHWARE_FTP_LOOKUP_URL});
+    config(lookup_url => "$test_lookup_url");
     config(filter => '2.2');
 
     like(lookup_by_timestamp(test_filename_listing('no current')),
@@ -314,7 +322,7 @@ subtest 'test lookup_by_timestamp()' => sub {
 subtest 'test lookup_by_versionstring()' => sub {
     __clear_CONFIG();
 
-    config(lookup_url => $ENV{FETCHWARE_FTP_LOOKUP_URL});
+    config(lookup_url => "$test_lookup_url");
     config(filter => '2.2');
 
     like(lookup_by_versionstring(test_filename_listing('no current')),
@@ -336,10 +344,10 @@ subtest 'test determine_download_path()' => sub {
     filter 'httpd-2.2';
 
     # Set needed config variables.
-    lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    lookup_url "$test_lookup_url";
     # Must also specify program, mirror, and a verify method.
     program 'testin';
-    mirror $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    mirror "$test_lookup_url";
     verify_failure_ok 'On';
 
     check_lookup_config();
@@ -358,10 +366,10 @@ subtest 'test determine_download_path()' => sub {
     filter 'httpd-2.2';
 
     # Set needed config variables.
-    lookup_url $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    lookup_url "$test_lookup_url";
     # Must also specify program, mirror, and a verify method.
     program 'testin';
-    mirror $ENV{FETCHWARE_FTP_LOOKUP_URL};
+    mirror "$test_lookup_url";
     verify_failure_ok 'On';
 
     lookup_method 'versionstring';

@@ -119,7 +119,6 @@ subtest 'test create_fetchware_package()' => sub {
     ###BUGALERT### Must add tests for adding the gpg generated files to the
     #fetchware package, so that gpg doesn't have to download the keys again.
     #Also, I must actually add code for this in bin/fetchware.
-    skip_all_unless_release_testing();
 
     my $fetchwarefile = '# Fake Fetchwarefile for testing';
 note("CFPsFPPFPPFPPFPP[$fetchwarefile]");
@@ -158,7 +157,6 @@ note("CFPsFPPFPPFPPFPP[$fetchwarefile]");
 
 
 subtest 'check fetchware_database_path()' => sub {
-    skip_all_unless_release_testing();
 
     if (is_os_type('Unix', $^O)) {
         # If we're effectively root use a "system" directory.
@@ -194,10 +192,10 @@ subtest 'check fetchware_database_path()' => sub {
 
     # Test fetchware_database_path() when the fetchware_database_path
     # configuration option has been specified.
-    config(fetchware_database_path => cwd());
+    config(fetchware_db_path => cwd());
     is(fetchware_database_path(), cwd(),
         'check fetchware_database_path() config option success.');
-    config_delete('fetchware_database_path');
+    config_delete('fetchware_db_path');
 
     # Test FETCHWARE_DATABASE_PATH too.
     $ENV{FETCHWARE_DATABASE_PATH} = cwd();
@@ -205,18 +203,17 @@ subtest 'check fetchware_database_path()' => sub {
         'check fetchware_database_path() ENV option success.');
 
     # Now test both of them together.
-    config(fetchware_database_path => dir(cwd())->parent());
+    config(fetchware_db_path => dir(cwd())->parent());
     is(fetchware_database_path(), dir(cwd())->parent(),
         'check fetchware_database_path() both options success.');
 
     # Clean up after ourselves.
     delete $ENV{FETCHWARE_DATABASE_PATH};
-    config_delete('fetchware_database_path');
+    config_delete('fetchware_db_path');
 };
 
 
 subtest 'check determine_fetchware_package_path()' => sub {
-    skip_all_unless_release_testing();
 
     # Write some test files to my fetchware_database_path() to test determining
     # if they're there or not.
@@ -247,21 +244,20 @@ EOE
     
     ok( ( map { unlink catfile($fetchware_db_path, $_) } @test_files ) == 5,
         'checked determine_fetchware_package_path() delete test files');
-
 };
 
 
 subtest 'check extract_fetchwarefile()' => sub {
     skip_all_unless_release_testing();
 
-    my $fetchwarefile = '# WTF!!!!!!!!!!!!!!!!1   ';
+    my $fetchwarefile = '# Fake testing Fetchwarefile.';
 note("CEFsFPPFPPFPPFPPFPP[$fetchwarefile]");
 
     my $pc = dir(cwd());
     my $last_dir = $pc->dir_list(-1, 1);
-    note("LASTDIR[$last_dir]");
+note("LASTDIR[$last_dir]");
 
-    note("CWD[@{[cwd()]}]");
+note("CWD[@{[cwd()]}]");
 
 
     # Create a test fetchware package to text extract_fetchwarefile().
@@ -270,7 +266,7 @@ note("CEFsFPPFPPFPPFPPFPP[$fetchwarefile]");
         =
         create_fetchware_package(\$fetchwarefile, $last_dir, tmpdir());
 
-    note("TFPP[$fetchware_package_path]");
+note("TFPP[$fetchware_package_path]");
 
     is(${extract_fetchwarefile($fetchware_package_path)},
         $fetchwarefile, 'checked extract_fetchwarefile() success');
@@ -289,7 +285,6 @@ note("CEFsFPPFPPFPPFPPFPP[$fetchwarefile]");
 
 
 subtest 'check copy_fpkg_to_fpkg_database()' => sub {
-    skip_all_unless_release_testing();
 
     # Build a fetchwarefile package needed, so I can test installing it.
     my $fetchwarefile = '# Fake Fetchwarefile just for testing';

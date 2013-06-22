@@ -187,6 +187,12 @@ subtest 'test verbose_on()' => sub {
 
 
 subtest 'test add_prefix_if_nonroot() success' => sub {
+    # Skip all of add_prefix_if_nonroot()'s tests if run as nonroot, because
+    # this subtest only tests for correct output when run as nonroot. When run
+    # as root add_prefix_if_nonroot() returns undef, which the test does not
+    # account for.
+    plan(skip_all => q{Only test add_prefix_if_nonroot() if we're nonroot})
+        if $> == 0;
     # Clear out any other use of config().
     __clear_CONFIG();
 

@@ -45,6 +45,7 @@ our @EXPORT = qw(
     program
     filter
     temp_dir
+    fetchware_db_path
     user
     prefix
     configure_options
@@ -238,6 +239,7 @@ extension see the section L<CREATING A FETCHWARE EXTENSION>
         [ program => 'ONE' ],
         [ filter => 'ONE' ],
         [ temp_dir => 'ONE' ],
+        [ fetchware_db_path => 'ONE' ],
         [ user => 'ONE' ],
         [ prefix => 'ONE' ],
         [ configure_options=> 'ONEARRREF' ],
@@ -1001,7 +1003,15 @@ sub file_parse_filelist {
     for my $file (@$file_listing) {
         my ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size, $atime,$mtime,$ctime,
             $blksize,$blocks)
-            = stat($file);
+            = stat($file) or die <<EOD;
+App-Fetchware: Fetchware failed to stat() the file [$file] while trying to parse
+your local [file://] lookup_url. The OS error was [$!]. This should not happen,
+and is either a bug in fetchware or some sort of race condition.
+EOD
+
+use Test::More;
+note("FPFFILE[$file]");
+note("FPFMTIME[$mtime]");
 
         # Replace scalar filename with a arrayref of the filename with its
         # assocated timestamp for later processing for lookup().
@@ -1290,7 +1300,9 @@ sub determine_package_path {
 
     # return $package_path, which stores the full path of where the file
     # HTTP::Tiny downloaded.
-    return catfile($tempdir, $filename)
+    ###BUGALERT### $tempdir is no longer used, so remove it from
+    #determine_package_path() and probably download() too.
+    return catfile(cwd(), $filename)
 }
 
 
@@ -3241,6 +3253,23 @@ directory that it uses to download, verify, unarchive, build, and install your
 software. By default it uses your system temp directory, which is whatever
 directory L<File::Temp's> tempdir() decides to use, which is whatever
 L<File::Spec>'s tmpdir() decides to use.
+
+=head2 fetchware_db_path '~/.fetchwaredb';
+
+C<fetchware_db_path> tells fetchware to use a different directory other
+than its default directory to store the installed fetchware package for the
+particular fetchware package that this option is specified in your
+Fetchwarefile. Fetchware's default is C</var/log/fetchware> on Unix when run as
+root, and something like C</home/[username]/.local/share/Perl/dist/fetchware/>
+when run nonroot.
+
+This option is B<not> recommended unless you only want to change it for just one
+fetchware package, because fetchware also consults the
+C<FETCHWARE_DATABASE_PATH> environment variable that you should set in your
+shell startup files if you want to change this globally for all of your
+fetchware packages. For sh/bash like shells use:
+
+    export FETCHWARE_DATABASE_PATH='/your/path/here'
 
 =head2 user 'nobody';
 

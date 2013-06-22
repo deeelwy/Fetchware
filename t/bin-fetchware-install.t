@@ -8,7 +8,7 @@ use 5.010001;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More;# 0.98 tests => '5'; #Update if this changes.
+use Test::More 0.98 tests => '5'; #Update if this changes.
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
@@ -109,6 +109,8 @@ subtest 'test test-dist.fpkg cmd_install' => sub {
     my $test_dist_path = make_test_dist('test-dist', '1.00');
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
+verbose_on();
+
     my $install_success = cmd_install($test_dist_path);
     note("IS[$install_success");
 
@@ -126,8 +128,6 @@ subtest 'test test-dist.fpkg cmd_install' => sub {
 
 
 subtest 'test cmd_install(else)' => sub {
-    skip_all_unless_release_testing();
-
     eval_ok(sub {cmd_install()}, <<EOE, 'checked cmd_install() no args');
 fetchware: You called fetchware install incorrectly. You must also specify
 either a Fetchwarefile or a fetchware package that ends with [.fpkg].
@@ -145,4 +145,4 @@ EOE
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-done_testing();
+#done_testing();

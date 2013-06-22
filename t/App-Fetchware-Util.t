@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '23'; #Update if this changes.
+use Test::More 0.98 tests => '22'; #Update if this changes.
 use Test::Deep;
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir rootdir);
@@ -147,7 +147,7 @@ EOE
     my $temp_dir = tempdir("fetchware-test-$$-XXXXXXXXX",
         CLEANUP => 1, TMPDIR => 1);
     eval_ok(sub {file_download_dirlist($temp_dir)},
-        qr/if a new version of the software is available is empty. This directory/,
+        qr/Fetchware-Util: The directory that fetchware is trying to use to determine/,
         'checked file_download_dirlist() empty directory exception.');
 
     # Get a dirlisting for fetchware's testing directory, because it *has* to
@@ -159,9 +159,9 @@ note explain $dirlist;
     # Check if known files are in the t directory. Regexes are used in case
     # files are changed or added, so I don't have to constantly update a silly
     # listing of all the files in the t directory.
-    ok( grep m!t/App-Fetchware-!, @$dirlist,
+    ok( grep m!App-Fetchware-!, @$dirlist,
         'checked file_download_dirlist() for App-Fetchware tests.');
-    ok( grep m!t/bin-fetchware-!, @$dirlist,
+    ok( grep m!bin-fetchware-!, @$dirlist,
         'checked file_download_dirlist() for bin-fetchware tests.');
 };
 
@@ -833,15 +833,18 @@ subtest 'test cleanup_tempdir()' => sub {
 
 
 subtest 'test drop_privs()' => sub {
-    # Note: drop_privs() forks, and Test::More and Test::Builder don't support
-    # forking. It's a massive bug that's still not fixed. Test::Builder2 should
-    # fix it, but it isn't released yet as far as I know. Therefore I cannot use
-    # any Test::More tests inside drop_privs() coderefs :( Instead I'll have to
-    # write success to a tempfile, and then read the tempfile in a Test::More
-    # test back in the parent, and only run tests in the parent.
+    plan skip_all => 'Test suite not being run on Unix.' unless do {
+        if (is_os_type('Unix')) {
+            note('ISUNIX');
+            1
+        } else {
+            # Return false
+            note('ISNOTUNIX');
+            0
+        }
+    };
 
-
-    # If we not running as root.
+    # If we're not running as root.
     if ($< != 0) {
         my $previous_uid = $<;
         my $previous_euid = $>;
@@ -968,21 +971,6 @@ subtest 'test drop_privs()' => sub {
         fail('Uhmmmm...this shouldn\'t happen...!?!');
     }
 
-};
-
-
-SKIP: {
-    skip 'Test suite not being run on Unix.', 1 unless do {
-        if (is_os_type('Unix')) {
-            note('ISUNIX');
-            1
-        } else {
-            # Return false
-            note('ISNOTUNIX');
-            0
-        }
-    };
-
 
 
     if (is_os_type('Unix')) {
@@ -1044,7 +1032,9 @@ SKIP: {
     } else {
         note("Should be skipped, because you're not running this on Unix! [$^O]");
     }
-}
+
+
+};
 
 
 # Share these variables with safe_open()'s tests as root below in the SKIP
@@ -1138,30 +1128,25 @@ EOE
 };
 
 
-
-SKIP: {
-    skip 'Test suite not being run as root.', 1 unless do {
-        if (is_os_type('Unix')) {
-            if ($< == 0 or $> == 0) {
-            # Return true
-            note('ISUNIXANDROOT');
-            1
+subtest 'test safe_open() needs root' => sub {
+    skip_all_unless_release_testing();
+        plan skip_all =>  'Test suite not being run as root.' unless do {
+            if (is_os_type('Unix')) {
+                if ($< == 0 or $> == 0) {
+                # Return true
+                note('ISUNIXANDROOT');
+                1
+                } else {
+                # Return false
+                note('ISUNIXNOTROOT!!!');
+                0
+                }
             } else {
-            # Return false
-            note('ISUNIXNOTROOT!!!');
-            0
+                # Return false
+                note('ISNOTUNIX');
+                0
             }
-        } else {
-            # Return false
-            note('ISNOTUNIX');
-            0
-        }
-    };
-
-
-    subtest 'test safe_open() needs root' => sub {
-        skip_all_unless_release_testing();
-
+        };
 
         if ($< == 0 or $> == 0) {
             # Use dir from above. #$tempdir and $filename.
@@ -1226,8 +1211,7 @@ EOE
         } else {
             note("Should be skipped, because you're not root! [$<] [$>]");
         }
-    };
-}
+};
 
 
 
@@ -1256,6 +1240,11 @@ sub drop_privs_ok {
     my $tester_code = shift;
     my @drop_privs_args = @_;
 
+    # Switch to a directory that will pass File::Temp's HIGH safe_level(), which
+    # is a system wide tempdir().
+    my $original_cwd = cwd();
+    chdir tmpdir()
+        or fail("Failed to chdir to [@{[tmpdir()]}]. OS error [$!]");
 
     my $output = drop_privs(sub {
         my $write_pipe = shift;
@@ -1267,6 +1256,10 @@ sub drop_privs_ok {
         or fail("Failed to open [$output] [$$output]. OS error [$!]");
 
     $tester_code->($output_fh);
+
+    # chdir back to $orignal_cwd like we were there the whole time.
+    chdir $original_cwd
+        or fail("Failed to chdir to [@{[tmpdir()]}]. OS error [$!]");
 }
 
 

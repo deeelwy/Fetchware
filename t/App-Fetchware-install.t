@@ -142,6 +142,9 @@ subtest 'test install() install_commands success' => sub {
 
 
 subtest 'test install() no_install success' => sub {
+    # Skip this test, because its prereqs won't be done when we're not release
+    # testing.
+    skip_all_unless_release_testing();
     no_install 'True';
 
     is(install($build_path), 'installation skipped!',
@@ -150,14 +153,22 @@ subtest 'test install() no_install success' => sub {
 
 
 subtest 'Call end() to delete temporary directory.' => sub {
+    # Skip this test, because its prereqs won't be done when we're not release
+    # testing.
+    skip_all_unless_release_testing();
     # Call end() to delete temp dir created by start().
     ok(end(),
         'ran end() to delete temp dir.');
 };
 
 
+###BUGALERT### Add a local file install() test using make_test_dist().
+
+
 # Clear %config between real install() test and fake make_test_dist() one.
 __clear_CONFIG();
+
+###BUGALERT### Where is the fake make_test_dist() one referenced above?????
 
 
 # Remove this or comment it out, and specify the number of tests, because doing

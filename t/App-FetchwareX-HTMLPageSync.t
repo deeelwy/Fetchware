@@ -309,6 +309,8 @@ note explain $download_file_path_basenames;
 };
 
 
+###BUGALERT### Create a customizable version of make_test_dist() to create a
+#user testable version of this module.
 
 
 subtest 'test HTMLPageSync end()' => sub {

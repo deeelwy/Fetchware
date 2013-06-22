@@ -136,30 +136,6 @@ EOE
 };
 
 
-
-#skip for now!!!!
-##TODO##subtest 'test analyze_lookup_listing() success' => sub {
-##TODO##    # Create test Term::UI object.
-##TODO##    my $term = Term::ReadLine->new('fetchware');
-##TODO##
-##TODO##    # Test CURRENT/LATEST branch.
-##TODO##    my $current_filename_listing = [
-##TODO##        ['CURRENT_IS_2.4', 'timestamp is ignored'],
-##TODO##        ['just need current line above', 'fake timestamp'],
-##TODO##    ];
-##TODO##    is(analyze_lookup_listing($term, $current_filename_listing), undef,
-##TODO##        'checked get_lookup_url() success');
-##TODO##
-##TODO##    # Test main else branch.
-##TODO##    my $filename_listing = [
-##TODO##        ['fake-prog-2.2.tar.gz', 'timestamp is ignored'],
-##TODO##        ['whocares', 'fake timestamp'],
-##TODO##    ];
-##TODO##    is(analyze_lookup_listing($term, $filename_listing), undef,
-##TODO##        'checked get_lookup_url() success');
-##TODO##};
-##TODO##
-
 subtest 'test append_to_fetchwarefile() success' => sub {
     my $fetchwarefile;
 
@@ -257,9 +233,7 @@ EOS
 
 subtest 'test add_mirrors() success' => sub {
     skip_all_unless_release_testing();
-#    plan(skip_all => 'Optional FETCHWARE_INTERACTIVE_TESTS disabled by default.')
-#        unless $ENV{FETCHWARE_INTERACTIVE_TESTS}
-#            eq 'Yes!!! I want this test to stop and wait for me to answer questions!!!';
+
     plan(skip_all => 'Optional Test::Expect testing module not installed.')
         unless eval {use Test::Expect; 1;};
 
@@ -343,9 +317,7 @@ subtest 'test add_mirrors() success' => sub {
 
 subtest 'test add_verification() success' => sub {
     skip_all_unless_release_testing();
-#    plan(skip_all => 'Optional FETCHWARE_INTERACTIVE_TESTS disabled by default.')
-#        unless $ENV{FETCHWARE_INTERACTIVE_TESTS}
-#            eq 'Yes!!! I want this test to stop and wait for me to answer questions!!!';
+
     plan(skip_all => 'Optional Test::Expect testing module not installed.')
         unless eval {use Test::Expect; 1;};
 
@@ -388,9 +360,7 @@ subtest 'test add_verification() success' => sub {
 
 subtest 'test determine_mandatory_options() success' => sub {
     skip_all_unless_release_testing();
-#    plan(skip_all => 'Optional FETCHWARE_INTERACTIVE_TESTS disabled by default.')
-#        unless $ENV{FETCHWARE_INTERACTIVE_TESTS}
-#            eq 'Yes!!! I want this test to stop and wait for me to answer questions!!!';
+
     plan(skip_all => 'Optional Test::Expect testing module not installed.')
         unless eval {use Test::Expect; 1;};
 
@@ -434,9 +404,7 @@ subtest 'test determine_mandatory_options() success' => sub {
 
 subtest 'test determine_filter_option() success' => sub {
     skip_all_unless_release_testing();
-#    plan(skip_all => 'Optional FETCHWARE_INTERACTIVE_TESTS disabled by default.')
-#        unless $ENV{FETCHWARE_INTERACTIVE_TESTS}
-#            eq 'Yes!!! I want this test to stop and wait for me to answer questions!!!';
+
     plan(skip_all => 'Optional Test::Expect testing module not installed.')
         unless eval {use Test::Expect; 1;};
 
@@ -468,9 +436,7 @@ subtest 'test determine_filter_option() success' => sub {
 
 subtest 'test analyze_lookup_listing() success' => sub {
     skip_all_unless_release_testing();
-#    plan(skip_all => 'Optional FETCHWARE_INTERACTIVE_TESTS disabled by default.')
-#        unless $ENV{FETCHWARE_INTERACTIVE_TESTS}
-#            eq 'Yes!!! I want this test to stop and wait for me to answer questions!!!';
+
     plan(skip_all => 'Optional Test::Expect testing module not installed.')
         unless eval {use Test::Expect; 1;};
 
@@ -619,8 +585,6 @@ note("$fetchwarefile");
 ###BUGALERT### Actually implement this test.
 #subtest 'test cmd_new() success' => sub {
     #skip_all_unless_release_testing();
-    ###BUGALERT### Move this test to xt/, and actually implement it. Use
-    #Expect.
 
 
 #};

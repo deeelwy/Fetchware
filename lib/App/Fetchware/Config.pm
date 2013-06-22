@@ -236,6 +236,10 @@ Data::Dumper::Dumper()'s %CONFIG and prints it.
 =cut
 
 sub debug_CONFIG {
+    ###BUGALERT### Should print be a note() to avoid polluting stdout when
+    #testing??? But I don't really want to load Test::More, when I'm not
+    #testing. So, I could move this to Test::Fetchware, but that does not have
+    #access to %CONFIG.
     print Dumper(\%CONFIG);
 }
 

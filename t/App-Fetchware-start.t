@@ -49,7 +49,7 @@ subtest 'test start()' => sub {
 
     # Test start() with no_install being set.
     config(no_install => 1);
-    my $tempdir = start();
+    $tempdir = start();
     ok(-e $tempdir, 'check start() no_install success');
     # chdir() so it can be delete the tempdir.
     chdir();

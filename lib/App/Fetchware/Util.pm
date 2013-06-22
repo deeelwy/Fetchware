@@ -7,7 +7,7 @@ use strict;
 use warnings;
 
 use File::Spec::Functions qw(catfile catdir splitpath splitdir rel2abs
-    file_name_is_absolute rootdir);
+    file_name_is_absolute rootdir tmpdir);
 use Path::Class;
 use Net::FTP;
 use HTTP::Tiny;
@@ -17,7 +17,7 @@ use App::Fetchware::Config ':CONFIG';
 use File::Copy 'cp';
 use File::Temp 'tempdir';
 use File::stat;
-use Fcntl qw(S_ISDIR :flock);
+use Fcntl qw(S_ISDIR :flock S_IMODE);
 # Privileges::Drop only works on Unix, so only load it on Unix.
 use if is_os_type('Unix'), 'Privileges::Drop';
 use POSIX '_exit';
@@ -347,7 +347,11 @@ EOD
     # mirror option is silly.
     my ($scheme, $auth, undef, undef, undef) =
         uri_split(config('lookup_url'));
-    push @urls, uri_join($scheme, $auth, undef, undef, undef);
+    # Skip adding the "hostname" for local (file://) url's, because they don't
+    # have a hostname.
+    if ($scheme ne 'file') {
+        push @urls, uri_join($scheme, $auth, undef, undef, undef);
+    }
     if (exists $opts{PATH}
         and defined $opts{PATH}
         and $opts{PATH}) {
@@ -582,6 +586,13 @@ sub file_download_dirlist {
         $local_lookup_url =  catdir(original_cwd(), $local_lookup_url);
     }
 
+use Test::More;
+note("UID[$<]EUID[$>]");
+note("LS[");
+system('ls', '-ld', $local_lookup_url);
+system('ls', '-lh', $local_lookup_url);
+note("]");
+
     # Throw an exception if called with a directory that does not exist.
     die <<EOD if not -e $local_lookup_url;
 App-Fetchware-Util: The directory that fetchware is trying to use to determine
@@ -591,11 +602,39 @@ EOD
 
 
     my @file_listing;
-    for my $file (glob catfile($local_lookup_url, '*')) {
-        push @file_listing, $file;
+    opendir my $dh, $local_lookup_url or die <<EOD;
+App-Fetchware-Util: The directory that fetchware is trying to use to determine
+if a new version of the software is availabe cannot be opened. This directory is
+[$local_lookup_url], and the OS error is [$!].
+EOD
+    while (my $filename = readdir($dh)) {
+        # Trim the useless '.' and '..' Unix convention fake files from the listing.
+        unless ($filename eq '.' or $filename eq '..') {
+            # Turn the relative filename into a full pathname.
+            #
+            # Full pathnames are required, because lookup()'s
+            # file_parse_filelist() stat()s each file using just their filename,
+            # and if it's relative instead of absolute these stat() checks will
+            # fail.
+            my $full_path = catfile($local_lookup_url, $filename);
+            push @file_listing, $full_path;
+        }
     }
+
+    closedir $dh;
+
+
+
+
+note("FILENAMELISTING!!!![");
+note explain \@file_listing;
+note("]");
+
     # Throw another exception if the directory contains nothing.
-    die <<EOD if @file_listing == 0;
+    # Awesome, clever, and simple Path::Class based "is dir empty" test courtesy
+    # of tobyinc on PerlMonks (http://www.perlmonks.org/?node_id=934482).
+    my $pc_local_lookup_url = dir($local_lookup_url);
+    die <<EOD if $pc_local_lookup_url->stat() && !$pc_local_lookup_url->children();
 App-Fetchware-Util: The directory that fetchware is trying to use to determine
 if a new version of the software is available is empty. This directory is
 [$local_lookup_url].
@@ -1293,8 +1332,6 @@ EOD
         print $write_pipe "$variable2\n";
         print $write_pipe "$variable3\n";
 
-        # Or use Storable.
-        store_fd(\%a_data_structure, $write_pipe);
         }, $regular_user
     );
 
@@ -1309,14 +1346,6 @@ EOD
     chomp(my $variable1 = <$output_fh>);
     chomp(my $variable2 = <$output_fh>);
     chomp(my $variable3 = <$output_fh>);
-
-    # If you used Storable, you'll have to unStorable your data.
-    # Open $output as if it were a file, because Storable doesn't work on
-    # scalars just files or file handles.
-    open my $output_fh, '<', $output or die <<EOD;
-    drop_privs() failed to open output. OS error [$!].
-    EOD
-    my $a_data_structure = fd_retrieve($output_fh);
 
 Forks drops privs to $regular_user, and then executes whatever is in the first
 argument, which should be a code reference. Throws an exception on any problems
@@ -1356,11 +1385,11 @@ represented and used.
 
 The output returned by drop_privs() is whatever the child wants it to be. If
 somehow the child got hacked, the $output could be something that could cause
-the parent (which has root perms!) execute some code, or otherwise do something
-that could cause the child to gain root access. So be sure to check how you use
-drop_privs() return value, and definatley don't just string eval it. Structure
-it so the return value can only be used as data for variables, and that those
-variables are never executed by root.
+the parent (which has root perms!) to execute some code, or otherwise do
+something that could cause the child to gain root access. So be sure to check
+how you use drop_privs() return value, and definitley don't just string eval it.
+Structure it so the return value can only be used as data for variables, and
+that those variables are never executed by root.
 
 =back
 
@@ -1382,11 +1411,13 @@ better security, because the child's behavior cannot directly impact the parents
 via %CONFIG. However, the parent trusts the code the child downloads especially
 after verify() verifies it with gpg, so an attacker could modify the install
 scripts that root will later blindly execute. But again the attacker would need
-to know to modify the install scripts; instead, of just gain root with a
+to know to modify the install scripts; instead, of just gaining root with a
 standard shell code payload, which would only give them C<nobody> access or
 perhaps a dedicated fetchware user access
 
 =back
+
+=over 
 
 =cut
 
@@ -1425,9 +1456,8 @@ EOM
     if (is_os_type('Unix') and ($< == 0 or $> == 0)) {
         # Ensure that $user_temp_dir can be accessed by my drop priv'd child.
         # And only try to change perms to 0755 only if perms are not 0755 already.
-        my $perms = ( stat(cwd()) )[2];
-        $perms = S_IMODE($perms); # Ditch the file type garbage.
-        unless ($perms & 0755) {
+        my $st = stat(cwd());
+        unless ((S_IMODE($st->mode) & 0755) >= 0755) {
             chmod 0755, cwd() or die <<EOD;
 App-Fetchware-Util: Fetchware failed to change the permissions of the current
 temporary directory [@{[cwd()]} to 0755. The OS error was [$!].
@@ -1439,8 +1469,15 @@ EOD
         # $new_temp_dir does not have a semaphore file, but its parent directory
         # does, which will still keep fetchware clean from deleting this
         # directory out from underneath us.
+        #
+        # Also note, that cwd() is "blindly" coded here, which makes it a
+        # "dependency," but drop_privs() is meant to be called after start() by
+        # fetchware::cmd_*(). It's not meant to be a generic subroutine to drop
+        # privs, and it's also not really meant to be used by fetchware
+        # extensions mostly just fetchware itself. Perhaps I should move it back
+        # to bin/fetchware???
         my $new_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
-            DIR => cwd(), CLEANUP => 1);
+            DIR => cwd());#, CLEANUP => 1);
         # Determine /etc/passwd entry for the "effective" uid of the
         # current fetchware process. I should use the "effective" uid
         # instead of the "real" uid, because effective uid is used to
@@ -1469,7 +1506,7 @@ App-Fetchware-Util: Fetchware failed to chdir() to its new temporary directory
 your system temporary directory is full. The OS error was [$!].
 EOD
 
-        # Open a pipe to allow the child to talk back the parent.
+        # Open a pipe to allow the child to talk back to the parent.
         pipe(READONLY, WRITEONLY) or die <<EOD;
 App-Fetchware-Util: Fetchware failed to create a pipe to allow the forked
 process to communication back to the parent process. OS error [$!].
@@ -1820,12 +1857,17 @@ sub create_tempdir {
     my $exception;
     my $temp_dir;
     eval {
+        local $@;
 
         # Determine tempdir()'s arguments.
-        my @args = ("fetchware-$$-XXXXXXXXXX", TMPDIR => 1);
+        my @args = ("fetchware-$$-XXXXXXXXXX");#, TMPDIR => 1);
 
         # Specify the caller's TempDir (DIR) if they specify it.
-        push @args, DIR => $opts{TempDir} if defined $opts{TempDir};
+        #push @args, DIR => $opts{TempDir} if defined $opts{TempDir};
+
+        # Specify either system temp directory or user specified directory.
+        push @args,
+            (defined $opts{TempDir} ? (DIR => $opts{TempDir}) : (TMPDIR => 1));
 
         # Don't CLEANUP if KeepTempDir is set.
         push @args, CLEANUP => 1 if not defined $opts{KeepTempDir};

@@ -8,7 +8,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98;# tests => '3'; #Update if this changes.
+use Test::More 0.98 tests => '4'; #Update if this changes.
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
@@ -32,7 +32,10 @@ note("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 subtest 'test config file subs' => sub {
     # Test 'ONE' and 'BOOLEAN' config subs.
+    program 'test';
+    filter 'test';
     temp_dir 'test';
+    fetchware_db_path 'test';
     user 'test';
     prefix 'test';
     configure_options 'test';
@@ -42,10 +45,14 @@ subtest 'test config file subs' => sub {
     lookup_url 'test';
     lookup_method 'test';
     gpg_sig_url 'test';
+    gpg_keys_url 'test';
+    sha1_url 'test';
+    md5_url 'test';
     verify_method 'test';
     no_install 'test';
     verify_failure_ok 'test';
     stay_root 'test';
+    user_keyring 'test';
 
     debug_CONFIG();
 
@@ -89,16 +96,20 @@ __clear_CONFIG();
 
 subtest 'test ONEARRREF config_file_subs()' => sub {
     my @onearrref_or_not = (
+        [ program => 'ONE' ],
         [ filter => 'ONE' ],
         [ temp_dir => 'ONE' ],
+        [ fetchware_db_path => 'ONE' ],
         [ user => 'ONE' ],
         [ prefix => 'ONE' ],
         [ configure_options=> 'ONEARRREF' ],
         [ make_options => 'ONEARRREF' ],
         [ build_commands => 'ONEARRREF' ],
         [ install_commands => 'ONEARRREF' ],
+        [ uninstall_commands => 'ONEARRREF' ],
         [ lookup_url => 'ONE' ],
         [ lookup_method => 'ONE' ],
+        [ gpg_keys_url => 'ONE' ],
         [ gpg_sig_url => 'ONE' ],
         [ sha1_url => 'ONE' ],
         [ md5_url => 'ONE' ],
@@ -107,6 +118,7 @@ subtest 'test ONEARRREF config_file_subs()' => sub {
         [ no_install => 'BOOLEAN' ],
         [ verify_failure_ok => 'BOOLEAN' ],
         [ stay_root => 'BOOLEAN' ],
+        [ user_keyring => 'BOOLEAN' ],
     );
 
     { no strict 'refs';
@@ -162,4 +174,4 @@ EOE
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-done_testing();
+#done_testing();

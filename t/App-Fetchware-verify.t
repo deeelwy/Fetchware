@@ -281,15 +281,18 @@ EOE
 };
 
 
-###BUGALERT###Add a subtest that uses make_test_dist() and md5sum_file() to test
-#verify() functionality on non FETCHWARE_RELEASE_TESTING systems.
-
-
 subtest 'Call end() to clean up temporary directory.' => sub {
+    # Skip this simple test, because start() is only caled with the other
+    # prereques, which are skipped except during release testing.
+    skip_all_unless_release_testing();
     # Call end() to delete temp dir created by start().
     ok(end(),
         'cleared out fetchware temporary directory.');
 };
+
+
+###BUGALERT###Add a subtest that uses make_test_dist() and md5sum_file() to test
+#verify() functionality on non FETCHWARE_RELEASE_TESTING systems.
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.

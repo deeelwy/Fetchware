@@ -235,7 +235,7 @@ sub cmd_install {
     if ($filename =~ /\.fpkg$/) {
         $fetchwarefile = extract_fetchwarefile($filename);
         vmsg <<EOM;
-Extracting out Fetchwarefile from [$filename] to [$fetchwarefile]
+Extracting out Fetchwarefile from [$filename] to [$$fetchwarefile]
 EOM
     } else {
         my $fh = safe_open($filename, <<EOD);
@@ -246,14 +246,14 @@ EOD
         # Add a \ to turn the slurped scalar into a scalar ref for calling
         # parse_fetchwarefile() properly.
         $fetchwarefile = \do {local $/; <$fh>};
-        vmsg  "Slurped [$filename] into fetchware: [$fetchwarefile]";
+        vmsg  "Slurped [$filename] into fetchware: [$$fetchwarefile]";
     }
 
     # Must parse the Fetchwarefile in the parent, so that the parent has access
     # to the imported subroutines and modified fetchware configuration (%CONFIG)
     # just as the child does.
     parse_fetchwarefile($fetchwarefile);
-    vmsg "Parsed Fetchwarefile [$fetchwarefile].";
+    vmsg "Parsed Fetchwarefile [$$fetchwarefile].";
 
 
     # start() runs as root before the fork, because it uses
@@ -310,19 +310,6 @@ EOD
         ($P_build_path)
             = pipe_read_newline($output);
 
-        # If we forked, then the child already ran start(), and chdir()'d to
-        # $temp_dir; therefore, we must also chdir($temp_dir) here if we
-        # forked,so that the parent is also in the correct temporary directory.
-        # uninstall() is still responsible for chdir()ing to $P_build_path,
-        # though.
-        #unless ( dir(cwd())->dir_list(-1, 1) eq $temp_dir) {
-        unless (dir(cwd())->subsumes($temp_dir)) {
-            chdir($temp_dir) or die <<EOD;
-fetchware: fetchware failed to chdir to the build directory [$temp_dir]. It
-needs to chdir() to this directory, so that it can uninstall your program.
-EOD
-        }
-
         install($P_build_path);
 
         vmsg "Creating Fetchware package from [@{[cwd()]}].";
@@ -374,12 +361,20 @@ installed fetchware packages.
 
 =back
 
+=over
+
+=item NOTICE
+
+cmd_uninstall() does B<not> call drop privileges, because it needs root
+privileges to copy the installed fetchware package from the system level
+fetchware package database, and it needs root to actually be able to delete
+files in system level directories.
+
+=back
+
 =cut
 
 sub cmd_uninstall {
-    # These variables must be shared back to the parent from the child using
-    # pipe_{write,read}_newline().
-    my $P_build_path;
 
     my $uninstall_package_path = shift;
 
@@ -427,60 +422,28 @@ EOD
     # end() is called.
     my $temp_dir = start();
 
-    # Drop privs, so only install() and end() is called with root permissions
-    my $output = drop_privs(
-    sub { 
-        my $write_pipe = shift;
-
-        # "Download" the package using File::Copy's cp().
-        my $package_path;
-        if (cp($fetchware_package_path, $temp_dir)) {
-            # Determine the output file that cp() used.
-            ###BUGALERT### Open the file for cp(), and provide cp() with a
-            #filehandle to write the data to to ensure the filename is exactly
-            #what it needs to be.
-            $package_path = catfile($temp_dir,
-                file($fetchware_package_path)->basename());
-        } else {
-            die <<EOD;
+    # "Download" the package using File::Copy's cp().
+    my $package_path;
+    if (cp($fetchware_package_path, $temp_dir)) {
+        # Determine the output file that cp() used.
+        ###BUGALERT### Open the file for cp(), and provide cp() with a
+        #filehandle to write the data to to ensure the filename is exactly
+        #what it needs to be.
+        $package_path = catfile($temp_dir,
+            file($fetchware_package_path)->basename());
+    } else {
+        die <<EOD;
 fetchware: Fetchware failed to copy the file [$fetchware_package_path] to the
 destination directory [$temp_dir]. OS error [$!].
 EOD
-        }
-
-
-        vmsg "Copied installed package to temporary directory at [$package_path]";
-
-        $P_build_path = unarchive($package_path);
-
-        # Tell the parent, root, process the values of the variables the
-        # child calculated in this coderef, and write them across this pipe
-        # back to the parent
-        pipe_write_newline($write_pipe, $P_build_path);
-        }, config('user')
-    ); # End drop_privs().
-
-    # Read from the pipe the child, the drop_privs()ed process, writes to to
-    # read the necessary values that correspond to the variables that the
-    # child must communicate back to the parent, so the parent can continue
-    # processing as though no fork()ing or priv dropping took place.
-    ($P_build_path) = pipe_read_newline($output);
-
-
-
-    # If we forked, then the child already ran start(), and chdir()'d to
-    # $temp_dir; therefore, we must also chdir($temp_dir) here if we
-    # forked,so that the parent is also in the correct temporary directory.
-    # uninstall() is still responsible for chdir()ing to $P_build_path, though.
-    #unless ( dir(cwd())->dir_list(-1, 1) eq $temp_dir) {
-    unless (dir(cwd())->subsumes($temp_dir)) {
-        chdir($temp_dir) or die <<EOD;
-fetchware: fetchware failed to chdir to the build directory [$temp_dir]. It
-needs to chdir() to this directory, so that it can uninstall your program.
-EOD
     }
 
-    uninstall($P_build_path);
+
+    vmsg "Copied installed package to temporary directory at [$package_path]";
+
+    my $build_path = unarchive($package_path);
+
+    uninstall($build_path);
 
     end();
 
@@ -1686,6 +1649,11 @@ downloads and builds your software. It will then switch back to root privs, if
 run as root, and install your software system wide. This does not work on
 Windows.
 EOA
+        fetchware_database_path => <<EOA,
+fetchware_database_path specifies an alternate path for fetchware to use to
+store the fetchware package that 'fetchware install' creates, and that
+'fetchware upgrade' uses to upgrade this fetchware package.
+EOA
         prefix => <<EOA,
 prefix specifies what base path your software will be installed under. This
 only works for software that uses GNU AutoTools to configure itself, it uses
@@ -2179,6 +2147,8 @@ EOD
         #download too to make upgrade() be able to use the lookup_by_timestamp
         #algorithm too, which is a better default anyway.
         my $download_url = lookup();
+use Test::More;
+note("DOWNLOADURL[$download_url]");
 
         my $P_download_url_basename = file($download_url)->basename();
         my $P_upgrade_name_basename =
@@ -2216,6 +2186,10 @@ EOD
         # it.
         # Clean up 
         $P_file_listing_0_0 = $file_listing[0][0];
+
+note("DOWNLOADURLBASENAME[$P_download_url_basename]");
+note("FILE_LISTING[$P_file_listing_0_0]");
+
         if ($P_file_listing_0_0 eq $P_download_url_basename
             # Make cmd_upgrade() not upgrade when the ver
             and $P_file_listing_0_0 ne $P_upgrade_name_basename) {
@@ -3010,14 +2984,12 @@ C<FETCHWARE_DATABASE_PATH>.
 sub fetchware_database_path {
     # If user specifically specifies their own fetchware database path in their
     # fetchwarefile use it instead of the default one.
-    return config('fetchware_database_path')
-        if defined config('fetchware_database_path');
-    # Otherwise use $ENV{FETCHWARE_DATABASE_PATH} if it's been defined.
-    return $ENV{FETCHWARE_DATABASE_PATH}
-        if defined $ENV{FETCHWARE_DATABASE_PATH};
-
     my $fetchware_database_path;
-    if (is_os_type('Unix', $^O)) {
+    if (defined config('fetchware_db_path')) {
+        $fetchware_database_path = config('fetchware_db_path');
+    } elsif (defined $ENV{FETCHWARE_DATABASE_PATH}) {
+        $fetchware_database_path = $ENV{FETCHWARE_DATABASE_PATH};
+    } elsif (is_os_type('Unix', $^O)) {
         # If we're effectively root use a "system" directory.
         if ($> == 0) {
             # Fetchware is modeled slightly after Slackware's package manager,
@@ -3056,7 +3028,6 @@ sub fetchware_database_path {
     vmsg <<EOM;
 Determined fetchware database path to be: [$fetchware_database_path]
 EOM
-
     return $fetchware_database_path;
 }
 
@@ -3200,6 +3171,8 @@ sub copy_fpkg_to_fpkg_database {
     my $fetchware_package_path = shift;
 
     my $fetchware_db_path = fetchware_database_path();
+use Test::More;
+note("FDP!!![$fetchware_db_path]");
 
     unless (-e $fetchware_db_path) {
         # Just use make_path() from File::Path to avoid having to check if
