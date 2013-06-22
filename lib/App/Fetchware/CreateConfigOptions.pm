@@ -19,11 +19,12 @@ use 5.010001;
 # ensure that your fetchware extension implementes all of fetchware's API
 # subroutines at compile time.
 
-=head1 EXPORTAPI'S API METHODS
+=head1 CREATECONFIGOPTIONS'S API METHODS
 
-App::Fetchware::ExportAPI (ExportAPI) has only one user-servicable part--it's
-import() method. It works just like L<Exporter>'s import() method except it
-takes arguments differently, and checks it's arguments more thuroughly.
+App::Fetchware::CreateConfigOptions (CreateConfigOptions) has only one
+user-servicable part--it's import() method. It works just like L<Exporter>'s
+import() method except it takes arguments differently, and checks it's arguments
+more thuroughly.
 
 =cut
 
@@ -128,7 +129,7 @@ additional type:
 recommended that you use export_api(), and any App::Fetchware API subroutines
 that you C<'KEEP'> export_api() will automatically call _create_config_options()
 for you to import any fetchware API subroutines that you want your fetchware
-extension to reuse. See L<export_api() for details. You can specify the
+extension to reuse. See L<App::Fetchware::ExportAPI> for details. You can specify the
 C<NOIMPORT> option, C<_create_config_options(..., NOIMPORT =E<gt> 1);>, to avoid
 the automatic importing of App::Fetchware configuration options.
 

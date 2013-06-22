@@ -3219,7 +3219,7 @@ installed programs that fetchware installed.
 =cut
 
 
-=head1 App::Fetchware'S FETCHWAREFILE CONFIGURATTION OPTIONS
+=head1 App::Fetchware'S FETCHWAREFILE CONFIGURATION OPTIONS
 
 App::Fetchware has many configuration options. Most were briefly described in
 the section L<MANUALLY CREATING A App::Fetchware FETCHWAREFILE>. All of them are
@@ -4593,18 +4593,9 @@ in your Fetchwarefile, and then supply whatever configuration options you
 need.
 
 This extension mechanism is also very easy for Perl programmers, because you're
-basically I<subclassing> App::Fetchware, only you have to do it manually:
-
-=over
-
-=item 1. Instead of C<use parent 'App::Fetchware';>, you use
-C<use App::Fetchware qw(the subroutines you want to "inherit");>
-
-=item 2. Just like in a real subclass, whatever subroutines you want to "override", you implement in your subclass.
-
-=item 3. Most importantly, Perl does not do any "subroutine resolution." Therefore, you B<must> do this manually by exporting App::Fetchware's API subroutines and whatever configuration options your subclass needs.
-
-=back
+basically I<subclassing> App::Fetchware, only you do it using
+L<App::Fetchware::ExportAPI> and L<App::Fetchware::CreateConfigOptions>. See
+section L<Implement your fetchware extension.> for full details.
 
 =head2 How do I fix the verification failed error.
 
