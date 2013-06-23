@@ -572,10 +572,6 @@ EOF
         vmsg "Downloaded lookup_url's directory listing";
         vmsg Dumper($filename_listing);
 
-        ###BUGALERT### if/when analyze_lookup_listing() ever does more analysis
-        #then just determine if a filter is needed consider changing its return
-        #value to a list, and then giving that list to
-        #append_options_to_fetchwarefile() below.
         my $config_options = analyze_lookup_listing($P_term, $filename_listing,
             $lookup_url);
 
@@ -2381,6 +2377,9 @@ fetchware clean when you are finished working with it.
 
 =cut
 
+
+###BUGALERT### Fix the bug that prevents look from check for an installed
+#package first, then a filename or fetchwarefile.
 sub cmd_look {
     my $filename = shift;
 
@@ -3242,7 +3241,7 @@ __END__
     fetchware [-v | --verbose] [-q | --quiet] [-h | -? | --help]
               [-V | --version] <command> [<filenames | paths | Fetchwarfiles>]
 
-=head2 Create a new fetchware package.
+=head2 L<Create a new fetchware package.|/new>
 
     fetchware new <name of program>
 
@@ -3251,7 +3250,7 @@ __END__
     ... And answer the questions fetchware asks you appropriately and then press
     enter.
 
-=head2 Install a new fetchware package.
+=head2 L<Install a new fetchware package.|/install>
 
     fetchware install name-of-program.Fetchwarefile
 
@@ -3259,34 +3258,33 @@ __END__
     # you have one.
     fetchware install name-of-program.fpkg
 
-=head2 Upgrade a specific fetchware package.
+=head2 L<Upgrade a specific fetchware package.|/upgrade>
 
     fetchware upgrade <name of already installed program>
 
-=head2 Upgrade B<all> installed fetchware packages.
+    # Use fetchware list to see a list of already installed programs.
+    fetchware list
+
+=head2 L<Upgrade B<all> installed fetchware packages.|/upgrade-all>
 
     fetchware upgrade-all
 
-=head2 Uninstall an installed fetchware package.
+=head2 L<Uninstall an installed fetchware package.|/uninstall>
 
     # Requires a "uninstall" make target, or customization of its Fetchwarefile
     # to specify what specific C<uninstall_commands> will uninstall this package.
-    ###BUGALERT### Link to uninstall command for more info.
-    fetchware uninstall <name of program>
 
-=head2 List all installed fetchware packages.
+=head2 L<List all installed fetchware packages.|/list>
 
     fetchware list 
 
     # Pipe to grep if you want to search for something specific.
     fetchware list | grep <something specific>
 
-=head2 "Look" inside a fetchware package.
+=head2 L<"Look" inside a fetchware package.|/look>
 
     fetchware look <name-of-program.fpkg> | <name-of-program.Fetchwarefile>
 
-    ###BUGALERT### Fix the bug that prevents look from check for an installed
-    #package first, then a filename or fetchwarefile.
 
 =head2 Put this in your /etc/cron.daily to make fetchware check for updates every night
 

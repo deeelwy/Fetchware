@@ -131,6 +131,9 @@ our @EXPORT_OK = @{$EXPORT_TAGS{OVERRIDE_ALL}};
 
 
 
+
+###BUGALERT### Add strict argument checking to App::Fetchware's API subroutines
+#to check for not being called correctly to aid extension debugging.
 =head1 FETCHWAREFILE API SUBROUTINES
 
 The subroutines below B<are> Fetchwarefile's API subroutines or helper
@@ -2464,11 +2467,12 @@ Apache are pasted below.
 
 Why arn't relative paths good enough for Autotools?
 
-###BUGALERT### Add an uninstall() option to instead edit the AutoTools paths
-#into relative ones.
 =back
 
 =cut
+
+###BUGALERT### Add an uninstall() option to instead edit the AutoTools paths
+#into relative ones.
 
 sub run_configure {
     my $configure = './configure';
@@ -2696,6 +2700,11 @@ the program.
 
 =cut
 
+
+
+###BUGALERT### Is uninstall() calling API subs a bug??? Should it just use the
+#lower level library functions of these tools. Have it do this after I subify
+#the rest of the API subs like I've done to lookup and download.
 ###BUGALERT### NOT TESTED!!! There is no t/App-Fetchware-uninstall.t test
 #file!!! cmd_uninstall(), which uses uninstall(), is tested, but not uninstall()
 #directly!!!
@@ -3986,17 +3995,10 @@ arguments they receive, and what their expected return value is.
 
 =item B<uninstall> - You might think its just uninstall(), but its not.  uninstall() calls start(), download() (to copy the already installed fetchware package from the fetchware package database to the temporary directory), unarchive(), uninstall(), and end().
 
-###BUGALERT### Is uninstall() calling API subs a bug??? Should it just use the
-#lower level library functions of these tools. Have it do this after I subify
-#the rest of the API subs like I've done to lookup and download.
-
 =back
 
 Use the above overview of App::Fetchware's API to design what each API
 subroutine keeping in mind its arguments and what its supposed to return.
-
-###BUGALERT### Add strict argument checking to App::Fetchware's API subroutines
-#to check for not being called correctly to aid extension debugging.
 
 =head2 Determine your fetchware extension's Fetchwarefile configuration options.
 
@@ -4033,12 +4035,16 @@ and paste it, and then delete its specifics to create a simple extension
 skeleton. Then just follow the steps below to fill in this skeleton with the
 specifics needed for you fetchware extension.
 
+=cut
+
 ###BUGALERT### Create a fetchware command to do this for users perhaps even
 #plugin it into Module::Starter???? If possible.
 ####BUGALERT## Even have so that you can specify which API subs you want to
 #override or avoid overriding, and then it will create the skelton with stubs
 #for those API sub already having some empty POD crap and the correct
 #prototypes.
+
+=pod
 
 =over
 

@@ -2111,10 +2111,10 @@ As with the rest of App::Fetchware, App::Fetchware::Util does not return any
 error codes; instead, all errors are die()'d if it's App::Fetchware::Util's
 error, or croak()'d if its the caller's fault. These exceptions are simple
 strings, and are listed in the L</DIAGNOSTICS> section below.
-###BUGALERT### Actually implement croak or more likely confess() support!!!
 
 =cut
 
+###BUGALERT### Actually implement croak or more likely confess() support!!!
 
 
 ##TODO##=head1 DIAGNOSTICS
