@@ -172,12 +172,11 @@ subtest 'test build() default success' => sub {
 };
 
 
-# Clean up after previous build() run.
-make_clean();
-
-
 subtest 'test build() build_commands' => sub {
     skip_all_unless_release_testing();
+
+    # Clean up after previous build() run.
+    make_clean();
 
     build_commands './configure, make';
     ok(build($build_path), 'checked build() build_command success.');
@@ -194,13 +193,11 @@ subtest 'test build() build_commands' => sub {
 };
 
 
-
-# Clean up after previous build() run.
-make_clean();
-
-
 subtest 'test build() configure_options' => sub {
     skip_all_unless_release_testing();
+
+    # Clean up after previous build() run.
+    make_clean();
 
     configure_options '--enable-etags';
     ok(build($build_path), 'checked build() configure_options success.');
@@ -217,13 +214,11 @@ subtest 'test build() configure_options' => sub {
 };
 
 
-
-# Clean up after previous build() run.
-make_clean();
-
-
 subtest 'test build() prefix success' => sub {
     skip_all_unless_release_testing();
+
+    # Clean up after previous build() run.
+    make_clean();
 
     prefix '/usr/local';
     ok(build($build_path), 'checked build() prefix success.');

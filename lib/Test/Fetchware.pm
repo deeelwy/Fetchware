@@ -234,9 +234,20 @@ used in build() and install()'s test scripts to run make clean in between test
 runs. If you override build() or install() you may wish to use make_clean to
 automate this for you.
 
+
+make_clean() also makes some simple checks to ensure that you are not running it
+inside of fetchware's own build directory. If it detects this, it BAIL_OUT()'s
+of the test file to indicate that the test file has gone crazy, and is about to
+do something it shouldn't.
+
 =cut
 
 sub make_clean {
+    BAIL_OUT(<<EOF) if -e 'lib/Test/Fetchware.pm' && -e 't/App-Fetchware-build.t';
+Running make_clean() inside of fetchware's own directory! make_clean() should
+only be called inside testing build directories, and perhaps also only called if
+FETCHWARE_RELEASE_TESTING has been set.
+EOF
     system('make', 'clean');
     chdir(updir()) or fail(q{Can't chdir(updir())!});
 }
