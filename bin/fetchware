@@ -94,10 +94,13 @@ run() unless caller();
 sub run {
     # Set up a %SIG handler for CTRL-C or CTRL-Z on Windows.
     # And a %SIG handler for QUIT, which is CTRL-\
-    @SIG{qw(INT TERM QUIT EXIT)} = sub {
+    #
+    # Be sure to prepend the first message that's printed with a newline to
+    # ensure that it's printed on a brand new fresh line.
+    @SIG{qw(INT TERM QUIT)} = sub {
         my $sig = shift;
         msg <<EOM;
-Signal [$sig] received. Cleaning up Fetchware.
+\nSignal [$sig] received. Cleaning up Fetchware.
 EOM
         vmsg <<EOM;
 Any temporary files that fetchware may have created will be deleted by
@@ -2691,9 +2694,10 @@ EOM
 
     cmd_help();
 
-Prints a help message to C<STDOUT> listing usage, all command options, and examples.
+Prints a help message to C<STDOUT> listing usage, all command options, and
+examples.
 
-And then C<exit()> with an exit status of 1.
+And then C<exit()>s with an exit status of 0 indicating success.
 
 =cut
 
@@ -2709,25 +2713,24 @@ To create a new package just use fetchware's "new" command such as:
 And then answer the questions as best you can while fetchware takes your
 answers and creates a Fetchwarefile for you. If your program's needs seem to
 exceed the ability of fetchware's q&a configuration see perldoc App::Fetchware
-for instructions on further customization.
+for instructions on manual Fetchwarefile configuration.
 
 USAGE:
-###BUGALERT### Double check man page formatting standards!!!!!
-	fetchware install|uninstall|upgrade|upgrade-all|help
+	fetchware new|install|uninstall|upgrade|upgrade-all|list|look|clean|help
 		[--help|-h|-?|--version|-V|--verbose|-v|--quiet|-q]
 		package-name
-###BUGALERT### Double check man page formatting standards!!!!!
+
 COMMANDS:
     new - creates a new Fetchwarefile for use with fetchware.
 	install - installs a fetchware package, which is a .tar.gz ending with
 		.fpkg, which includes the source code distribution unmodified,
 		but with an included Fetchwarefile. See perldoc fetchware.
+	uninstall - uninstalls a fetchware package.
 	upgrade - upgrades a fetchware package if a newer version is available.
 	upgrade-all - upgrades *all* installed fetchware packages.
-	uninstall - uninstalls a fetchware package.
-    look - downloads and unarchives a fetchware package for viewing.
-    clean - deletes and left over messes caused by fetchware in your tempdir.
     list - lists all installed fetchware packages.
+    look - downloads and unarchives a fetchware package for viewing.
+    clean - deletes any left over messes caused by fetchware in your tempdir.
 	help - prints this help message
 OPTIONS:
 	--help|-h|-? - prints this help message.
