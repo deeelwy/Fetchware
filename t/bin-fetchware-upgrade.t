@@ -155,6 +155,14 @@ subtest 'test cmd_upgrade() test-dist' => sub {
     # both the old and new test dists can be in the same directory.
     my $upgrade_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
         CLEANUP => 1, TMPDIR => 1);
+    # However, not only do I have create the tempdir, but I must also chmod 755
+    # this temporary directory to ensure read access if this test file is run as
+    # root, and then drops its privs without the extra read perms this test will
+    # fail, because the nobody user will not be able to access this directory's
+    # 700 perms.
+    chmod 0755, $upgrade_temp_dir or fail(<<EOF);
+Failed to chmod(0755, [$upgrade_temp_dir])! This is probably a bug or something?
+EOF
 
 note("UPGRADETD[$upgrade_temp_dir]");
 

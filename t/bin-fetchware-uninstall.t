@@ -184,14 +184,7 @@ EOE
 __clear_CONFIG();
 
 subtest 'test cmd_uninstall() with test-dist.fpkg' => sub {
-    # Create a $temp_dir for make_test_dist() to use. I need to do this, so that
-    # both the old and new test dists can be in the same directory.
-    my $upgrade_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
-        CLEANUP => 1, TMPDIR => 1);
-
-note("UPGRADETD[$upgrade_temp_dir]");
-
-    my $test_dist_path = make_test_dist('test-dist', '1.00', $upgrade_temp_dir);
+    my $test_dist_path = make_test_dist('test-dist', '1.00');
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
     # I obviously must install apache before I can test uninstalling it :)

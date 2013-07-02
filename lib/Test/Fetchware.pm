@@ -298,27 +298,20 @@ sub make_test_dist {
     my $ver_num = shift;
     my $destination_directory = shift;
 
-use Test::More;
-note("MTDUID[$<]EUID[$>]");
-
-    # Set optional 3 argument to be the destination directory.
-    # If that option was not provided set the destination directory to be a
-    # a new temporary directory.
+    # $destination_directory is a mandatory option, but if the caller does not
+    # provide one, then simply use a tempdir().
     if (not defined $destination_directory) {
         $destination_directory
             = tempdir("fetchware-test-$$-XXXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
-
-    }
-
-    # If you're running the test suite as root, then $destination_directory
-    # should be 755 instead of 700 so that the droped priv child can still
-    # access it.
-    if ($> == 0) {
+        # Don't *only* create the tempdid $destination_directory, also, it must
+        # be chmod()'d to 755, unless stay_root is set, so that the dropped priv
+        # user can still access the directory make_test_dist() creates.
         chmod 0755, $destination_directory or die <<EOD;
 Test-Fetchware: Fetchware failed to change the permissions of it's testing
 destination directory [$destination_directory] this shouldn't happen, and is
 perhaps a bug. The OS error was [$!].
 EOD
+
     }
 
     # Support other options such as Fetchwarefile and AppendOption.

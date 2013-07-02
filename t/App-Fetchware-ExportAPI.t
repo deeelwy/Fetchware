@@ -50,9 +50,7 @@ subtest 'Test _export_api() success.' => sub {
     
     my @api_subs
         = qw(start lookup download verify unarchive build install uninstall end);
-note("TPEXPORT[@TestPackage::EXPORT]");
     App::Fetchware::ExportAPI::_export_api($caller, KEEP => \@api_subs);
-note("AFTERTPEXPORT[@TestPackage::EXPORT]");
 
     package main;
     # Test that _export_api() exports Exporter's import() into its caller's
