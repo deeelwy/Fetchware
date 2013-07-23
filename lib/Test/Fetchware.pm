@@ -273,6 +273,19 @@ directory.
 
 Returns the full path to the created test-dist fetchwware package.
 
+=over
+
+=item WARNING
+
+When you specify your own $destination_directory, you must also B<ensure> that
+it's permissions are C<0755>, because during testing fetchware may drop_privs()
+causing it to lose its ability to access the $destination_directory. Therefore,
+when specifying your own $destination_directory, please C<chmod> it to to
+C<0755> to ensure its child can still access the test distribution in your
+$destination_directory.
+
+=back
+
 =cut
 
 ###BUGALERT### make_test_dist() only works properly on Unix, because of its
