@@ -16,8 +16,6 @@ multiple links to man fetchware and man App::Fetchware to help in fetchware's
 commands, and its Fetchwarefile configuration file syntax.
 
 
-###BUGALERT### Remember to disable the thingy in dzil that creates the README to
-avoid overwritting this one.
 
 
 INTRODUCTION
@@ -48,10 +46,7 @@ AND A FETCHWARE PACKAGE?
 A Fetchware package is simply the original source-code distribution unarchived
 with your Fetchwarefile added to it. Then it is tared and gziped, but named with
 a .fpkg file extension instead of a .tar.gz file extension. This simple format
-is modelled after Slackware Linux's package format, which is simply every
-file the package needs to install in a path from the root directory without the
-slash to avoid accidental overwrites, and a few other files for description, and
-a file to execute any commands the package needs to run.
+is modelled after Slackware Linux's package format, which is also very simple.
 
 
 WHAT'S THE DIFFERENCE?
@@ -66,7 +61,7 @@ WHY SHOULD I USE FETCHWARE INSTEAD OF MY OWN PLATFORM'S PACKAGE MANAGER?
 
 Fetchware should be used if you want to build those same software packages from
 source code, and be able to specify your own configuration options to
-configuration that software as you want instead of how that package's maintainer
+configure that software as you want instead of how that package's maintainer
 wants it to be configured. Furthermore, Fetchware leaves you in control of
 creating the actual Fetchware package, because you just need the Fetchwarefile,
 and that is enough to build and install a Fetchware package. This means that
@@ -115,7 +110,7 @@ cpan App::Fetchware
 
 That should cause the CPAN client to install the App::Fetchware distribution
 from Perl's CPAN. This will also take care of installing any of Fetchware's
-dependencies on any other external CPAN modules that don't come with Perl, and
+dependencies, or any other external CPAN modules that don't come with Perl and
 might not be installed on your computer. This method is recommended, and the
 manual method shown below should be avoided, so you don't have to worry about
 installing Fetchware's external CPAN dependencies.
@@ -132,6 +127,9 @@ In either case, installation is not complete without setting up a cronjob to
 have Fetchware check each night for updates to your installed Fetchware
 packages. See STEP 6 below for the details.
 
+###BUGALERT### Move STEP 6 below to here
+
+###BUGALERT## Copy and paste the required CPAN modules form dist.ini to here.
 
 HOW DO I USE FETCHWARE?
 
