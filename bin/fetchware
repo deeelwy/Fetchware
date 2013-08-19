@@ -655,7 +655,7 @@ program the Fetchwarefile is supposed to download and install.
 EOM
 
     my $program_name = $term->get_reply(
-        prompt => q{What name is your program called?},
+        prompt => q{What name is your program called? },
         print_me => $what_a_program_is,
     );
 
@@ -732,7 +732,7 @@ How to determine your application's lookup_url:
 
     # prompt for lookup_url.
     my $lookup_url = $term->get_reply(
-        prompt => q{What is your application's lookup_url?},
+        prompt => q{What is your application's lookup_url? },
         allow => qr!(ftp|http)://!,
         print_me => $what_a_lookup_url_is,
     );
@@ -1329,7 +1329,7 @@ sub prompt_for_other_options {
     my %option_description = (
         temp_dir => {
             prompt => <<EOP,
-What temp_dir configuration option would you like?
+What temp_dir configuration option would you like? 
 EOP
             print_me => <<EOP
 temp_dir is the directory where fetchware creates a temporary directory that
@@ -1339,7 +1339,7 @@ EOP
         },
         user => {
             prompt => <<EOP,
-What user configuration option would you like?
+What user configuration option would you like? 
 EOP
             print_me => <<EOP
 user specifies what user fetchware will drop priveleges to on Unix systems
@@ -1353,7 +1353,7 @@ EOP
         },
         prefix => {
             prompt => <<EOP,
-What prompt configuration option would you like?
+What prompt configuration option would you like? 
 EOP
             print_me => <<EOP
 prefix specifies the base path that will be used to install this software. The
@@ -1364,7 +1364,7 @@ EOP
         },
         configure_options => {
             prompt => <<EOP,
-What configure_options configuration option would you like?
+What configure_options configuration option would you like? 
 EOP
             print_me => <<EOP
 configure_options specifies what options fetchware should add when it configures
@@ -1378,7 +1378,7 @@ EOP
         },
         make_options => {
             prompt => <<EOP,
-What make_options configuration option would you like?
+What make_options configuration option would you like? 
 EOP
             print_me => <<EOP
 make_options specifies what options fetchware will pass to make when make is run
@@ -1395,7 +1395,7 @@ EOP
 #build commands of whatever system this option specifies.
         build_commands => {
             prompt => <<EOP,
-What build_commands configuration option would you like?
+What build_commands configuration option would you like? 
 EOP
             print_me => <<EOP
 build_commands specifies what commands fetchware will run to compile your
@@ -1409,7 +1409,7 @@ EOP
         },
         install_commands => {
             prompt => <<EOP,
-What install_commands configuration option would you like?
+What install_commands configuration option would you like? 
 EOP
             print_me => <<EOP
 install_commands specifies what commands fetchware will run to install your
@@ -1427,12 +1427,12 @@ uninstall_commands specifes what commands fetchware will run to uninstall your
 software pacakge. The default is 'make uninstall,' which works for some GNU
 AutoTools packages, but not all. If your software package does not have a 'make
 uninstall' make target, but it has some other command that can uninstall it,
-then please specify it using uninstall_commands so fetchware can uninstall it.
+then please specify it using uninstall_commands so fetchware can uninstall it. 
 
         },
         lookup_method => {
             prompt => <<EOP,
-What lookup_method configuration option would you like?
+What lookup_method configuration option would you like? 
 EOP
             print_me => <<EOP
 lookup_method specifies what how fetchware determines if a new version of your
@@ -1447,7 +1447,7 @@ EOP
         },
         gpg_keys_url => {
             prompt => <<EOP,
-What gpg_keys_url configuration option would you like?
+What gpg_keys_url configuration option would you like? 
 EOP
             print_me => <<EOP
 gpg_keys_url specifies a url similar to lookup_url in that it should specify a
@@ -1457,7 +1457,7 @@ EOP
         },
         gpg_sig_url => {
             prompt => <<EOP,
-What gpg_sig_url configuration option would you like?
+What gpg_sig_url configuration option would you like? 
 EOP
             print_me => <<EOP
 gpg_sig_url specifies a url similar to lookup_url in that it should specify a
@@ -1467,7 +1467,7 @@ EOP
         },
         sha1_url => {
             prompt => <<EOP,
-What sha1_url configuration option would you like?
+What sha1_url configuration option would you like? 
 EOP
             print_me => <<EOP
 sha1_url specifies a url similar to lookup_url in that it should specify a
@@ -1479,7 +1479,7 @@ EOP
         },
         md5_url => {
             prompt => <<EOP,
-What md5_url configuration option would you like?
+What md5_url configuration option would you like? 
 EOP
             print_me => <<EOP,
 md5_url specifies a url similar to lookup_url in that it should specify a
@@ -1491,7 +1491,7 @@ EOP
         },
         verify_method => {
             prompt => <<EOP,
-What verify_method configuration option would you like?
+What verify_method configuration option would you like? 
 EOP
             print_me => <<EOP,
 verify_method specifies what method of verification fetchware should use to
@@ -1509,7 +1509,7 @@ EOP
 # Nah! Leave it! Just create a command line option for it too!
         no_install => {
             prompt => <<EOP,
-Would you like to enable the no_install configuration option?
+Would you like to enable the no_install configuration option? 
 EOP
             ###BUGALERT### no_install is not currently implemented properly!!!
             print_me => <<EOP
@@ -1524,7 +1524,7 @@ EOP
         },
         verify_failure_ok => {
             prompt => <<EOP,
-Would you like to enable the verify_failure_ok configuration option?
+Would you like to enable the verify_failure_ok configuration option? 
     EOP
             print_me => <<EOP
 verify_failure_ok is a true or false option, whoose acceptable values include 1
@@ -1537,7 +1537,7 @@ EOP
         },
         users_keyring => {
             prompt => <<EOP,
-Would you like to enable users_keyring configuration option?
+Would you like to enable users_keyring configuration option? 
 EOP
             print_me => <<EOP
 users_keyring when enabled causes fetchware to use the user who calls
@@ -1566,7 +1566,7 @@ EOP
 
     if (
         $term->ask_yn(prompt => <<EOP,
-Would you like to add extra configuration options to your fetchwarefile?
+Would you like to add extra configuration options to your fetchwarefile? 
 EOP
         default => 'n',
         print_me => <<EOP,
@@ -1587,7 +1587,7 @@ EOP
         my @config_file_options_to_provide = $term->get_reply(
             prompt => <<EOP,
 Please answer with a space seperated list of the configuration file options that
-you would like to provide options for?
+you would like to provide options for? 
 EOP
             choices => [@options],
             multi => 'True: Allow multiple answers',
@@ -1793,7 +1793,7 @@ sub edit_manually {
 
     if (
         $term->ask_yn(prompt => <<EOP,
-Would you like to edit your automagically generated Fetchwarefile manually?
+Would you like to edit your automagically generated Fetchwarefile manually? 
 EOP
         default => 'n',
         print_me => <<EOP,
@@ -1818,7 +1818,7 @@ EOP
         # Ask what editor to use if EDITOR environment variable is not set.
         my $editor = $ENV{EDITOR} || do {
             $term->get_reply(prompt => <<EOP,
-What text editor would you like to use?
+What text editor would you like to use? 
 EOP
                 print_me => <<EOP
 The Environment variable EDITOR is not set. This is used by fetchware and other
@@ -2001,7 +2001,7 @@ EOM
     # If the user wants to install their new Fetchwarefile.
     if (
         $term->ask_yn(prompt => <<EOP,
-Would you like to install the program you just created a Fetchwarefile for?
+Would you like to install the program you just created a Fetchwarefile for? 
 EOP
         default => 'y',
         print_me => <<EOP,
@@ -2037,7 +2037,7 @@ EOM
         if (-e $fetchwarefile_filename) {
             while (1) {
                 $fetchwarefile_filename = $term->get_reply(prompt => <<EOP,
-What would you like your new Fetchwarefile's filename to be?
+What would you like your new Fetchwarefile's filename to be? 
 EOP                 
                     print_me => <<EOP
 Fetchware by default uses the program name you specified at the beginning of
