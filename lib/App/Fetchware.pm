@@ -938,7 +938,14 @@ timestamps.
 
                 #parse out archive name.
                 my $link = $h->as_text();
-                if ($link =~ /\.(tar\.(gz|bz2|xz)|(tgz|tbz2|txz))$/) {
+                # NOTE: The weird alternations adding .asc, .md5, and .sha.?,
+                # and also a KEYS file are to allow fetchware new to also use
+                # this subroutine to parse http file listings to analyze the
+                # contents of the user's lookup_url. It does not make any sense
+                # to copy and paste this function or even add a callback argument
+                # allowing you to change the regex.
+                if ($link =~
+                    /(\.(tar\.(gz|bz2|xz)|(tgz|tbz2|txz))|(asc|md5|sha.?))|KEYS$/) {
                     # Should I strip out dirs just to be safe?
                     my $filename = $link;
                     # Obtain the tag to the right of the archive link to find the
@@ -951,6 +958,8 @@ timestamps.
                             $listing_line = $rh;
                         }
                         my @fields = split ' ', $listing_line;
+                        ###BUGALERT### Internationalization probably breaks this
+                        #datetime parsing? Can a library do it?
                         # day-month-year   time
                         # $fields[0]      $fields[1]
                         # Normalize format for lookup algorithms .
