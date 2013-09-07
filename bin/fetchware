@@ -277,7 +277,7 @@ EOD
 
             # Run the App::Fetchware API subroutines to do everything to install
             # the program, but be mindful of drop_privs() requiring this coderef
-            # to use pipe_write_newline() to communicate needed changes back to
+            # to use write_dropprivs_pipe() to communicate needed changes back to
             # the parent process, for example, $P_build_path--the parent needs to
             # chdir() to that directory before it tries to execute install().
 
@@ -302,7 +302,7 @@ EOD
             # Tell the parent, root, process the values of the variables the
             # child calculated in this coderef, and write them across this pipe
             # back to the parent
-            pipe_write_newline($write_pipe, $P_build_path);
+            write_dropprivs_pipe($write_pipe, $P_build_path);
         }, config('user')
         ); # End drop_privs().
 
@@ -311,7 +311,7 @@ EOD
         # child must communicate back to the parent, so the parent can continue
         # processing as though no fork()ing or priv dropping took place.
         ($P_build_path)
-            = pipe_read_newline($output);
+            = read_dropprivs_pipe($output);
 
         install($P_build_path);
 
@@ -550,19 +550,21 @@ EOF
         #Perhaps create a 'fetchwarefile' command to download and look at
         #fetchwarefiles from CPAN, and then install them, and/or perhaps upload
         #them pausing to ask for the user's PAUSE credentials!!!!!!!!!
+use Test::Fetchware 'verbose_on';
+verbose_on();
 
         opening_message();
 
         # Ask user for name of program unless the user provided one at command
         # line such as fetchware new <programname>.
-        $P_program_name //= name_program($P_term);
+        $P_program_name //= name_program($term);
         vmsg "Determined name of your program to be [$P_program_name]";
 
         append_options_to_fetchwarefile({program => $P_program_name},
             \$P_fetchwarefile);
         vmsg "Appended program [$P_program_name] configuration option to Fetchwarefile";
 
-        my $lookup_url = get_lookup_url($P_term);
+        my $lookup_url = get_lookup_url($term);
         vmsg "Asked user for lookup_url [$lookup_url] from user.";
 
         # Add $lookup_url to $P_fetchwarefile.
@@ -571,11 +573,11 @@ EOF
         vmsg "Appended lookup_url [$lookup_url] configuration option to Fetchwarefile";
 
         vmsg "Downloaded lookup_url [$lookup_url]";
-        my $filename_listing = download_lookup_url($P_term, $lookup_url);
+        my $filename_listing = download_lookup_url($term, $lookup_url);
         vmsg "Downloaded lookup_url's directory listing";
         vmsg Dumper($filename_listing);
 
-        my $config_options = analyze_lookup_listing($P_term, $filename_listing,
+        my $config_options = analyze_lookup_listing($term, $filename_listing,
             $lookup_url);
 
         # Append $config_options to P_fetchwarefile.
@@ -586,7 +588,7 @@ EOF
         #presumably be the user who will install the package now and later.
         ###BUGALERT### Ask user for a prefix if their running nonroot???
         vmsg 'Prompting for other options that may be needed.';
-        my %options = prompt_for_other_options($P_term);
+        my %options = prompt_for_other_options($term);
         vmsg 'User entered the following options.';
         vmsg Dumper(\%options);
 
@@ -594,30 +596,40 @@ EOF
         append_options_to_fetchwarefile(\%options, \$P_fetchwarefile);
         vmsg 'Appended all other options listed above to Fetchwarefile.';
 
-        add_mirrors($P_term, \$P_fetchwarefile);
-        vmsg 'Added the mirrors the user specified to Fetchwarefile';
-
-        edit_manually($P_term, \$P_fetchwarefile);
+        edit_manually($term, \$P_fetchwarefile);
         vmsg <<EOM;
 Asked user if they would like to edit their generated Fetchwarefile manually.
 EOM
+
+use Test::More;
+diag("1111111111111111FETCHWAREFILE!!!!!!!!!");
+diag("[$P_fetchwarefile]");
+
     
         # Tell the parent, root, process the values of the variables the
         # child calculated in this coderef, and write them across this pipe
         # back to the parent
-        pipe_write_newline($write_pipe, $P_program_name, $P_term, $P_fetchwarefile);
+        write_dropprivs_pipe($write_pipe, $P_program_name, $P_fetchwarefile);
     }, config('user')
     ); # End drop_privs() back to root now!
 
+    # Use our own term in the parent process. Writing the Term::ReadLine object
+    # across the pipe makes no sense, so just make your own in the parent
+    # process.
+    my $term = Term::ReadLine->new('Fetchware new');
 
     # Read from the pipe the child, the drop_privs()ed process, writes to to
     # read the necessary values that correspond to the variables that the
     # child must communicate back to the parent, so the parent can continue
     # processing as though no fork()ing or priv dropping took place.
-    ($P_program_name, $P_term, $P_fetchwarefile) = pipe_read_newline($output);
+    ($P_program_name, $P_fetchwarefile) = read_dropprivs_pipe($output);
+
+use Test::More;
+diag("FETCHWAREFILE!!!!!!!!!");
+diag("[$P_fetchwarefile]");
 
     my $fetchware_package_path =
-        ask_to_install_now_to_test_fetchwarefile($P_term, \$P_fetchwarefile,
+        ask_to_install_now_to_test_fetchwarefile($term, \$P_fetchwarefile,
             $P_program_name);
 }
 
@@ -2213,7 +2225,7 @@ note("FILE_LISTING[$P_file_listing_0_0]");
         # semantics--you know how perl will read from an array until its end
         # when you call a subroutine, and it will write a list to a array when
         # you assign from a subroutine in list context.
-        pipe_write_newline($write_pipe,
+        write_dropprivs_pipe($write_pipe,
             $P_download_url_basename,
             $P_upgrade_name_basename,
             $P_file_listing_0_0,
@@ -2232,7 +2244,7 @@ note("FILE_LISTING[$P_file_listing_0_0]");
     ($P_download_url_basename,
     $P_upgrade_name_basename,
     $P_file_listing_0_0,
-    $P_build_path) = pipe_read_newline($output);
+    $P_build_path) = read_dropprivs_pipe($output);
 
     # Test if a new version is available again due to drop_priv() ending
     # half way through this if statement.
@@ -2462,7 +2474,7 @@ EOM
             # Tell the parent, root, process the values of the variables the
             # child calculated in this coderef, and write them across this pipe
             # back to the parent
-            pipe_write_newline($write_pipe, $P_look_path);
+            write_dropprivs_pipe($write_pipe, $P_look_path);
         } else {
             ###BUGALERT### Replace with warn for proposed for loop above to work?
             die <<EOD;
@@ -2482,7 +2494,7 @@ EOD
     # child must communicate back to the parent, so the parent can continue
     # processing as though no fork()ing or priv dropping took place.
     ($P_look_path)
-        = pipe_read_newline($output);
+        = read_dropprivs_pipe($output);
 
     return $P_look_path;
 }
