@@ -2547,6 +2547,10 @@ fetchware temporary directories from your system's temorary directory. It
 cleverly uses locking to ensure that cmd_clean() does B<not> delete a temporary
 directory that is still being used by a running fetchware process.
 
+cmd_clean() also deletes any temporary files that Fetchware uses that are
+regular files not directories. These start with either C<fetchware-*> or
+C<Fetchwarefile-*> for Fetchwarefiles cmd_new() creates for the user.
+
 flock() is used along with C<LOCK_{EX,NB}> from L<Fcntl>. C<LOCK_EX> gets an
 exclusive lock (only current process who got lock can access the file, and
 C<LOCK_NB>, which does a non-blocking attempt to get a lock returning success at
@@ -2596,10 +2600,30 @@ EOD
 
         # Store all of the fetchware-* temp dirs in @globbed_fetchware_temp_dirs
         # for later processing.
-        for my $globed_dir (glob(catfile($fetchware_temp_dir, 'fetchware-*'))) {
-            # Skip fetchware-* files that are not directories.
-            next unless -d $globed_dir;
-            push @globbed_fetchware_temp_dirs, $globed_dir;
+        for my $fetchware_file_or_dir (
+            glob(catfile($fetchware_temp_dir, 'fetchware-*')),
+            glob(catfile($fetchware_temp_dir, 'Fetchwarefile-*'))
+        ) {
+            # If it's a directory add it to the queue of directories to delete
+            # below.
+            if (-d $fetchware_file_or_dir) {
+                push @globbed_fetchware_temp_dirs, $fetchware_file_or_dir;
+            # If it's just a file just delete right away.
+            } else {
+                ###BUGALERT### Should I check if the current user has perms to
+                #delete the file before deleting it? What about root? Should
+                #root delete all files found even for other users? I'll go with
+                #the Unix default of just doing the operation, and dealing with
+                #the error message you receive to avoid the complexity of
+                #checking perms. Furthermore, what about Unix ACLs and Windows'
+                #ACL style perms? It's not worth dealing with that hassel.
+                unlink $fetchware_file_or_dir or die <<EOD;
+fetchware: Failed to unlink file [$fetchware_file_or_dir]. OS error [$!].
+EOD
+                    vmsg <<EOM;
+fetchware clean found and deleted file [$fetchware_file_or_dir].
+EOM
+            }
         }
     }
 
@@ -2694,7 +2718,7 @@ EOM
     # through a bunch of error messages to see if it worked right.
     msg <<EOM if $num_remove_tree_errors > 0;
 fetchware clean had [$num_remove_tree_errors] directories give errors.
-EM
+EOM
     msg <<EOM if $num_remove_tree_successes > 0;
 fetchware clean successfully deleted [$num_remove_tree_successes] directories. 
 EOM
@@ -3566,6 +3590,10 @@ if you would like to.
 C<clean> deletes all fetchware temporary files and directories to clean up your
 system temporary directory.
 
+You can also specify one or more arguments to C<fetchware clean> to specify what
+directories you want fetchware to search for fetchware's left over temp files to
+clean up.
+
 =head2 help
 
 Prints out a brief screen full of help messages reminding you of fetchware's
@@ -3875,8 +3903,8 @@ exits.
 =item clean
 
 Clean just deletes all fetchware temp files and directories in the system
-temp_dir.
-
+temp_dir. These files and directories all start with C<fetchware-*> or
+C<Fetchwarefile-*>.
 
 =item help
 
