@@ -58,8 +58,8 @@ subtest 'UTIL export what they should' => sub {
         do_nothing
         safe_open
         drop_privs
-        pipe_write_newline
-        pipe_read_newline
+        write_dropprivs_pipe
+        read_dropprivs_pipe
         create_tempdir
         original_cwd
         cleanup_tempdir
@@ -395,11 +395,8 @@ App-Fetchware: run-time error. fetchware failed to cwd() to [/doesnt/exist/anywh
 EOS
 
     eval_ok(sub {download_ftp_url("$scheme://$auth/$path/filedoesntexist")},
-        <<EOS, 'checked download_ftp_url() cant Net::FTP->get() file');
-App-Fetchware: run-time error. fetchware failed to cwd() to [//pub/apache/httpd/httpd-2.2.24.tar.bz2/filedoesntexist] on site
-[carroll.cac.psu.edu]. The ftp error was [Failed to change directory.
-]. See perldoc App::Fetchware.
-EOS
+        qr!App-Fetchware: run-time error. fetchware failed to cwd\(\) to \[//pub/apache/httpd/httpd!,
+        'checked download_ftp_url() cant Net::FTP->get() file');
     
 ##BUGALERT### Must add test for download_ftp_url() returning the $filename.
 
@@ -991,8 +988,8 @@ subtest 'test drop_privs()' => sub {
                     # Test goes here.
 
 
-                    # Finally test pipe_write_newline().
-                    pipe_write_newline($write_pipe, @expected);
+                    # Finally test write_dropprivs_pipe().
+                    write_dropprivs_pipe($write_pipe, @expected);
 
 
                     # End test start fork and pipe boilerplate.
@@ -1010,7 +1007,7 @@ subtest 'test drop_privs()' => sub {
                     # Parent test goes here.
                     
 
-                    my @got = pipe_read_newline(\$output);
+                    my @got = read_dropprivs_pipe(\$output);
                     for my $i (0..$#expected) {
                         is($got[$i], $expected[$i],
                             "checked pipe_{write,read}_newline() success [$i]");

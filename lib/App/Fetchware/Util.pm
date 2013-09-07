@@ -50,8 +50,8 @@ our %EXPORT_TAGS = (
         do_nothing
         safe_open
         drop_privs
-        pipe_write_newline
-        pipe_read_newline
+        write_dropprivs_pipe
+        read_dropprivs_pipe
         create_tempdir
         original_cwd
         cleanup_tempdir
@@ -1631,7 +1631,7 @@ contains utilties that help users of drop_privs() parse the input and output
 they send from the child back to the parent.
 
 Use pipe_print_newline() to send data back to the parent, that later you'll read
-with pipe_read_newline() back in the parent.
+with read_dropprivs_pipe() back in the parent.
 
 =cut
 
@@ -1639,44 +1639,68 @@ with pipe_read_newline() back in the parent.
 ###BUGALERT### Add quotemeta() support to pipe parsers to help prevent attacks.
 
 
-=head3 pipe_write_newline()
+=head3 write_dropprivs_pipe()
 
-    pipe_write_newline($write_pipe, $variable1, $variable2, $variable3);
+    write_dropprivs_pipe($write_pipe, $variable1, $variable2, $variable3);
 
 Simply uses the caller provided $write_pipe file handle to write the rest of its
-args to that file handle separated by new lines.
+args to that file handle separated by a I<magic number>.
 
-Throws an exception if a user provided variable has a new line it. They can't,
-because that's what it uses to separate each variable from the previous and next
-variables.
+This magic number is just generated uniquely each time App::Fetchware::Util is
+compiled. This number replaces using newline to separate each of the variables
+that write_dropprivs_pipe() writes. This way you can include newline, and in
+fact anything that does not contain the magic number, which is obviously
+suitably unlikely.
 
 =cut
 
-sub pipe_write_newline {
+{ # Bareblock just for the $MAGIC_NUMBER.
+    # Determine $front_magic
+    my $front_magic = int(rand(8128389023));
+    # For no particular reason convert the random integer into hex, because I
+    # never  store something in decimal and then exact same thing in hex.
+    $front_magic = $front_magic . sprintf("%x", $front_magic);
+    # Run srand() again to change random number generator between rand() calls.
+    # Not really necessary, but should make it harder to guess correct magic
+    # numbers.
+    srand(time());
+    # Same a $front_magic.
+    my $back_magic = int(rand(986487516));
+    # Octal this time :) for no real reason.
+    $back_magic = $back_magic . sprintf("%o", $back_magic);
+    my $MAGIC_NUMBER = $front_magic 
+        . 'MAGIC_NUMBER_REPLACING_NEWLINE'
+        . $back_magic;
+
+sub write_dropprivs_pipe {
     my $write_pipe = shift;
 
     for my $a_var (@_) {
-        warn <<EOD if $a_var =~ /\n/;
-fetchware: Huh? [$a_var] has a newline in it? This shouldn't happen, and messes up
-fetchware's simple IPC. If you actually have a newline in a file name, just
-change it to something else.
+        die <<EOD if $a_var =~ /$MAGIC_NUMBER/;
+fetchware: Huh? [$a_var] has fetchware's MAGIC_NUMBER in it? This shouldn't
+happen, and messes up fetchware's simple IPC. You should never see this error,
+because it's not a particuarly magic number if anybody actually uses it. This is
+most likely a bug, so please report it.
 EOD
 
-        print $write_pipe "$a_var\n"
+        # Write to the $write_pipe, but use the $MAGIC_NUMBER instead of just
+        # newline.
+        print $write_pipe "$a_var" . $MAGIC_NUMBER;
     }
 }
 
 
-=head3 pipe_read_newline()
+=head3 read_dropprivs_pipe()
 
     my ($variable1, $variable2, $variable3) = pipe_read_newling($output);
 
 pipe_read_newling() opens the scalar $output, and returns a list of $outputs
-parsed out varialbes based on newlines.
+parsed out variables split on the $MAGIC_NUMBER, which is randomly generated
+during each time you run Fetchware to avoid you every actually using it.
 
 =cut
 
-sub pipe_read_newline {
+sub read_dropprivs_pipe {
     my $output = shift;
 
     die <<EOD if ref($output) ne 'SCALAR';
@@ -1684,14 +1708,12 @@ App-Fetchware-Util: pipe_read_newling() was called with an output variable
 [$output] that was not a scalar reference. It must be a scalar reference.
 EOD
 
-    # Open scalar ref $output for reading.
-    open my $output_fh, '<', $output or die <<EOD;
-fetchware: Failed to open a scalar as a file handle! OS error [$!]
-EOD
-
-    my ($variable, @variables);
-    while (defined($variable = <$output_fh>)) {
-        chomp($variable);
+    my @variables;
+    for my $variable (split(/$MAGIC_NUMBER/, $$output)) {
+        # Delete the junk $MAGIC_NUMBER. And use the 's' option to make . match
+        # the newline. Otherwise $1 will only include the first line of the
+        # Fetchwarefile.
+        $variable =~ s/(.*?)$MAGIC_NUMBER/$1/ms;
 
         # And some error handling just in case.
         die <<EOD if not defined $variable;
@@ -1722,6 +1744,8 @@ EOD
     return @variables;
 }
 ###BUGALERT### Add some pipe parsers that use Storable too.
+
+} # End $MAGIC_NUMBER bare block.
 
 
 =head1 MISCELANEOUS UTILTY SUBROUTINES
