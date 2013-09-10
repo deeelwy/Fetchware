@@ -33,11 +33,10 @@ use Cwd 'cwd';
 use File::Path qw(make_path remove_tree);
 use Term::UI;
 use Term::ReadLine;
-use File::Temp 'tempfile';
 use Perl::OSType 'is_os_type';
 use File::HomeDir;
 use File::Find 'find';
-use File::Temp qw(tempdir tempfile);
+use File::Temp 'tempfile';
 use Fcntl qw(SEEK_SET);
 use Path::Class;
 use Text::Wrap 'wrap';
@@ -45,6 +44,7 @@ use Data::Dumper;
 use Fcntl ':flock';
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
 use Sub::Mage;
+use URI::Split qw(uri_split uri_join);
 
 # Setup exports, which are only meant to ease testing.
 use Exporter 'import';
@@ -484,6 +484,11 @@ EOD
 #only edit a blank file (Have helpful comments about what options are must
 #haves), and then have fetchware ask the user if they would like to then install
 #that new Fetchwarefile.
+###BUGALERT### Rename lookup_url to main_mirror or master_mirror or author_mirror
+#or something to better implicitly explain what it is.
+###BUGALERT### Add the check to see if there is a MIRRORS file or some similar
+#regex, and if so parse it, and auto add it to the list of mirrors? Is this
+#really feasible?
 
 =head2 cmd_new()
 
@@ -517,14 +522,13 @@ sub cmd_new {
 
     # These are the variables that the child must share back with the parent.
     my $P_program_name = shift; # The child might change or define it again.
-    my $P_term;
     my $P_fetchwarefile;
 
     # Drop privs, so only install() is called with root permissions
     my $output = drop_privs( sub {
         my $write_pipe = shift;
 
-        $P_term = Term::ReadLine->new('Fetchware new');
+        my $term = Term::ReadLine->new('Fetchware new');
 
         my $now = localtime;
         ###BUGALERT### Only App::Fetchware based Fetchwarefile's are supported now
@@ -550,8 +554,6 @@ EOF
         #Perhaps create a 'fetchwarefile' command to download and look at
         #fetchwarefiles from CPAN, and then install them, and/or perhaps upload
         #them pausing to ask for the user's PAUSE credentials!!!!!!!!!
-use Test::Fetchware 'verbose_on';
-verbose_on();
 
         opening_message();
 
@@ -601,16 +603,15 @@ verbose_on();
 Asked user if they would like to edit their generated Fetchwarefile manually.
 EOM
 
-use Test::More;
-diag("1111111111111111FETCHWAREFILE!!!!!!!!!");
-diag("[$P_fetchwarefile]");
-
-    
         # Tell the parent, root, process the values of the variables the
         # child calculated in this coderef, and write them across this pipe
         # back to the parent
         write_dropprivs_pipe($write_pipe, $P_program_name, $P_fetchwarefile);
-    }, config('user')
+    }, config('user'),
+    # cmd_new() does not want or need the directory that drop_privs() creates
+    # for the child so that the child can write files inside the parent's
+    # temporary directory that was created with start().
+    SkipTempDirCreation => 1
     ); # End drop_privs() back to root now!
 
     # Use our own term in the parent process. Writing the Term::ReadLine object
@@ -623,10 +624,6 @@ diag("[$P_fetchwarefile]");
     # child must communicate back to the parent, so the parent can continue
     # processing as though no fork()ing or priv dropping took place.
     ($P_program_name, $P_fetchwarefile) = read_dropprivs_pipe($output);
-
-use Test::More;
-diag("FETCHWAREFILE!!!!!!!!!");
-diag("[$P_fetchwarefile]");
 
     my $fetchware_package_path =
         ask_to_install_now_to_test_fetchwarefile($term, \$P_fetchwarefile,
@@ -860,7 +857,7 @@ sub analyze_lookup_listing {
 
 =head3 determine_mandatory_options()
 
-    my $filter = determine_mandatory_options($term, $filename_listing);
+    my $filter = determine_mandatory_options($term, $filename_listing, $lookup_url);
 
 Analyzes $filename_listing and asks the user the necessary questions to
 determine what the values to fetchware's mandatory configuration options should
@@ -880,13 +877,15 @@ sub determine_mandatory_options {
     my $term = shift;
     # $filename_listing is an array of [$filename, $timestamp] arrays.
     my $filename_listing = shift;
+    # add_verification() needs $lookup_url.
+    my $lookup_url = shift;
 
     # program and lookup_url were defined earlier, so the only other mandatory
     # options are at least one mirror (but more are allowed, and some way to
     # verify downloads.
     my @options;
     push @options, add_mirrors($term, $filename_listing);
-    push @options, add_verification($term, $filename_listing);
+    push @options, add_verification($term, $filename_listing, $lookup_url);
 
     return @options;
 }
@@ -978,7 +977,7 @@ EOP
 
 =head3 add_verification()
 
-    my @options = add_verification($term, $filename_listing);
+    my @options = add_verification($term, $filename_listing, $lookup_url);
 
 Parses $filename_listing to determine what type of verification is available.
 Prefering gpg, but falling back on sha1, and then md5 if gpg is not available.
@@ -993,6 +992,9 @@ C<user_keyring> C<'BOOLEAN'> option to use the user's public keyring instead of
 fetchware's own keyring. And if the user does not want to use their own gpg
 public keyring, then add_verification will fall back to sha1 or md5 setting
 C<verify_method> to sha1 or md5 as needed.
+
+Also, adds a gpg_keys_url option if a C<KEYS> file is found in
+$filename_listing.
 
 If no verification methods are available, fetchware will print a big nasty
 warning message, and offer to use C<verify_failure_ok> to make such a failure
@@ -1022,8 +1024,8 @@ sub add_verification {
     my $verify_configed_flag = 0;
     #If gpg is available prefer it over the others.
     if (exists $available_verify_methods{gpg}
-            or defined $available_verify_methods{gpg}
-            or $available_verify_methods{gpg} > 0
+            and defined $available_verify_methods{gpg}
+            and $available_verify_methods{gpg} > 0
     ) {
         msg <<EOM;
 gpg digital signatures found. Using gpg verification.
@@ -1031,11 +1033,17 @@ EOM
         push @options, verify_method => 'gpg';
 
         # Search for a KEYS file to use to import the author's keys.
-        if (grep {$_ eq 'KEYS'} @$filename_listing) {
+        if (grep {$_->[0] eq 'KEYS'} @$filename_listing) {
             msg <<EOM;
 KEYS file found using lookup_url. Adding gpg_keys_url to your Fetchwarefile.
 EOM
-            push @options, gpg_keys_url => "$lookup_url/KEYS";
+            # Add 'KEYS' or '/KEYS' to $lookup_url's path.
+            my ($scheme, $auth, $path, $query, $fragment) =
+                uri_split($lookup_url);
+            $path = catfile($path, 'KEYS');
+            $lookup_url = uri_join($scheme, $auth, $path, $query, $fragment);
+
+            push @options, gpg_keys_url => $lookup_url;
             $verify_configed_flag++;
         } else {
             msg <<EOM;
@@ -1073,16 +1081,16 @@ EOP
     # Only try sha1 and md5 if gpg failed.
     unless ($verify_configed_flag == 1) {
         if (exists $available_verify_methods{sha1}
-                or defined $available_verify_methods{sha1}
-                or $available_verify_methods{sha1} > 0
+                and defined $available_verify_methods{sha1}
+                and $available_verify_methods{sha1} > 0
         ) {
             msg <<EOM;
 SHA1 checksums found. Using SHA1 verification.
 EOM
             push @options, verify_method => 'sha1';
         } elsif (exists $available_verify_methods{md5}
-                or defined $available_verify_methods{md5}
-                or $available_verify_methods{md5} > 0
+                and defined $available_verify_methods{md5}
+                and $available_verify_methods{md5} > 0
         ) {
             msg <<EOM;
 MD5 checksums found. Using MD5 verification.
@@ -1125,7 +1133,7 @@ surprisingly common:
 Download mirrors *do* get hacked. Do not make the mistake, and think that it is
 not possible. It is possible, and it does happen, so please properly configure
 your Fetchwarefile to enable fetchware to verify that the downloaded software is
-the same that the author uploaded.
+the same what the author uploaded.
 EOP
                 )
             ) {
@@ -1690,6 +1698,7 @@ EOA
         uninstall_commands => <<EOA,
 uninstall_commands specifies what commands fetchware should execute to uninstall
 your software.
+EOA
         lookup_url => <<EOA,
 lookup_url specifes the url that fetchware uses to determine what what
 versions of your program are available. It should point to a directory listing
@@ -1709,6 +1718,7 @@ EOA
         gpg_sig_url => <<EOA,
 gpg_sig_url specifies the url that fetchware uses to download digital
 signatures of this program. They're files that usually end .asc.
+EOA
         sha1_url => <<EOA,
 sha1_url specfies the url that fetchware uses to download sha1sum files of
 this program. This url should be the program's main download site instead of a
@@ -1739,6 +1749,7 @@ EOA
         users_keyring => <<EOA,
 users_keyring if enabled causes fetchware to use the user's own gpg keyring
 instead of fetchware's own keyring.
+EOA
         mirror => <<EOA
 The mirror configuration option provides fetchware with alternate servers to
 try to download this program from. This option is used when the server
@@ -1748,12 +1759,12 @@ EOA
 
     my %description_seen;
     for my $opt (keys %$options) {
-        if (exists $config_file_description{$opt}) {
+        if (defined $config_file_description{$opt}) {
             # If the description has not been written to the $fetchwarefile yet,
             # then include it.
             if (exists $description_seen{$opt}
-                or defined $description_seen{$opt}
-                or $description_seen{$opt} == 0 
+                and defined $description_seen{$opt}
+                and $description_seen{$opt} == 0 
             ) {
                 append_to_fetchwarefile($fetchwarefile, $opt, $options->{$opt},
                     $config_file_description{$opt});
@@ -1771,7 +1782,7 @@ does not support having a description for. Please call
 append_options_to_fetchwarefile() with the correct \$options, or add the new,
 missing option to append_options_to_fetchwarefile()'s internal
 %config_file_description hash. \$options was:
-@{[%$options]}
+@{[Dumper(\%$options)]}
 EOD
         }
         # Increment this for each time each $opt is written to the
@@ -2006,6 +2017,7 @@ fetchware package that has been installed.
 sub ask_to_install_now_to_test_fetchwarefile {
     my ($term, $fetchwarefile, $program_name) = @_;
 
+
     vmsg <<EOM;
 Determining if user wants to install now or just save their Fetchwarefile.
 EOM
@@ -2024,10 +2036,16 @@ install it, then please enter 'yes' or just press <Enter>.
 EOP
         )
     ) {
-        # Abuse create_test_fetchwarefile(). This is not for testing, but this
-        # subroutine does exactly what I need one to do :) It even deletes this
-        # fetchwarefile when the program exists.
-        my $fetchwarefile_filename = create_test_fetchwarefile($$fetchwarefile);
+
+        # Create a temp Fetchwarefile to store the autogenerated configuration.
+        my ($fh, $fetchwarefile_filename)
+            =
+            tempfile("fetchware-$$-XXXXXXXXXXXXXX", TMPDIR => 1, UNLINK => 1);
+        print $fh $$fetchwarefile;
+        # Close the temp file to ensure everything that was written to it gets
+        # flushed from caches and actually makes it to disk.
+        close $fh;
+
         vmsg <<EOM;
 Saved Fetchwarefile temporarily to [$fetchwarefile_filename].
 EOM
@@ -2158,8 +2176,6 @@ EOD
         #download too to make upgrade() be able to use the lookup_by_timestamp
         #algorithm too, which is a better default anyway.
         my $download_url = lookup();
-use Test::More;
-note("DOWNLOADURL[$download_url]");
 
         my $P_download_url_basename = file($download_url)->basename();
         my $P_upgrade_name_basename =
@@ -3209,8 +3225,6 @@ sub copy_fpkg_to_fpkg_database {
     my $fetchware_package_path = shift;
 
     my $fetchware_db_path = fetchware_database_path();
-use Test::More;
-note("FDP!!![$fetchware_db_path]");
 
     unless (-e $fetchware_db_path) {
         # Just use make_path() from File::Path to avoid having to check if

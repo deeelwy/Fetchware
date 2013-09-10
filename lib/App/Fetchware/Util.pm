@@ -586,13 +586,6 @@ sub file_download_dirlist {
         $local_lookup_url =  catdir(original_cwd(), $local_lookup_url);
     }
 
-use Test::More;
-note("UID[$<]EUID[$>]");
-note("LS[");
-system('ls', '-ld', $local_lookup_url);
-system('ls', '-lh', $local_lookup_url);
-note("]");
-
     # Throw an exception if called with a directory that does not exist.
     die <<EOD if not -e $local_lookup_url;
 App-Fetchware-Util: The directory that fetchware is trying to use to determine
@@ -622,13 +615,6 @@ EOD
     }
 
     closedir $dh;
-
-
-
-
-note("FILENAMELISTING!!!![");
-note explain \@file_listing;
-note("]");
 
     # Throw another exception if the directory contains nothing.
     # Awesome, clever, and simple Path::Class based "is dir empty" test courtesy
@@ -1327,29 +1313,19 @@ EOD
         my $write_pipe = shift;
         # Do stuff as $regular_user
         ...
-        # Communicate back to parent by printing to the supplied $write_pipe.
-        print $write_pipe "$variable1\n";
-        print $write_pipe "$variable2\n";
-        print $write_pipe "$variable3\n";
+        # Use write_dropprivs_pipe to share variables back to parent.
+        write_dropprivs_pipe($write_pipe, $var1, $var2, ...);
 
         }, $regular_user
     );
 
-    # Then back in the parent, you can access the pipe from drop_priv()s return
-    # value.
+    # Back in the parent, use read_dropprivs_pipe() to read in whatever
+    # variables the child shared with us.
+    my ($var1, $var2, ...) = read_dropprivs_pipe($output);
 
-    # Open the returned scalar as a file to use Perl's line reading to parse it
-    # for us.
-    open my $output_fh, '<', $output or die <<EOD;
-    drop_privs() failed to open output. OS error [$!].
-    EOD
-    chomp(my $variable1 = <$output_fh>);
-    chomp(my $variable2 = <$output_fh>);
-    chomp(my $variable3 = <$output_fh>);
-
-Forks drops privs to $regular_user, and then executes whatever is in the first
-argument, which should be a code reference. Throws an exception on any problems
-with the fork.
+Forks and drops privs to $regular_user, and then executes whatever is in the
+first argument, which should be a code reference. Throws an exception on any
+problems with the fork.
 
 It only allows you to specify what the lower priveledged user does. The parent
 process's behavior can not be changed. All the parent does:
@@ -1377,7 +1353,10 @@ And return the output the child wrote on the pipe as a scalar reference.
 
 Whatever the child writes is returned. drop_privs() does not use Storable or
 JSON or XML or anything. It is up to you to specify how the data is to be
-represented and used.
+represented and used. However, L<read_dropprivs_pipe()> and
+L<write_dropprivs_pipe()> are provided.  They provide a simple way to store
+multiple variables that can have any character in them including newline. See
+their documentation for details.
 
 =over
 
@@ -1399,31 +1378,30 @@ executes the provided code reference I<without> dropping priveledges.
 
 =over
 
-=item NOTICE
+=item USABILITY NOTICE 
 
-Due to the nature for fork()ing, it is impossible to access the return value of
-$child_code on the parent. The could be worked around with pipes and perhaps
-L<Storable>, but the possible bugs and pipe deadlock headaches are not worth it.
-So, we're stuck with not being able to access the child's return value.
-Furthermore, any changes to %CONFIG variables done in the child process are
-B<not> currently sync'd with the parent. This is done to avoid using pipes, and
-better security, because the child's behavior cannot directly impact the parents
-via %CONFIG. However, the parent trusts the code the child downloads especially
-after verify() verifies it with gpg, so an attacker could modify the install
-scripts that root will later blindly execute. But again the attacker would need
-to know to modify the install scripts; instead, of just gaining root with a
-standard shell code payload, which would only give them C<nobody> access or
-perhaps a dedicated fetchware user access
+drop_privs()'s implementation depends on start() creating a tempdir and
+chdir()ing to it. Furthermore, drop_privs() sometimes creates a tempdir of its
+own, and it does not do a chdir back to another directory, so drop_privs()
+depends on end() to chdir back to original_cwd(). Therefore, do not use
+drop_privs() without also using start() and end() to manage a temporary
+directory for drop_privs().
 
 =back
 
-=over 
+drop_privs() also supports a C<SkipTempDirCreation =E<gt> 1> option that turns
+off drop_privs() creating a temporary diretory to give the child a writable
+temporary directory. This option is only used by cmd_new(), and probably only
+really needs to be used there. Also, note that you must provide this option
+after the $child_code coderef, and the $regular user options. Like so,
+C<my $output = drop_privs($child_code, $regular_user, SkipTempDirCreation =E<gt> 1>.
 
 =cut
 
 sub drop_privs {
     my $child_code = shift;
     my $regular_user = shift // 'nobody';
+    my %opts = @_;
 
     # Need to do this in 2 places.
     my $dont_drop_privs = sub {
@@ -1452,59 +1430,66 @@ EOM
         return $dont_drop_privs->($child_code);
     }
 
-    # Only for on Unix-like systems and we're root.
     if (is_os_type('Unix') and ($< == 0 or $> == 0)) {
-        # Ensure that $user_temp_dir can be accessed by my drop priv'd child.
-        # And only try to change perms to 0755 only if perms are not 0755 already.
-        my $st = stat(cwd());
-        unless ((S_IMODE($st->mode) & 0755) >= 0755) {
-            chmod 0755, cwd() or die <<EOD;
+        # cmd_new() needs to skip the creation of this useless directory that it
+        # does not use. Furthemore, the creation of this extra tempdir is not
+        # needed by cmd_new(), and this tempdir presumes start() was called
+        # before drop_privs(), which is always the case except for cmd_new().
+        unless (exists $opts{SkipTempDirCreation}
+            and defined $opts{SkipTempDirCreation}
+            and $opts{SkipTempDirCreation}) {
+            # Ensure that $user_temp_dir can be accessed by my drop priv'd child.
+            # And only try to change perms to 0755 only if perms are not 0755 already.
+            my $st = stat(cwd());
+            unless ((S_IMODE($st->mode) & 0755) >= 0755) {
+                chmod 0755, cwd() or die <<EOD;
 App-Fetchware-Util: Fetchware failed to change the permissions of the current
 temporary directory [@{[cwd()]} to 0755. The OS error was [$!].
 EOD
-        }
-        # Create a new tempdir for the droped prive user to use, and be sure to
-        # chown it so they can actually write to it as well.
-        #
-        # $new_temp_dir does not have a semaphore file, but its parent directory
-        # does, which will still keep fetchware clean from deleting this
-        # directory out from underneath us.
-        #
-        # Also note, that cwd() is "blindly" coded here, which makes it a
-        # "dependency," but drop_privs() is meant to be called after start() by
-        # fetchware::cmd_*(). It's not meant to be a generic subroutine to drop
-        # privs, and it's also not really meant to be used by fetchware
-        # extensions mostly just fetchware itself. Perhaps I should move it back
-        # to bin/fetchware???
-        my $new_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
-            DIR => cwd());#, CLEANUP => 1);
-        # Determine /etc/passwd entry for the "effective" uid of the
-        # current fetchware process. I should use the "effective" uid
-        # instead of the "real" uid, because effective uid is used to
-        # determine what each uid can do, and the real uid is only
-        # really used to track who the original user was in a setuid
-        # program.
-        my ($name, $useless, $uid, $gid, $quota, $comment, $gcos, $dir,
-            $shell, $expire)
-            = getpwnam(config('user') // 'nobody');
-        chown($uid, $gid, $new_temp_dir) or die <<EOD;
+            }
+            # Create a new tempdir for the droped prive user to use, and be sure to
+            # chown it so they can actually write to it as well.
+            #
+            # $new_temp_dir does not have a semaphore file, but its parent directory
+            # does, which will still keep fetchware clean from deleting this
+            # directory out from underneath us.
+            #
+            # Also note, that cwd() is "blindly" coded here, which makes it a
+            # "dependency," but drop_privs() is meant to be called after start() by
+            # fetchware::cmd_*(). It's not meant to be a generic subroutine to drop
+            # privs, and it's also not really meant to be used by fetchware
+            # extensions mostly just fetchware itself. Perhaps I should move it back
+            # to bin/fetchware???
+            my $new_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
+                DIR => cwd(), CLEANUP => 1);
+            # Determine /etc/passwd entry for the "effective" uid of the
+            # current fetchware process. I should use the "effective" uid
+            # instead of the "real" uid, because effective uid is used to
+            # determine what each uid can do, and the real uid is only
+            # really used to track who the original user was in a setuid
+            # program.
+            my ($name, $useless, $uid, $gid, $quota, $comment, $gcos, $dir,
+                $shell, $expire)
+                = getpwnam(config('user') // 'nobody');
+            chown($uid, $gid, $new_temp_dir) or die <<EOD;
 App-Fetchware-Util: Fetchware failed to chown [$new_temp_dir] to the user it is
 dropping privileges to. This just shouldn't happen, and might be a bug, or
 perhaps your system temporary directory is full. The OS error was [$!].
 EOD
-        chmod(0700, $new_temp_dir) or die <<EOD;
+            chmod(0700, $new_temp_dir) or die <<EOD;
 App-Fetchware-Util: Fetchware failed to change the permissions of its new
 temporary directory [$new_temp_dir] to 0700 that it created, because its
 dropping privileges.  This just shouldn't happen, and is bug, or perhaps your
 system temporary directory is full. The OS error is [$!].
 EOD
-        # And of course chdir() to $new_temp_dir, because everything assumes
-        # that the cwd() is where everything should be saved and done.
-        chdir($new_temp_dir) or die <<EOD;
+            # And of course chdir() to $new_temp_dir, because everything assumes
+            # that the cwd() is where everything should be saved and done.
+            chdir($new_temp_dir) or die <<EOD;
 App-Fetchware-Util: Fetchware failed to chdir() to its new temporary directory
 [$new_temp_dir]. This shouldn't happen, and is most likely a bug, or perhaps
 your system temporary directory is full. The OS error was [$!].
 EOD
+        }
 
         # Open a pipe to allow the child to talk back to the parent.
         pipe(READONLY, WRITEONLY) or die <<EOD;
@@ -1685,7 +1670,7 @@ EOD
 
         # Write to the $write_pipe, but use the $MAGIC_NUMBER instead of just
         # newline.
-        print $write_pipe "$a_var" . $MAGIC_NUMBER;
+        print $write_pipe $a_var . $MAGIC_NUMBER;
     }
 }
 
@@ -1710,11 +1695,6 @@ EOD
 
     my @variables;
     for my $variable (split(/$MAGIC_NUMBER/, $$output)) {
-        # Delete the junk $MAGIC_NUMBER. And use the 's' option to make . match
-        # the newline. Otherwise $1 will only include the first line of the
-        # Fetchwarefile.
-        $variable =~ s/(.*?)$MAGIC_NUMBER/$1/ms;
-
         # And some error handling just in case.
         die <<EOD if not defined $variable;
 fetchware: Huh? The child failed to write the proper variable back to the
@@ -1727,7 +1707,8 @@ EOD
         # t/bin-fetchware-install.t test file (Or any other ones that call
         # drop_privs().).
         my $untainted;
-        if ($variable =~ /(.*)/) {
+        # Need the m//ms options to match strings with newlines in them.
+        if ($variable =~ /(.*)/ms) {
             $untainted = $1;
         } else {
             die <<EOD;
@@ -1869,7 +1850,6 @@ handling, because flock will do them for us!
 sub create_tempdir {
     my %opts = @_;
 
-
     msg 'Creating temp dir to use to install your package.';
 
     # Ask for better security.
@@ -1887,7 +1867,7 @@ sub create_tempdir {
         my @args = ("fetchware-$$-XXXXXXXXXX");#, TMPDIR => 1);
 
         # Specify the caller's TempDir (DIR) if they specify it.
-        #push @args, DIR => $opts{TempDir} if defined $opts{TempDir};
+        push @args, DIR => $opts{TempDir} if defined $opts{TempDir};
 
         # Specify either system temp directory or user specified directory.
         push @args,
@@ -1910,27 +1890,6 @@ directory [$temp_dir] to 0700. This should not happen, and is a bug, or perhaps
 your system's temporary directory is full. The OS error was [$!].
 EOD
         }
-
-##DELME##        # And if run as root, I must chown the directory to the same user that
-##DELME##        # fetchware will drop_privs() too, but only on *nix, because only *nix
-##DELME##        # will drop_privs(). Avoid chown()ing when run stay_root is in effect,
-##DELME##        # because that setting will keep drop_privs() from dropping privs.
-##DELME##        if (not config('stay_root')) {
-##DELME##            if (not defined $opts{NoChown}
-##DELME##                and is_os_type('Unix') and ($< == 0 or $> == 0)
-##DELME##            ) {
-##DELME##                # Determine /etc/passwd entry for the "effective" uid of the
-##DELME##                # current fetchware process. I should use the "effective" uid
-##DELME##                # instead of the "real" uid, because effective uid is used to
-##DELME##                # determine what each uid can do, and the real uid is only
-##DELME##                # really used to track who the original user was in a setuid
-##DELME##                # program.
-##DELME##                my ($name, $useless, $uid, $gid, $quota, $comment, $gcos, $dir,
-##DELME##                    $shell, $expire)
-##DELME##                    = getpwnam(config('user') // 'nobody');
-##DELME##                chown($uid, $gid, $temp_dir);
-##DELME##            }
-##DELME##        }
 
         $exception = $@;
         1; # return true unless an exception is thrown.
@@ -2020,6 +1979,7 @@ sub cleanup_tempdir {
 App-Fetchware-Util: Huh? close() failed! Fetchware failed to close(\$fh_sem).
 Perhaps some one or something deleted it under us? Maybe a fetchware clean was
 run with the force flag (--force) while this other fetchware was running?
+OS error [$!].
 EOD
     vmsg <<EOM;
 Closed [fetchware.sem] filehandle to unlock this fetchware temporary directory from any

@@ -931,6 +931,23 @@ subtest 'test drop_privs()' => sub {
             }, 'nobody'
         );
 
+        # Test drop_privs()'s SkipTempDirCreation option.
+        my $previous_cwd = cwd();
+        drop_privs_ok(
+            sub {
+                my $fh = shift;
+                # Just share our cwd() with the parent tester...
+                my $cwd = cwd();
+                print $fh "$cwd\n";
+            }, sub {
+                my $rfh = shift;
+                chomp(my $child_cwd = <$rfh>);
+
+                ok(! dir($previous_cwd)->subsumes(dir($child_cwd)),
+                    'checked drop_privs() SkipTempDirCreation success');
+            }, undef, SkipTempDirCreation => 1 # Need the undef placeholder.
+        );
+
         # Set stay_root to true to disable priv dropping.
         config(stay_root => 1);
 
