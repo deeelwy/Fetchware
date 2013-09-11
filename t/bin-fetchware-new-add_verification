@@ -43,6 +43,9 @@ is($_, 'mirror', 'checked add_mirrors() key success.')
 like($_, qr!^(ftp|http|file)://!, 'checked add_mirrors() success.')
     for values %options;
 
+# Spit out # of tests run.
+done_testing();
+
 # Print a bogus "prompt" to keep Expect from freaking out, because it presumes
 # the prompt works like it does in a shell, but fetchware new is not a shell.
 print "Bogus shell: \n";

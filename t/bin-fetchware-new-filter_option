@@ -43,6 +43,9 @@ like($_, qr/filter/,
 ok(defined($_), 'checked determine_filter_option() success.')
     for values %options;
 
+# Spit out # of tests run.
+done_testing();
+
 # Print a bogus "prompt" to keep Expect from freaking out, because it presumes
 # the prompt works like it does in a shell, but fetchware new is not a shell.
 print "Bogus shell: \n";
