@@ -95,6 +95,11 @@ sub run {
     # Set up a %SIG handler for CTRL-C or CTRL-Z on Windows.
     # And a %SIG handler for QUIT, which is CTRL-\
     #
+    # Define a $parent_pid, so I can compare it to $$ (the current pid) to
+    # see if I'm the child or the parent inside the sig handler to act
+    # accordingly.
+    my $parent_pid = $$;
+    #
     # Be sure to prepend the first message that's printed with a newline to
     # ensure that it's printed on a brand new fresh line.
     @SIG{qw(INT TERM QUIT)} = sub {
@@ -103,7 +108,8 @@ sub run {
         # try to run this code at the same time resulting in the one closing the
         # file and deleting the tempdir() before the other one resulting in
         # strange undefined warnings.
-        if (forked()) {
+        #
+        if ($parent_pid == $$) {
             msg <<EOM;
 \nSignal [$sig] received. Cleaning up Fetchware.
 EOM

@@ -1311,40 +1311,6 @@ EOD
 }
 
 
-{ # Begin drop_privs() and forked() closure.
-
-# Used by the %SIG handler in bin/fetchware to ensure that only the parent
-# process has forked or not.
-# The child will inherit this value, but it will not change it, because the
-# forked copy is not exec()'d, so this main "compile-time" code never runs again
-# in the child.
-my $parent_pid = $$;
-
-=head2 forked()
-
-    if (forked()) {
-        # We're the parent do something.
-    } else {
-        # We're the child skip doing the above something.
-    }
-
-forked() simply returns true if this is the original parent process that called
-drop_privs(), or returns false if this is the child instead.
-
-=cut
-
-sub forked {
-    # If my pid is the same as the saved $parent_pid, then I'm the parent, and I
-    # should return true.
-    if ($$ == $parent_pid) {
-        return $$;
-    # If not return false.
-    } else {
-        return;
-    }
-}
-
-
 =head2 drop_privs()
     
     my $output = drop_privs(sub {
@@ -1645,8 +1611,6 @@ EOD
         return $dont_drop_privs->($child_code);
     }
 }
-
-} # Close forked() and drop_privs() bare block to hide a closeure.
 
 
 =head2 drop_privs() PIPE PARSING UTILITIES
