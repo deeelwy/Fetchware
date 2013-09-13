@@ -12,7 +12,7 @@ use Path::Class;
 use Data::Dumper;
 use File::Copy 'cp';
 use HTML::TreeBuilder;
-use Scalar::Util 'blessed';
+use Scalar::Util qw(blessed looks_like_number);
 use Digest::SHA;
 use Digest::MD5;
 #use Crypt::OpenPGP::KeyRing;
@@ -870,6 +870,21 @@ Returns a array of arrays of filenames and timestamps.
         Dec => '12',
     );
 
+    my %num_month = (
+         1 => '01',
+         2 => '02',
+         3 => '03',
+         4 => '04',
+         5 => '05',
+         6 => '06',
+         7 => '07',
+         8 => '08',
+         9 => '09',
+        10 => '10',
+        11 => '11',
+        12 => '12',
+    );
+
 
     sub  ftp_parse_filelist {
         my $ftp_listing = shift;
@@ -966,7 +981,25 @@ timestamps.
                         my ($day, $month, $year) = split /-/, $fields[0];
                         # Ditch the ':' in the time.
                         $fields[1] =~ s/://;
-                        push @filename_listing, [$filename, "$year$month{$month}$day$fields[1]"];
+                        # Some dirlistings use string months Aug, Jun, etc...
+                        if (looks_like_number($month)) {
+                            # Strip leading 0 if it exists by converting the
+                            # string with the useless leading 0 into an integer.
+                            # The %num_month hash lookup will add back a leading
+                            # 0 if there was one. This stupid roundabout code is
+                            # to ensure that there always is a leading 0 if the
+                            # number is less than 10 to ensure that all of the
+                            # numbers this hacky datetime parser outputs all
+                            # have the same length so that the numbers can
+                            # easily be compared with each other.
+                            $month = sprintf("%u", $month);
+                            push @filename_listing, [$filename,
+                                "$year$num_month{$month}$day$fields[1]"];
+                        # ...and some use numbers 8, 6, etc....
+                        } else {
+                            push @filename_listing, [$filename,
+                                "$year$month{$month}$day$fields[1]"];
+                        }
                     } else {
 ###BUGALERT### Add support for other http servers such as lighttpd, nginx,
 #cherokee, starman?, AND use the Server: header to determine which algorithm to
@@ -1020,10 +1053,6 @@ App-Fetchware: Fetchware failed to stat() the file [$file] while trying to parse
 your local [file://] lookup_url. The OS error was [$!]. This should not happen,
 and is either a bug in fetchware or some sort of race condition.
 EOD
-
-use Test::More;
-note("FPFFILE[$file]");
-note("FPFMTIME[$mtime]");
 
         # Replace scalar filename with a arrayref of the filename with its
         # assocated timestamp for later processing for lookup().

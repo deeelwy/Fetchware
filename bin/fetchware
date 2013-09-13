@@ -99,15 +99,21 @@ sub run {
     # ensure that it's printed on a brand new fresh line.
     @SIG{qw(INT TERM QUIT)} = sub {
         my $sig = shift;
-        msg <<EOM;
+        # Avoid a silly race condition where both the parent and the child both
+        # try to run this code at the same time resulting in the one closing the
+        # file and deleting the tempdir() before the other one resulting in
+        # strange undefined warnings.
+        if (forked()) {
+            msg <<EOM;
 \nSignal [$sig] received. Cleaning up Fetchware.
 EOM
-        vmsg <<EOM;
+            vmsg <<EOM;
 Any temporary files that fetchware may have created will be deleted by
 File::Temp's END block.
 EOM
 
-        cleanup_tempdir();
+            cleanup_tempdir();
+        }
 
         # Exit failure, because fetchware failed to properly install your
         # software while it was running, because the signal it received forced
@@ -516,6 +522,11 @@ user. The algorithm is dead stupid:
 cmd_new() uses Term::UI, which in turn uses Term::ReadLine to implement the
 character based question and anwser wizard interface.
 
+cmd_new() also asks the user if they would like fetchware to build their new
+program based on the Fetchwarefile cmd_new() created for them. If they answer
+yes, it builds it, and if now cmd_new() returns the path to the created
+Fetchwarefile for them.
+
 =cut
 
 sub cmd_new {
@@ -628,6 +639,8 @@ EOM
     my $fetchware_package_path =
         ask_to_install_now_to_test_fetchwarefile($term, \$P_fetchwarefile,
             $P_program_name);
+
+    return $fetchware_package_path;
 }
 
 
@@ -717,7 +730,10 @@ enter.
 sub get_lookup_url {
     my $term = shift;
 
-    my $what_a_lookup_url_is = q{
+
+    # prompt for lookup_url.
+    my $lookup_url = $term->get_reply(
+        print_me => <<EOP,
 Fetchware's heart and soul is its lookup_url. This is the configuration option
 that tells fetchware where to check if a new version of fetchware is released.
 
@@ -737,14 +753,9 @@ How to determine your application's lookup_url:
        Fetchware will download and analyze your lookup_url to see if it will work
        properly. If you do not end up with a browser directory listing, then
        please see Fetchware's documentation using perldoc App::Fetchware.
-};
-
-    # prompt for lookup_url.
-    my $lookup_url = $term->get_reply(
+EOP
         prompt => q{What is your application's lookup_url? },
-        allow => qr!(ftp|http)://!,
-        print_me => $what_a_lookup_url_is,
-    );
+        allow => qr!(ftp|http|file)://!);
 
     return $lookup_url;
 }
@@ -766,8 +777,9 @@ sub download_lookup_url {
 
     my $filename_listing;
     eval {
-
-        my $directory_listing = download_dirlist($lookup_url);
+        # Use no_mirror_download_dirlist(), because the regular one uses
+        # config(qw(lookup_url mirror)), which is not known yet.
+        my $directory_listing = no_mirror_download_dirlist($lookup_url);
 
         # Create a fake lookup_url, because parse_directory_listing() uses it to
         # determine the type of *_filename_listing() subroutine to call.
@@ -791,7 +803,9 @@ EOF
         $lookup_url = get_lookup_url($term, $lookup_url_failed_try_again);
 
         eval {
-            my $dir_list = download_dirlist($lookup_url);
+            # Use no_mirror_download_dirlist(), because the regular one uses
+            # config(qw(lookup_url mirror)), which is not known yet.
+            my $dir_list = no_mirror_download_dirlist($lookup_url);
 
             # Create a fake lookup_url, because parse_directory_listing() uses
             # it to determine the type of *_filename_listing() subroutine to
@@ -930,21 +944,21 @@ FTP, HTTP, and local file:// mirrors are supported. All other formats are not
 supported.
 EOP
         prompt => 'Please enter the URL of your mirror: ',
-        #allow => qr!^(ftp|http|file)://!,
+        allow => qr!^(ftp|http|file)://!,
     );
 
     push @options, mirror => $mirror;
 
     if (
         $term->ask_yn(
-        prompt => 'Would you like to add any additional mirrors? ',
-        default => 'n',
         print_me => <<EOP,
 In addition to the one required mirror that you must define in order for
 fetchware to function properly, you may specify additonal mirros that fetchware
 will use if the mirror you've already specified is unreachable or download
 attempts using that mirror fail.
 EOP
+        prompt => 'Would you like to add any additional mirrors? ',
+        default => 'n',
         )
     ) {
         # Prompt for first mirror outside loop, because if you just hit enter or
@@ -1443,11 +1457,15 @@ EOP
         },
         uninstall_commands => {
             prompt => <<EOP,
+What uninstall_commands configuration option would you like?
+EOP
+            print_me => <<EOP,
 uninstall_commands specifes what commands fetchware will run to uninstall your
 software pacakge. The default is 'make uninstall,' which works for some GNU
 AutoTools packages, but not all. If your software package does not have a 'make
 uninstall' make target, but it has some other command that can uninstall it,
 then please specify it using uninstall_commands so fetchware can uninstall it. 
+EOP
 
         },
         lookup_method => {
@@ -1545,7 +1563,7 @@ EOP
         verify_failure_ok => {
             prompt => <<EOP,
 Would you like to enable the verify_failure_ok configuration option? 
-    EOP
+EOP
             print_me => <<EOP
 verify_failure_ok is a true or false option, whoose acceptable values include 1
 or 0, true or falue, On or Off. It's default value is false, but if you enable
@@ -1570,24 +1588,9 @@ EOP
     );
     my %answered_option;
 
-    # Obtain other options from App::Fetchware instead of manually copy and
-    # pasting. This way I don't have to bother adding code or data to support
-    # new default options.
-    my @options = @App::Fetchware::EXPORT;
-    # Remove fetchware and override!
-    my @remove;
-    for (my $i = 0; $i <= $#options; $i++) {
-        # Remove unnecessary ones and ones asked about in other places.
-        for (qw(lookup_url filter mirror)) {
-            push @remove, $i if $options[$i] eq $_;
-        }
-    }
-    splice @options, $_, 1 for 0..$#remove;
-
     if (
-        $term->ask_yn(prompt => <<EOP,
-Would you like to add extra configuration options to your fetchwarefile? 
-EOP
+        $term->ask_yn(prompt =>
+        q{Would you like to add extra configuration options to your fetchwarefile?},
         default => 'n',
         print_me => <<EOP,
 Fetchware has many different configuration options that allow you to control its
@@ -1604,20 +1607,24 @@ fetchware's more flexible options, and just give the defaults a chance.
 EOP
         )
     ) {
+        my @options = keys %option_description;
         my @config_file_options_to_provide = $term->get_reply(
-            prompt => <<EOP,
-Please answer with a space seperated list of the configuration file options that
-you would like to provide options for? 
+            print_me => <<EOP,
+Below is a listing of Fetchware's available configuration options.
 EOP
-            choices => [@options],
-            multi => 'True: Allow multiple answers',
+            prompt => <<EOP,
+Please answer with a space seperated list of the number before the configuration
+file options that you would like to add to your configuration file? 
+EOP
+            choices => \@options,
+            multi => 1,
         );
 
 
         for my $config_file_option (@config_file_options_to_provide) {
             $answered_option{$config_file_option} = $term->get_reply(
-                prompt => $option_description{$config_file_option}->{prompt},
                 print_me => $option_description{$config_file_option}->{print_me},
+                prompt => $option_description{$config_file_option}->{prompt},
             );
         }
     }
@@ -1762,9 +1769,9 @@ EOA
         if (defined $config_file_description{$opt}) {
             # If the description has not been written to the $fetchwarefile yet,
             # then include it.
-            if (exists $description_seen{$opt}
+            unless (exists $description_seen{$opt}
                 and defined $description_seen{$opt}
-                and $description_seen{$opt} == 0 
+                and $description_seen{$opt} > 0 
             ) {
                 append_to_fetchwarefile($fetchwarefile, $opt, $options->{$opt},
                     $config_file_description{$opt});
@@ -1815,10 +1822,7 @@ sub edit_manually {
     my ($term, $fetchwarefile) = @_;
 
     if (
-        $term->ask_yn(prompt => <<EOP,
-Would you like to edit your automagically generated Fetchwarefile manually? 
-EOP
-        default => 'n',
+        $term->ask_yn(
         print_me => <<EOP,
 Fetchware has now asked you all of the needed questions to determine what it
 thinks your new program's Fetchwarefile should look like. But it's not perfect,
@@ -1830,6 +1834,8 @@ If you would like to cancel any edits you have made, and use the automagically
 generated Fetchwarefile, just delete the entire contents of the file, and save
 an empty file.
 EOP
+            prompt => q{Would you like to edit your automagically generated Fetchwarefile manually? },
+        default => 'n',
         )
     ) {
         my ($fh, $fetchwarefile_filename) =
@@ -2024,16 +2030,15 @@ EOM
 
     # If the user wants to install their new Fetchwarefile.
     if (
-        $term->ask_yn(prompt => <<EOP,
-Would you like to install the program you just created a Fetchwarefile for? 
-EOP
-        default => 'y',
+        $term->ask_yn(
         print_me => <<EOP,
 It is recommended that fetchware go ahead and install the program based on the
 Fetchwarefile that fetchware has created for you. If you don't want to install
 it now, then enter 'no', but if you want to test your Fetchwarefile now, and
 install it, then please enter 'yes' or just press <Enter>.
 EOP
+        prompt => q{Would you like to install the program you just created a Fetchwarefile for? },
+        default => 'y',
         )
     ) {
 

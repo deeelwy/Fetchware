@@ -86,7 +86,7 @@ subtest 'test name_program() success' => sub {
     my $term = Term::ReadLine->new('fetchware');
 
     is(name_program($term), undef,
-        'checked get_lookup_url() success');
+        'checked name_program() success');
 };
 
 
@@ -124,10 +124,10 @@ subtest 'test download_lookup_url() test-dist success' => sub {
         <<EOE, 'checked download_lookup_url() test-dist exception');
 fetchware: run-time error. The lookup_url you provided [] is not a
 usable lookup_url because of the error below:
-[App-Fetchware-Util: Failed to download the specifed URL [] or path
-[] using the included hostname in the url you specifed or any
-mirrors. The mirrors are []. And the urls
-that fetchware tried to download were [ ].
+[App-Fetchware: run-time syntax error: the url parameter your provided in
+your call to download_dirlist() [] does not have a supported URL scheme (the
+http:// or ftp:// part). The only supported download types, schemes, are FTP and
+HTTP. See perldoc App::Fetchware.
 ]
 Please see perldoc App::Fetchware for troubleshooting tips and rerun
 fetchware new.
@@ -177,16 +177,67 @@ EOE
 
 
 subtest 'test prompt_for_other_options() success' => sub {
-    ###BUGALERT### Add interactive tests in xt/!!!
-    # Create test Term::UI object.
-    my $term = Term::ReadLine->new('fetchware');
+    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+        unless eval {use Test::Expect; 1;};
 
-    # It returns 0, because prompt_for_other_options() returns an empty hash by
-    # default if no is pressed, or AUTOREPLY is set like it is in this test. And
-    # empty hash is the empty list, and the empty list in scalar context has 0
-    # elements so its return value is 0.
-    is(prompt_for_other_options($term), 0,
-        'checked prompt_for_other_options() success.');
+    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
+    # something crazy like Test::Expect, this will have to be tested "manually."
+    local $Term::UI::AUTOREPLY = 0;
+    # Fix the "out of orderness" thanks to Test::Builder messing with
+    # STD{OUT,ERR}.
+    local $| = 1;
+
+    # Have Expect tell me what it's doing for easier debugging.
+    #$Expect::Exp_Internal = 1;
+
+    expect_run(
+        command => 't/bin-fetchware-new-prompt_for_other_options',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC"
+    );
+
+    # First test that the command produced the correct outout.
+    expect_like(qr/Fetchware has many different configuration options that allow you to control its/,
+        'checked prompt_for_other_options() received correct config options prompt');
+
+    # Have Expect print an example URL.
+    expect_send('y',
+        'check prompt_for_other_options() sent Y.');
+
+    # Check if upon receiving the URL the command prints out the next correct
+    # prompt.
+    # The including [y/N] below is a stupid workaround for some stupid bug in
+    # Expect or in my code that I can't figure out. Fix this if you can.
+    #expect_like(qr/Below is a listing of Fetchware's available configuration options./,
+    expect_like(qr!\[y/N\]|Below is a listing of Fetchware's available configuration options.!,
+        'checked prompt_for_other_options() received configuration options prompt.');
+
+    # Note I have no clue what numbers will line up with what configuration
+    # options, because the configuraiton options come from a hash, and hash's
+    # order changes each time the program is compiled. I could parse the actual
+    # output with a regex or something, but as of now I'm not.
+    expect_send('1 5 9',
+        'checked prompt_for_other_options() specify some configuration options.');
+
+    # The weird regex is just so it can match any possible configuration option,
+    # because due to hashes being unordered I don't know which options are which
+    # numbers without complicated parsing that I'm not doing.
+    expect_like(qr/[\w .,?!]+/,
+        'checked prompt_for_other_options() received a specifc config option.');
+    expect_send('Some test value who cares',
+        'checked prompt_for_other_options() specify a specific config option.');
+
+    expect_like(qr/[\w .,?!]+/,
+        'checked prompt_for_other_options() received a specifc config option.');
+    expect_send('Some test value who cares',
+        'checked prompt_for_other_options() specify a specific config option.');
+
+    expect_like(qr/[\w .,?!]+/,
+        'checked prompt_for_other_options() received a specifc config option.');
+    expect_send('Some test value who cares',
+        'checked prompt_for_other_options() specify a specific config option.');
+
+    expect_quit();
     
 };
 
@@ -201,8 +252,11 @@ fetchware: append_options_to_fetchwarefile() was called with \$options that it
 does not support having a description for. Please call
 append_options_to_fetchwarefile() with the correct \$options, or add the new,
 missing option to append_options_to_fetchwarefile()'s internal
-\%config_file_description hash. \$options was:
-doesntexistever test 1 2 3.
+%config_file_description hash. \$options was:
+\$VAR1 = {
+          'doesntexistever' => 'test 1 2 3.'
+        };
+
 EOE
 
     append_options_to_fetchwarefile(
@@ -582,13 +636,91 @@ note("$fetchwarefile");
 };
 
 
-###BUGALERT### Actually implement this test.
-#subtest 'test cmd_new() success' => sub {
-    #skip_all_unless_release_testing();
-
-
-#};
+##BROKEN##subtest 'test cmd_new() success' => sub {
+##BROKEN##    skip_all_unless_release_testing();
+##BROKEN##
+##BROKEN##    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+##BROKEN##        unless eval {use Test::Expect; 1;};
+##BROKEN##
+##BROKEN##    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
+##BROKEN##    # something crazy like Test::Expect, this will have to be tested "manually."
+##BROKEN##    local $Term::UI::AUTOREPLY = 0;
+##BROKEN##    # Fix the "out of orderness" thanks to Test::Builder messing with
+##BROKEN##    # STD{OUT,ERR}.
+##BROKEN###    local $| = 1;
+##BROKEN##
+##BROKEN##    # Have Expect tell me what it's doing for easier debugging.
+##BROKEN##    $Expect::Exp_Internal = 1;
+##BROKEN##
+##BROKEN##    expect_run(
+##BROKEN##        command => 't/bin-fetchware-new-cmd_new',
+##BROKEN###        prompt => [-re => qr/((?<!\?  \[y\/N\]): |\? )/ms],
+##BROKEN##        #prompt => [-re => qr/(\?|:) \[y\/N\] |\? |: /ims],
+##BROKEN###        prompt => [-re => qr/((?:\?|:) \[y\/N\]: )|\? |: /i],
+##BROKEN##        prompt => [-re => qr/ \[y\/N\]: |\? |: /i],
+##BROKEN###        prompt => [-re => qr/\? \n/ims],
+##BROKEN##        quit => "\cC"
+##BROKEN##    );
+##BROKEN##
+##BROKEN##    # Have Expect restart its timeout anytime output is received. Should keep
+##BROKEN##    # expect from timeingout while it's waiting for Apache to compile.
+##BROKEN##    #my $exp = expect_handle();
+##BROKEN##    #$exp->restart_timeout_upon_receive(1);
+##BROKEN##
+##BROKEN##    # First test that the command produced the correct outout.
+##BROKEN##    expect_like(qr/Fetchware's new command is reasonably sophisticated, and is smart enough to/ms,
+##BROKEN##        'checked cmd_new() received correct name prompt');
+##BROKEN##
+##BROKEN##    expect_send('Apache',
+##BROKEN##        'check cmd_new() sent Apache as my name.');
+##BROKEN##
+##BROKEN##    expect_like(qr/Fetchware's heart and soul is its lookup_url. This is the configuration option/ms,
+##BROKEN##        'checked cmd_new() received lookup_url prompt.');
+##BROKEN##
+##BROKEN##    expect_send("$ENV{FETCHWARE_HTTP_LOOKUP_URL}",
+##BROKEN##        'checked cmd_new() say lookup_url.');
+##BROKEN##
+##BROKEN##    expect_like(qr/Fetchware requires you to please provide a mirror. This mirror is required,/ms,
+##BROKEN##        'checked cmd_new() received mirror prompt.');
+##BROKEN##
+##BROKEN##    expect_send("$ENV{FETCHWARE_HTTP_MIRROR_URL}",
+##BROKEN##        'checked cmd_new() say mirror.');
+##BROKEN##
+##BROKEN##    expect_like(qr/In addition to the one required mirror that you must define in order for/ms,
+##BROKEN##        'checked cmd_new() received more mirrors prompt.');
+##BROKEN##
+##BROKEN##    expect_send('N',
+##BROKEN##        'checked cmd_new() say N for more mirrors.');
+##BROKEN##
+##BROKEN##    #expect_like(qr!\[y/N\]|gpg digital signatures found. Using gpg verification.!ms,
+##BROKEN##    expect_like(qr!.*|gpg digital signatures found. Using gpg verification.!ms,
+##BROKEN##        'checked cmd_new() received filter prompt.');
+##BROKEN##
+##BROKEN##    expect_send('httpd-2.2',
+##BROKEN##        'checked cmd_new() say httpd-2.2 for filter option.');
+##BROKEN##
+##BROKEN##    expect_like(qr/Fetchware has many different configuration options that allow you to control its/ms,
+##BROKEN##        'checked cmd_new() received extra config prompt.');
+##BROKEN##
+##BROKEN##    expect_send('N',
+##BROKEN##        'checked cmd_new() say N for more config options prompt.');
+##BROKEN##
+##BROKEN##    expect_like(qr/Fetchware has now asked you all of the needed questions to determine what it/ms,
+##BROKEN##        'checked cmd_new() received edit config prompt.');
+##BROKEN##
+##BROKEN##    expect_send('N',
+##BROKEN##        'checked cmd_new() say N for edit config prompt.');
+##BROKEN##
+##BROKEN##    expect_like(qr/It is recommended that fetchware go ahead and install the program based on the/ms,
+##BROKEN##        'checked cmd_new() received install program prompt.');
+##BROKEN##
+##BROKEN##    # Say no to avoid actually installing Apache yet again.
+##BROKEN##    expect_send('N',
+##BROKEN##        'checked cmd_new() say N for install program prompt.');
+##BROKEN##
+##BROKEN##    expect_quit();
+##BROKEN##};
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
-#done_testing();
+#done_testing()

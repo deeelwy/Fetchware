@@ -49,6 +49,7 @@ our %EXPORT_TAGS = (
         just_filename
         do_nothing
         safe_open
+        forked
         drop_privs
         write_dropprivs_pipe
         read_dropprivs_pipe
@@ -345,8 +346,11 @@ EOD
     # specifying a mirror when using a local file:// URL makes no sense, and
     # requiring users to copy and paste the hostname of their lookup_url into a
     # mirror option is silly.
+use Test::More;
     my ($scheme, $auth, undef, undef, undef) =
         uri_split(config('lookup_url'));
+diag("SCHEME[$scheme]auth[$auth]");
+diag("LOOKUP_URL[" . config('lookup_url') ."]");
     # Skip adding the "hostname" for local (file://) url's, because they don't
     # have a hostname.
     if ($scheme ne 'file') {
@@ -1307,6 +1311,40 @@ EOD
 }
 
 
+{ # Begin drop_privs() and forked() closure.
+
+# Used by the %SIG handler in bin/fetchware to ensure that only the parent
+# process has forked or not.
+# The child will inherit this value, but it will not change it, because the
+# forked copy is not exec()'d, so this main "compile-time" code never runs again
+# in the child.
+my $parent_pid = $$;
+
+=head2 forked()
+
+    if (forked()) {
+        # We're the parent do something.
+    } else {
+        # We're the child skip doing the above something.
+    }
+
+forked() simply returns true if this is the original parent process that called
+drop_privs(), or returns false if this is the child instead.
+
+=cut
+
+sub forked {
+    # If my pid is the same as the saved $parent_pid, then I'm the parent, and I
+    # should return true.
+    if ($$ == $parent_pid) {
+        return $$;
+    # If not return false.
+    } else {
+        return;
+    }
+}
+
+
 =head2 drop_privs()
     
     my $output = drop_privs(sub {
@@ -1511,7 +1549,7 @@ pipe to send to the parent, and now it is unclear if the proper expected output
 has been received or not; therefore, we're just playing it safe and die()ing.
 EOD
         };
-
+        
         # Code below based on a cool forking idiom by Aristotle.
         # (http://blogs.perl.org/users/aristotle/2012/10/concise-fork-idiom.html)
         given ( scalar fork ) {
@@ -1607,6 +1645,8 @@ EOD
         return $dont_drop_privs->($child_code);
     }
 }
+
+} # Close forked() and drop_privs() bare block to hide a closeure.
 
 
 =head2 drop_privs() PIPE PARSING UTILITIES
@@ -1975,26 +2015,29 @@ sub cleanup_tempdir {
     msg 'Cleaning up temporary directory temporary directory.';
 
     # Close and unlock the fetchware semaphore lock file, 'fetchware.sem.'
-    close $fh_sem or die <<EOD;
+    if (defined $fh_sem) {
+        close $fh_sem or die <<EOD;
 App-Fetchware-Util: Huh? close() failed! Fetchware failed to close(\$fh_sem).
 Perhaps some one or something deleted it under us? Maybe a fetchware clean was
 run with the force flag (--force) while this other fetchware was running?
 OS error [$!].
 EOD
-    vmsg <<EOM;
+        vmsg <<EOM;
 Closed [fetchware.sem] filehandle to unlock this fetchware temporary directory from any
 fetchware clean runs.
 EOM
+    }
 
     # chdir to original_cwd() directory, so File::Temp can delete the tempdir.
     # This is necessary, because operating systems do not allow you to delete a
     # directory that a running program has as its cwd.
-
-    vmsg 'Changing directory to [@{[original_cwd()]}].';
-    chdir(original_cwd()) or die <<EOD;
+    if (defined(original_cwd())) {
+        vmsg 'Changing directory to [@{[original_cwd()]}].';
+        chdir(original_cwd()) or die <<EOD;
 App-Fetchware: run-time error. Fetchware failed to chdir() to
 [@{[original_cwd()]}]. See perldoc App::Fetchware.
 EOD
+    }
 
     # cleanup_tempdir() used to actually delete the temporary directory by using
     # File::Temp's cleanup() subroutine, but that subroutine deletes *all*
