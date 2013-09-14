@@ -23,6 +23,7 @@ use if is_os_type('Unix'), 'Privileges::Drop';
 use POSIX '_exit';
 use Sub::Mage;
 use URI::Split qw(uri_split uri_join);
+use Text::ParseWords 'quotewords';
 
 # Enable Perl 6 knockoffs, and use 5.10.1, because smartmatching and other
 # things in 5.10 were changed in 5.10.1+.
@@ -191,10 +192,15 @@ because run_prog() properly checks if the user specified the quiet switch
 (C<-q>), and disables external commands from printing to C<STDOUT> if it has
 been enabled.
 
+=cut
+
 
 =head2 run_prog()
 
     run_prog($program, @args);
+
+    # Or let run_prog() deal with splitting the $command into multiple pieces.
+    run_prig($command);
 
 run_prog() uses L<system> to execute the program for you. Only the secure way of
 avoiding the shell is used, so you can not use any shell redirection or any
@@ -209,11 +215,22 @@ uses the safer shell avoiding syntax on systems with L<fork>, and systems
 without L<fork>, Windows,  the older less safe syntax is used. Backticks are
 avoided, because they always use the shell.
 
+run_prog() when called with only one argument will split that one argument into
+multiple pieces using L<Text::ParseWords> quotewords() subroutine, which
+properly deals with quotes just like the shell does. quotewords() is always used
+even if you provide an already split up list of arguments to run_prog().
+
 =cut
 
 ###BUGALERT### Add support for dry-run functionality!!!!
 sub run_prog {
-    my ($program, @args) = @_;
+    my (@args) = @_;
+
+    # Use Text::ParseWords quotewords() subroutine to deal with spliting the
+    # arguments on whitespace, and to properly quote and keep single and double
+    # quotes.
+    my $program;
+    ($program, @args) = map {quotewords('\s+', 1, $_)} @args;
 
     # If fetchware is run without -q.
     unless (defined $fetchware::quiet and $fetchware::quiet > 0) {

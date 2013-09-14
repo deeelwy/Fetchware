@@ -22,6 +22,7 @@ use Archive::Zip qw(:ERROR_CODES :CONSTANTS);
 use Cwd 'cwd';
 use Sub::Mage;
 use URI::Split qw(uri_split uri_join);
+use Text::ParseWords 'quotewords';
 
 use App::Fetchware::Util ':UTIL';
 use App::Fetchware::Config ':CONFIG';
@@ -134,6 +135,7 @@ our @EXPORT_OK = @{$EXPORT_TAGS{OVERRIDE_ALL}};
 
 ###BUGALERT### Add strict argument checking to App::Fetchware's API subroutines
 #to check for not being called correctly to aid extension debugging.
+
 =head1 FETCHWAREFILE API SUBROUTINES
 
 The subroutines below B<are> Fetchwarefile's API subroutines or helper
@@ -2385,7 +2387,6 @@ sub build {
 
     msg "Building your package in [$build_path]";
 
-    use Cwd;
     vmsg "changing Directory to build path [$build_path]";
     chdir $build_path or die <<EOD;
 App-Fetchware: run-time error. Failed to chdir to the directory fetchware
@@ -2471,13 +2472,11 @@ sub run_star_commands {
             # split on it, and run each resulting command.
             my @star_commands = split /,\s*/, $star_command;
             for my $split_star_command (@star_commands) {
-                my ($cmd, @options) = split ' ', $split_star_command;
-                run_prog($cmd, @options);
+                run_prog($split_star_command);
             }
         # Or just run the one command.
         } else {
-            my ($cmd, @options) = split ' ', $star_command;
-            run_prog($cmd, @options);
+            run_prog($star_command);
         }
     }
 }
@@ -2529,14 +2528,16 @@ Once in 'prefix' and once in 'configure_options'. You may only specify prefix
 once in either configure option. See perldoc App::Fetchware.
 EOD
         } else {
+            ###BUGALERT## At least under AutoTools, --prefix needs to be a full
+            #path. Should I check for this here? Ignore this possible error, and
+            #just let ./configure check its own arguments. Or add syntax
+            #checking to configuration subroutines???
             $configure .= " --prefix=@{[config('prefix')]}";
         }
     }
     
-    # Now lets execute the modifed standard commands.
-    # First ./configure.
-    my ($cmd, @options) = split ' ', $configure;
-    run_prog($cmd, @options);
+    # Finally run ./configure.
+    run_prog($configure);
 
     # Return success.
     return 'Configure successful'; 
@@ -3878,6 +3879,40 @@ of wallpaper listed on a Web page up to date.
 
 ###BUGALERT### Add an section of use cases. You know explaing why you'd use
 #no_install, or why'd you'd use look, or why And so on.....
+
+=head1 EXAMPLE FETCHWAREFILES
+
+Below are example Fetchwarefiles. They use a range of features to show you what
+Fetchware can do, and how it's Fetchwarefile can be manipulated to work with any
+source-code distribution.
+
+=head2 Apache Web Server
+
+This Apache Fetchwarefile includes a few extra mirrors just in case one is down.
+The fairly common C<-j 4> C<make_option> to make the build go faster, and a
+gigantic C<configure_options> telling C<./configure> excatly how I want my
+Apache built and configured.
+
+=over
+    use App::Fetchware;
+
+    program 'Apache';
+    lookup_url 'http://www.apache.org/dist/httpd/';
+    filter 'httpd-2.2';
+    mirror 'http://apache.mirrors.pair.com/httpd/';
+    mirror 'http://mirrors.ibiblio.org/apache/httpd/';
+    mirror 'ftp://apache.cs.utah.edu/apache.org/httpd/';
+
+    verify_method 'gpg';
+    gpg_keys_url 'http://www.apache.org/dist/httpd/KEYS';
+
+    make_options '-j 4';
+    prefix '/home/dly/software/apache2.2';
+    configure_options q{--with-mpm=prefork --enable-modules="access alias auth autoindex cgi logio log_config status vhost_alias userdir rewrite ssl" --enable-so};
+
+=back
+
+=cut
 
 
 =head1 CREATING A FETCHWARE EXTENSION
