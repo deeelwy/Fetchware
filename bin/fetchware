@@ -1768,7 +1768,11 @@ specified in the url options in this file is unavailable or times out.
 EOA
     );
 
-    my %description_seen;
+    # Ensure %description_seen keeps track across calls. NOTE: that this will
+    # cause bugs if more than one Fetchwarefile is created with cmd_new. But as
+    # long as only one Fetchwarefile is created per fetchware run, this
+    # limitation is ok.
+    state %description_seen;
     for my $opt (keys %$options) {
         if (defined $config_file_description{$opt}) {
             # If the description has not been written to the $fetchwarefile yet,
