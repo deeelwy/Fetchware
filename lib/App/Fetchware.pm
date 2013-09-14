@@ -3891,7 +3891,8 @@ source-code distribution.
 This Apache Fetchwarefile includes a few extra mirrors just in case one is down.
 The fairly common C<-j 4> C<make_option> to make the build go faster, and a
 gigantic C<configure_options> telling C<./configure> excatly how I want my
-Apache built and configured.
+Apache built and configured. It also uses a heredoc to make its
+C<configure_options> configuration option much more legible.
 
 =over
     use App::Fetchware;
@@ -3908,7 +3909,12 @@ Apache built and configured.
 
     make_options '-j 4';
     prefix '/home/dly/software/apache2.2';
-    configure_options q{--with-mpm=prefork --enable-modules="access alias auth autoindex cgi logio log_config status vhost_alias userdir rewrite ssl" --enable-so};
+    # You can use heredocs to make gigantic options like this one more legible.
+    configure_options <<EOO;
+    --with-mpm=prefork
+    --enable-modules="access alias auth autoindex cgi logio log_config status vhost_alias userdir rewrite ssl"
+    --enable-so
+    EOO
 
 =back
 
