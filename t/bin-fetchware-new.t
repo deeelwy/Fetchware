@@ -600,6 +600,9 @@ EOE
 
 subtest 'test ask_to_install_now_to_test_fetchwarefile success' => sub {
     skip_all_unless_release_testing();
+    unless ($< == 0 or $> == 0) {
+        plan skip_all => 'Test suite not being run as root.'
+    }
 
     # Create test Term::UI object.
     my $term = Term::ReadLine->new('fetchware');

@@ -30,19 +30,18 @@ my $current_file_list =
 ];
 
 my $term = Term::ReadLine->new('testing fetchware new');
-my @options = determine_mandatory_options($term, $current_file_list);
 
-# Turn @options into a hash to abuse a hash's properties to make testing that
-# @options is a correct fake list pseudo hash easier.
-my %options = @options;
+my $fetchwarefile = "# Test fetchwarefile";
+
+my $lookup_url = $ENV{FETCHWARE_HTTP_LOOKUP_URL};
+
+determine_mandatory_options($term, $current_file_list, $lookup_url, \$fetchwarefile);
+
 
 # Ensure all keys are 'mirror'.
-like($_, qr/mirror|gpg_keys_url|user_keyring|verify_method|verify_failure_ok/,
-    'checked add_mirrors() key success.')
-    for keys %options;
-# And all values are URLs.
-like($_, qr!^(ftp|http|file)://!, 'checked add_mirrors() success.')
-    for values %options;
+like($fetchwarefile, qr/$_/,
+    "checked determine_mandatory_options() [$_} success.")
+    for qw(mirror user_keyring verify_method);
 
 # Spit out # of tests run.
 done_testing();

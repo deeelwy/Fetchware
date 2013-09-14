@@ -30,15 +30,16 @@ my $current_file_list =
 ];
 
 my $term = Term::ReadLine->new('testing fetchware new');
-my $options = analyze_lookup_listing($term, $current_file_list);
 
-# Ensure all keys are 'mirror'.
-like($_, qr/mirror|gpg_keys_url|user_keyring|verify_method|verify_failure_ok/,
-    'checked analyze_lookup_listing() key success.')
-    for keys %$options;
-# And all values are URLs.
-ok(defined($_), 'checked analyze_lookup_listing() success.')
-    for values %$options;
+my $fetchwarefile = "# Test Fetchwarefile \n";
+
+my $lookup_url = $ENV{FETCHWARE_HTTP_LOOKUP_URL};
+
+my $options = analyze_lookup_listing($term, $current_file_list, $lookup_url, \$fetchwarefile);
+
+like($fetchwarefile, qr/$_/,
+    "checked analyze_lookup_listing() key [$_]success.")
+    for qw(mirror user_keyring verify_method);
 
 # Spit out # of tests run.
 done_testing();

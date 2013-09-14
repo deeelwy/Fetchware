@@ -29,19 +29,14 @@ my $current_file_list =
 ];
 
 my $term = Term::ReadLine->new('testing fetchware new');
-my @options = determine_filter_option($term, $current_file_list);
+my $fetchwarefile = "# Test Fetchwarefile";
+determine_filter_option($term, $current_file_list, \$fetchwarefile);
 
-# Turn @options into a hash to abuse a hash's properties to make testing that
-# @options is a correct fake list pseudo hash easier.
-my %options = @options;
+like($fetchwarefile, qr/^filter/ms,
+    'checked determine_filter_option() key success.');
 
-# Ensure all keys are correct.
-like($_, qr/filter/,
-    'checked determine_filter_option() key success.')
-    for keys %options;
-# And all values are URLs.
-ok(defined($_), 'checked determine_filter_option() success.')
-    for values %options;
+like($fetchwarefile, qr/httpd-2.2/ms,
+    'checked determine_filter_option() success.');
 
 # Spit out # of tests run.
 done_testing();

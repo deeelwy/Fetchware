@@ -596,11 +596,8 @@ EOF
         vmsg "Downloaded lookup_url's directory listing";
         vmsg Dumper($filename_listing);
 
-        my $config_options = analyze_lookup_listing($term, $filename_listing,
-            $lookup_url);
-
-        # Append $config_options to P_fetchwarefile.
-        append_options_to_fetchwarefile($config_options, \$P_fetchwarefile);
+        analyze_lookup_listing($term, $filename_listing, $lookup_url,
+            \$P_fetchwarefile);
 
         ###BUGALERT### Ask to parrallelize make with make_options???
         ###BUGALERT### Verify prefix is writable by current user, who will
@@ -841,19 +838,16 @@ EOD
 
 =head3 analyze_lookup_listing()
 
-    my $filter = analyze_lookup_listing($term, $filename_listing, $lookup_url);
+    analyze_lookup_listing($term, $filename_listing, $lookup_url, $fetchwarefile);
 
 Calls numerous subroutines to analyze the $filename_listing to determine what
 mandatory configuration file options should be, and if any optional
 configuration file options may be needed such as C<filter>.
 
 The helper subroutines that analyze_lookup_listing() calls must follow the
-proper API. They should take $term and $filename_listing parameters, and return
-a faux hash list of %options that analyze_lookup_listing() will then concatenate
-this list of %options with all of the other subroutines it calls. Afterward,
-analyze_lookup_listing() will return this giant concatenated faux hash list of
-%options to its caller, who will then call append_options_to_fetchwarefile() to
-add these options to the user's Fetchwarefile.
+proper API. These helper subroutines are called, and are expected to use their
+$fetchwarefile argument to call append_options_to_fetchwarefile() directly to
+directly add their options to the user's $fetchwarefile.
 
 =cut
 
@@ -862,16 +856,11 @@ sub analyze_lookup_listing {
     # $filename_listing is an array of [$filename, $timestamp] arrays.
     my $filename_listing = shift;
     my $lookup_url = shift;
+    my $fetchwarefile = shift;
     
-    my @options;
-    push @options, determine_mandatory_options($term, $filename_listing,
-        $lookup_url);
-    push @options, determine_filter_option($term, $filename_listing);
-
-    # Turn @options into a hash.
-    my %options = @options;
-
-    return \%options;
+    determine_mandatory_options($term, $filename_listing, $lookup_url,
+        $fetchwarefile);
+    determine_filter_option($term, $filename_listing, $fetchwarefile);
 }
 
 
@@ -899,21 +888,19 @@ sub determine_mandatory_options {
     my $filename_listing = shift;
     # add_verification() needs $lookup_url.
     my $lookup_url = shift;
+    my $fetchwarefile = shift;
 
     # program and lookup_url were defined earlier, so the only other mandatory
     # options are at least one mirror (but more are allowed, and some way to
     # verify downloads.
-    my @options;
-    push @options, add_mirrors($term, $filename_listing);
-    push @options, add_verification($term, $filename_listing, $lookup_url);
-
-    return @options;
+    add_mirrors($term, $filename_listing, $fetchwarefile);
+    add_verification($term, $filename_listing, $lookup_url, $fetchwarefile);
 }
 
 
 =head3 add_mirrors()
 
-    add_mirrors($term, $filename_listing);
+    add_mirrors($term, $filename_listing, $fetchwarefile);
 
 Asks the user to specify at least one mirror to use to download their archives.
 It also reiterates to the user that the C<lookup_url> should point to the
@@ -925,16 +912,14 @@ After the user enters at least one mirror, add_mirrors() asks the user if they
 would like to add any additional mirrors, and it adds them if the user specifies
 them.
 
-add_mirrors() then returns a faux hash list of key value pairs that
-determine_mandatory_options() will then forward along back to its caller, which
-will presumably use append_options_to_fetchwarefile() to add these options to
-the user's Fetchwarefile.
+add_mirrors() then uses append_options_to_fetchwarefile() to add these options to
+the user's $fetchwarefile.
 
 
 =cut
 
 sub add_mirrors {
-    my ($term, $filename_listing) = @_;
+    my ($term, $filename_listing, $fetchwarefile) = @_;
 
     my @options;
 
@@ -953,7 +938,8 @@ EOP
         allow => qr!^(ftp|http|file)://!,
     );
 
-    push @options, mirror => $mirror;
+    # Append mirror to $fetchwarefile.
+    append_options_to_fetchwarefile({mirror => $mirror}, $fetchwarefile);
 
     if (
         $term->ask_yn(
@@ -976,6 +962,9 @@ EOP
             );
             push @options, 'mirror', $first_mirror;
 
+            # Append $first_mirror to $fetchwarefile.
+            append_options_to_fetchwarefile({mirror => $first_mirror}, $fetchwarefile);
+
         while (1) {
             my $mirror_or_done = $term->get_reply(
                 prompt => 'Type in URL of mirror or done to continue: ',
@@ -986,18 +975,18 @@ EOP
                 when ('done') {
                     last;
                 } default {
-                    push @options, 'mirror', $mirror_or_done;
+                    # Append $mirror_or_done to $fetchwarefile.
+                    append_options_to_fetchwarefile({mirror => $mirror_or_done}, $fetchwarefile);
                 }
             }
         }
     }
-    return @options;
 }
 
 
 =head3 add_verification()
 
-    my @options = add_verification($term, $filename_listing, $lookup_url);
+    add_verification($term, $filename_listing, $lookup_url, $fetchwarefile);
 
 Parses $filename_listing to determine what type of verification is available.
 Prefering gpg, but falling back on sha1, and then md5 if gpg is not available.
@@ -1020,10 +1009,13 @@ If no verification methods are available, fetchware will print a big nasty
 warning message, and offer to use C<verify_failure_ok> to make such a failure
 cause fetchware to continue installing your software.
 
+Adds all of the determined options to $fetchwarefile using
+append_options_to_fetchwarefile().
+
 =cut
 
 sub add_verification {
-    my ($term, $filename_listing, $lookup_url) = @_;
+    my ($term, $filename_listing, $lookup_url, $fetchwarefile) = @_;
 
     my @options;
 
@@ -1174,13 +1166,15 @@ EOD
             }
         }
     }
-    return @options;
+
+    # Append @options to $fetchwarefile.
+    append_options_to_fetchwarefile({@options}, $fetchwarefile);
 }
 
 
 =head3 determine_filter_option()
 
-    my @options = determine_filter_option($term, $filename_listing);
+    determine_filter_option($term, $filename_listing, $fetchwarefile);
 
 Analyzes $filename_listing and asks the user whatever questions are needed by
 fetchware to determine if a C<filter> configuration option is needed, and if it
@@ -1189,12 +1183,16 @@ that fetchware downloads is checked against, and only files that match this
 regex will fetchware consider to be the latest version of the software package
 that you want to install.
 
+If a filter option was provided append_options_to_fetchwarefile() is used to
+append the provided filter option to the user's $fetchwarefile.
+
 =cut
 
 sub determine_filter_option {
     my $term = shift;
     # $filename_listing is an array of [$filename, $timestamp] arrays.
     my $filename_listing = shift;
+    my $fetchwarefile = shift;
     msg <<EOS;
 Analyzing the lookup_url you provided to determine if fetchware can use it to
 successfully determine when new versions of your software are released.
@@ -1268,9 +1266,9 @@ EOP
         #ctrl-c|z.
     }
 
-    # Must return a faux hash list of the @options determine_filter_option()
-    # actually determined, but only if $filter is define.
-    defined $filter ? return 'filter', $filter : return ();
+    # Append $filter to $fetchwarefile.
+    append_options_to_fetchwarefile({filter => $filter}, $fetchwarefile)
+        if defined $filter;
 }
 
 
@@ -1393,7 +1391,7 @@ EOP
         },
         prefix => {
             prompt => <<EOP,
-What prompt configuration option would you like? 
+What prefix configuration option would you like? 
 EOP
             print_me => <<EOP
 prefix specifies the base path that will be used to install this software. The
@@ -1759,7 +1757,7 @@ install software that may have been compromised, or had malware inserted into
 it. Never use this option unless the author or maintainer of this program does
 not gpg sign or checksum his software.
 EOA
-        users_keyring => <<EOA,
+        user_keyring => <<EOA,
 users_keyring if enabled causes fetchware to use the user's own gpg keyring
 instead of fetchware's own keyring.
 EOA

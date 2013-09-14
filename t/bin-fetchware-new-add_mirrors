@@ -30,18 +30,17 @@ my $current_file_list =
 ];
 
 my $term = Term::ReadLine->new('testing fetchware new');
-my @options = add_mirrors($term, $current_file_list);
 
-# Turn @options into a hash to abuse a hash's properties to make testing that
-# @options is a correct fake list pseudo hash easier.
-my %options = @options;
+my $fetchwarefile = "# Test Fetchwarefile\n";
+
+add_mirrors($term, $current_file_list, \$fetchwarefile);
 
 # Ensure all keys are 'mirror'.
-is($_, 'mirror', 'checked add_mirrors() key success.')
-    for keys %options;
+like($fetchwarefile, qr/mirror/ms, 'checked add_mirrors() key success.');
+
 # And all values are URLs.
-like($_, qr!^(ftp|http|file)://!, 'checked add_mirrors() success.')
-    for values %options;
+like($fetchwarefile, qr!(ftp|http|file)://!ms,
+    'checked add_mirrors() success.');
 
 # Spit out # of tests run.
 done_testing();

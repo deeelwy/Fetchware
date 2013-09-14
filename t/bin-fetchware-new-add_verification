@@ -30,18 +30,18 @@ my $current_file_list =
 ];
 
 my $term = Term::ReadLine->new('testing fetchware new');
-my @options = add_verification($term, $current_file_list);
 
-# Turn @options into a hash to abuse a hash's properties to make testing that
-# @options is a correct fake list pseudo hash easier.
-my %options = @options;
+my $fetchwarefile = "# Test fetchwarefile";
 
-# Ensure all keys are 'mirror'.
-is($_, 'mirror', 'checked add_mirrors() key success.')
-    for keys %options;
-# And all values are URLs.
-like($_, qr!^(ftp|http|file)://!, 'checked add_mirrors() success.')
-    for values %options;
+my $lookup_url = $ENV{FETCHWARE_HTTP_LOOKUP_URL};
+
+add_verification($term, $current_file_list, $lookup_url, \$fetchwarefile);
+
+like($fetchwarefile, qr/user_keyring/ms,
+    'checked add_verification() key success.');
+
+like($fetchwarefile, qr/verify_method/ms,
+    'checked add_verification method sucess.');
 
 # Spit out # of tests run.
 done_testing();
