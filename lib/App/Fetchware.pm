@@ -1574,27 +1574,25 @@ location of where the C<.asc> digital signature is stored.
 sub gpg_verify {
     my $download_path = shift;
 
-
-    # Determine @gpg_options for use when running gpg.
     my @gpg_options;
-    push @gpg_options, '--homedir', '.' unless config('user_keyring');
-
-    ## Attempt to download KEYS file in lookup_url's containing directory.
-    ## If that fails, try gpg_keys_url if defined.
-    ## Import downloaded KEYS file into a local gpg keyring using gpg command.
-    ## Determine what URL to use to download the signature file *only* from
-    ## lookup_url's host, so that we only download the signature from the
-    ## project's main mirror.
-    ## Download it.
+    my $keys_file;
+    # Attempt to download KEYS file in lookup_url's containing directory.
+    # If that fails, try gpg_keys_url if defined.
+    # Import downloaded KEYS file into a local gpg keyring using gpg command.
+    # Determine what URL to use to download the signature file *only* from
+    # lookup_url's host, so that we only download the signature from the
+    # project's main mirror.
+    # Download it.
     # gpg verify the sig using the downloaded and imported keys in our local
     # keyring.
 
     # Skip downloading and importing keys if we're called from inside a
-    # fetchware package, which should already have a copy of our package's KEYS
-    # file.
-    unless (-e './pubring.gpg' and -e './secring.gpg') {
+    # fetchware package, which should already have a copy of our package's
+    # KEYS file.
+    unless (config('user_keyring')
+        or (-e './pubring.gpg' and -e './secring.gpg')) {
+        push @gpg_options, '--home-dir', '.';
         # Obtain a KEYS file listing everyone's key that signs this distribution.
-        my $keys_file;
         if (defined config('gpg_keys_url')) {
             $keys_file = no_mirror_download_file(config('gpg_keys_url'));
         } else {
@@ -1612,9 +1610,14 @@ verify_failure_ok 'On'; to your Fetchwarefile. See perldoc App::Fetchware.
 EOD
         }
 
-        # Import downloaded KEYS file into a local gpg keyring using gpg command.
+        # Import downloaded KEYS file into a local gpg keyring using gpg
+        # command.
         eval {
-            run_prog('gpg', @gpg_options, '--import', $keys_file);
+            unless (config('user_keyring')) {
+                run_prog('gpg', @gpg_options, '--import', $keys_file);
+            } else {
+                run_prog('gpg', '--import', $keys_file);
+            }
             1;
         } or msg <<EOM;
 App-Fetchware: Warning: gpg exits nonzero when importing large KEY files such as
@@ -1703,7 +1706,11 @@ EOD
         #    '--homedir', '.',  "$sig_file");
 
         # Verify sig.
-        run_prog('gpg', @gpg_options, '--verify', "$sig_file");
+        unless (config('user_keyring')) {
+            run_prog('gpg', @gpg_options, '--verify', $sig_file);
+        } else {
+            run_prog('gpg', '--verify', $sig_file);
+        }
 ###BUGALERT###    }
 
     # Return true indicating the package was verified.
@@ -3915,6 +3922,70 @@ C<configure_options> configuration option much more legible.
     --enable-modules="access alias auth autoindex cgi logio log_config status vhost_alias userdir rewrite ssl"
     --enable-so
     EOO
+
+=back
+
+
+=head2 NGINX Web Server
+
+nginx has its distribution set up differently than Apache, so some changes are
+needed. First, nginx does not seem to use any mirrors at all, which means
+nginx's Fetchwarefile is going to look kind of stupid with the same exact URL
+being used for both the C<lookup_url> and the C<mirror>, but such aconfiguration
+is supported. Next, nginx does not have a KEYS file, but it does list it's
+developer's keys on its Website. So, they have to be imported manually into your
+keyring, and then specify the C<user_keyring> option to switch fetchware from
+usings its own keyring to using your own keyring. Also, note the comment
+regarding having to use the C<user> option to specify a real user account. This
+is needed, because the verify step is done by fetchware's child after that child
+drops its root privileges. This default user is nobody, and nobody has no real
+home, so gpg won't be able to read the keys you ask it to by using the
+C<user_keyring> option; therefore, user must be specified to change it to a real
+user. Also, worth noting that this nginx configuration does not use a C<filter>
+option. This is not actually needed, because the only source-code packages
+availabe at the C<lookup_url> are the nginx software packages themselves, but it
+might be a good idea to include them, because the nginx developers could always
+change how their download server is structured. So, including it is always a
+good idea.
+
+=over
+
+    use App::Fetchware;
+    
+    program 'nginx';
+    
+    # lookup_url and mirror are the same thing, because nginx does not seem to have
+    # mirrors. Fetchware, however, requires one, so the same URL is simply
+    # duplicated.
+    lookup_url 'http://nginx.org/download/';
+    mirror 'http://nginx.org/download/';
+    
+    
+    # Must add the developers public keys to my own keyring. These keys are
+    # availabe from http://nginx.org/en/pgp_keys.html Do this with:
+    # gpg \
+    # --fetch-keys http://nginx.org/keys/aalexeev.key\
+    # --fetch-keys http://nginx.org/keys/is.key\
+    # --fetch-keys http://nginx.org/keys/mdounin.key\
+    # --fetch-keys http://nginx.org/keys/maxim.key\
+    # --fetch-keys http://nginx.org/keys/sb.key\
+    # --fetch-keys http://nginx.org/keys/glebius.key\
+    # --fetch-keys http://nginx.org/keys/nginx_signing.key
+    # You might think you could just set gpg_keys_url to the nginx-signing.key key,
+    # but that won't work, because like apache different releases are signed by
+    # different people. Perhaps I could change gpg_keys_url to be like mirror where
+    # you can specify more than one option?
+    user_keyring 'On';
+    # user_keyring specifies to use the user's own keyring instead of fetchware's.
+    # But fetchware drops privileges by default using he user 'nobody.' nobody is
+    # nobody, so that user account does not have a home directory for gpg to read a
+    # keyring from. Therefore, I'm using my own account instead.
+    user 'dly';
+    # The other option, which is commented out below, is to use root's own keyring,
+    # and the no_install option to ensure that root uses its own keyring instead of
+    # nobody's.
+    # noinstall 'On';
+    verify_method 'gpg';
 
 =back
 

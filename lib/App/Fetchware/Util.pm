@@ -2013,7 +2013,7 @@ EOM
     # This is necessary, because operating systems do not allow you to delete a
     # directory that a running program has as its cwd.
     if (defined(original_cwd())) {
-        vmsg 'Changing directory to [@{[original_cwd()]}].';
+        vmsg "Changing directory to [@{[original_cwd()]}].";
         chdir(original_cwd()) or die <<EOD;
 App-Fetchware: run-time error. Fetchware failed to chdir() to
 [@{[original_cwd()]}]. See perldoc App::Fetchware.

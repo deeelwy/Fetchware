@@ -1,0 +1,39 @@
+use App::Fetchware;
+
+program 'nginx';
+
+# lookup_url and mirror are the same thing, because nginx does not seem to have
+# mirrors. Fetchware, however, requires one, so the same URL is simply
+# duplicated.
+lookup_url 'http://nginx.org/download/';
+mirror 'http://nginx.org/download/';
+
+
+# Must add the developers public keys to my own keyring. Do this with:
+# gpg \
+# --fetch-keys http://nginx.org/keys/aalexeev.key\
+# --fetch-keys http://nginx.org/keys/is.key\
+# --fetch-keys http://nginx.org/keys/mdounin.key\
+# --fetch-keys http://nginx.org/keys/maxim.key\
+# --fetch-keys http://nginx.org/keys/sb.key\
+# --fetch-keys http://nginx.org/keys/glebius.key\
+# --fetch-keys http://nginx.org/keys/nginx_signing.key
+# You might think you could just set gpg_keys_url to the nginx-signing.key key,
+# but that won't work, because like apache different releases are signed by
+# different people. Perhaps I could change gpg_keys_url to be like mirror where
+# you can specify more than one option?
+user_keyring 'On';
+# user_keyring specifies to use the user's own keyring instead of fetchware's.
+# But fetchware drops privileges by default using he user 'nobody.' nobody is
+# nobody, so that user account does not have a home directory for gpg to read a
+# keyring from. Therefore, I'm using my own account instead.
+user 'dly';
+# The other option, which is commented out below, is to use root's own keyring,
+# and the no_install option to ensure that root uses its own keyring instead of
+# nobody's.
+# noinstall 'On';
+verify_method 'gpg';
+
+# There are other things in the mirror that could mess this up. These with the
+# below filter, and without it!!!!!!!
+filter 'nginx';
