@@ -3989,6 +3989,221 @@ good idea.
 
 =back
 
+
+=head2 PHP Programming Language
+
+PHP annoyingly uses a custom Web application on each of its mirror sites to
+server HTTP downloads. No simple directory listing is available. Therefore, to
+use php with fetchware, custom C<lookup>, C<download>, and C<verify> hooks are
+needed that override fetchware's internal behavior to customize fetchware as
+needed so that it can work with how PHP's site is up.
+
+The C<lookup> hook downloads and parses the L<http://www.php.net/downloads.php>
+page, which lists files availabe for download. This file is parsed using
+L<HTML::TreeBuilder> to determine the latest version. The MD5 sum is also parsed
+out to verify the downloaded file as well.
+
+The C<download> hook is only needed, because http_download_file() presumes that
+the last part of the path is the filename you're downloading. And this is
+annoyingly not the case with the way PHP has its downloading system set up.
+
+The C<verify> hook just uses L<Digest::MD5> to calculate the md5sum of the
+downloaded file, and compares it with the one C<lookup> parses out.
+
+=over
+
+    use App::Fetchware qw(
+        :OVERRIDE_LOOKUP
+        :OVERRIDE_DOWNLOAD
+        :OVERRIDE_VERIFY
+        :DEFAULT
+    );
+    use App::Fetchware::Util ':UTIL';
+    use HTML::TreeBuilder;
+    use URI::Split qw(uri_split uri_join);
+    use Data::Dumper;
+    use HTTP::Tiny;
+    
+    program 'php';
+    
+    lookup_url 'http://us1.php.net/downloads.php';
+    mirror 'http://us1.php.net';
+    mirror 'http://us2.php.net';
+    mirror 'http://www.php.net';
+    
+    # php does *not* use a standard http or ftp mirrors for downloads. Instead, it
+    # uses its Web site, and some sort of application to download files using URLs
+    # such as: http://us1.php.net/get/php-5.5.3.tar.bz2/from/this/mirror
+    #
+    # Bizarrely a URL like
+    # http://us1.php.net/get/php-5.5.3.tar.bz2/from/us2.php.net/mirror
+    # gets you the same page, but on a different mirror. Weirdly, these are direct
+    # downloads without any HTTP redirects using 300 codes, but direct downloads.
+    # 
+    # This is why using fetchware with php you needs a custom lookup handler.
+    # The files you download are resolved to a [http://us1.php.net/distributions/...]
+    # directory, but trying to access a apache styple auto index at that url fails
+    # with a rediret back to downloads.php.
+    my $md5sum;
+    hook lookup => sub {
+        die <<EOD unless config('lookup_url') =~ m!^http://!;
+    php.Fetchwarefile: Only http:// lookup_url's and mirrors are supported. Please
+    only specify a http lookup_url or mirror.
+    EOD
+    
+        msg "Downloading lookup_url [@{[config('lookup_url')]}].";
+        my $dir_list = download_dirlist(config('lookup_url'));
+    
+        vmsg "Parsing HTML page listing php releases.";
+        my $tree = HTML::TreeBuilder->new_from_content($dir_list);
+    
+        # This parsing code assumes that the latest version of php is the first one
+        # we find, which seems like a dependency that's unlikely to change.
+        my $download_path;
+        $tree->look_down(
+            _tag => 'a',
+            sub {
+                my $h = shift;
+                
+                my $link = $h->as_text();
+    
+                # Is the link a php download link or something to ignore.
+                if ($link =~ /tar\.(gz|bz2|xz)|(tgz|tbz2|txz)/) {
+    
+                    # Set $download_path to this tags href, which should be
+                    # something like: /get/php-5.5.3.tar.bz2/from/a/mirror
+                    if (exists $h->{href} and defined $h->{href}) {
+                        $download_path = $h->{href};
+                    } else {
+                        die <<EOD;
+    php.Fetchwarefile: A path should be found in this link [$link], but there is no
+    path it in. No href [$h->{href}].
+    EOD
+                    }
+    
+                    # Find and save the $md5sum for the verify hook below.
+                    # It should be 3 elements over, so it should be the third index
+                    # in the @right array below (remember to start counting 2 0.).
+                    my @right = $h->right();
+                    my $md5_span_tag = $right[2];
+                    $md5sum = $md5_span_tag->as_text();
+                    $md5sum =~ s/md5:\s+//; # Ditch md5 header.
+                }
+            }
+        );
+    
+        # Delete the $tree, so perl can garbage collect it.
+        $tree = $tree->delete;
+    
+        # Determine and return a properl $download_path.
+        # Switch it from [/from/a/mirror] to [/from/this/mirror], so the mirror will
+        # actually return the file to download.
+        $download_path =~ s!/a/!/this/!;
+    
+        vmsg "Determined download path to be [$download_path]";
+        return $download_path;
+    };
+    
+    
+    # I also must hook download(), because fetchware presumes that the filename of
+    # the downloaded file is the last part of the $path, but that is not the case
+    # with the path php uses for file downloads, because it ends in mirror, which is
+    # *not* the name of the file; therefore, I must  hook download() to fix this
+    # problem.
+    hook download => sub {
+        my ($temp_dir, $download_path) = @_;
+    
+        my $http = HTTP::Tiny->new();
+        my $response;
+        for my $mirror (config('mirror')) {
+            my ($scheme, $auth, $path, $query, $fragment) = uri_split($mirror);
+            my $url = uri_join($scheme, $auth, $download_path, undef, undef);
+            msg <<EOM;
+    Downloading path [$download_path] using mirror [$mirror].
+    EOM
+            $response = $http->get($url);
+            
+            # Only download it once.
+            last if $response->{success};
+        }
+    
+        die <<EOD unless $response->{success};
+    php.Fetchwarefile: Failed to download the download path [$download_path] using
+    the mirrors [@{[config('mirror')]}]. The response was:
+    [@{[Dumper($response->{headers})]}].
+    EOD
+        die <<EOD unless length $response->{content};
+    php.Fetchwarefile: Didn't actually download anything. The length of what was
+    downloaded is zero. status [$response->{status}] reason [$response->{reason}]
+    HTTP headers [@{[Dumper($response->{headers})]}].
+    EOD
+    
+        msg 'File downloaded successfully.';
+    
+        # Determine $filename from $download_path
+        my @paths = split('/', $download_path);
+        my ($filename) = grep /php/, @paths;
+    
+        vmsg "Filename determined to be [$filename]";
+    
+        open(my $fh, '>', $filename) or die <<EOD;
+    php.Fetchwarefile: Failed to open [$filename] for writing. OS error [$!].
+    EOD
+    
+        print $fh $response->{content};
+        close $fh or die <<EOD;
+    php.Fetchwarefile: Huh close($filename) failed! OS error [$!].
+    EOD
+    
+        my $package_path = determine_package_path($temp_dir, $filename);
+    
+        vmsg "Package path determined to be [$package_path].";
+    
+        return $package_path
+    };
+    
+    
+    # The above lookup hook parses out the md5sum on the php downloads.php web
+    # site, and stores it in $md5sum, which is used in the the verify hook below.
+    hook verify => sub {
+        # Don't need the $download_path, because lookup above did that work for us.
+        # $package_path is the actual php file that we need to ensure its md5
+        # matches the one lookup determined.
+        my ($download_path, $package_path) = @_;
+    
+        msg "Verifying [$package_path] using md5.";
+    
+        dir <<EOD if not defined $md5sum;
+    php.Fetchwarefile: lookup failed to figure out the md5sum for verify to use to
+    verify that the php version [$package_path] matches the proper md5sum.
+    The md5sum was [$md5sum].
+    EOD
+    
+        my $package_fh = safe_open($package_path, <<EOD);
+    php.Fetchwarefile: Can not open the php package [$package_path]. The OS error
+    was [$!].
+    EOD
+    
+        # Calculate the downloaded php file's md5sum.
+        my $digest = Digest::MD5->new();
+        $digest->addfile($package_fh);
+        my $calculated_digest = $digest->hexdigest();
+    
+        die <<EOD unless $md5sum eq $calculated_digest;
+    php.Fetchwarefile: MD5sum comparison failed. The calculated md5sum
+    [$calculated_digest] does not match the one parsed of php.net's Web site
+    [$md5sum]! Do not trust this downloaded file! Perhaps there's a bug somewhere,
+    or perhaps the php mirror you downloaded this php package from has been hacked.
+    Mirrors do get hacked occasionally, so it is very much possible.
+    EOD
+    
+        msg "ms5sums [$md5sum] [$calculated_digest] match.";
+    
+        return 'Package Verified';
+    };
+
+=back
+
 =cut
 
 

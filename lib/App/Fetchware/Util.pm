@@ -1001,6 +1001,9 @@ sub download_http_url {
     my %opts = @_ if @_ % 2 == 0;
 
     my $http = HTTP::Tiny->new(%opts);
+    ###BUGALERT### Should use request() instead of get, because request can
+    #directly write the chunks of the file to disk as they are downloaded. get()
+    #just uses RAM, so a 50Meg file takes up 50 megs of ram, and so on.
     my $response = $http->get($http_url);
 
     die <<EOD unless $response->{success};
@@ -1010,12 +1013,6 @@ listingfrom your provided url [$http_url]. HTTP status code
 [@{[Data::Dumper::Dumper($response->{headers})]}].
 See man App::Fetchware.
 EOD
-
-
-    while (my ($k, $v) = each %{$response->{headers}}) {
-        for (ref $v eq 'ARRAY' ? @$v : $v) {
-        }
-    }
 
     # In this case the content is binary, so it will mess up your terminal.
     #diag($response->{content}) if length $response->{content};
@@ -1028,6 +1025,14 @@ EOD
     # Contains $response->{content}, which may be binary terminal killing
     # garbage.
     #diag explain $response;
+use Test::More;
+diag("RESPONSE OBJECT[");
+diag explain $response->{status};
+diag explain $response->{headers};
+diag explain $response->{url};
+diag explain $response->{reason};
+diag explain $response->{success};
+diag("]");
 
     # Must convert the worthless $response->{content} variable into a real file
     # on the filesystem. Note: start() should have cd()d us into a suitable
@@ -1039,6 +1044,7 @@ EOD
     # If $filename is empty string, then its probably a index directory listing.
     $filename ||= 'index.html';
     ###BUGALERT### Need binmode() on Windows???
+    ###BUGALERT### Switch to safe_open()????
     open(my $fh, '>', $filename) or die <<EOD;
 App-Fetchware: run-time error. Fetchware failed to open a file necessary for
 fetchware to store HTTP::Tiny's output. Os error [$!]. See perldoc
