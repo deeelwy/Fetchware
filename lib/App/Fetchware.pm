@@ -1970,18 +1970,6 @@ $build_path.
 
 =over
 
-=item LIMITATIONS
-Depends on Archive::Extract, so it is stuck with Archive::Extract's limitations.
-
-Archive::Extract prevents fetchware from checking if there is an absolute path
-in the archive, and throwing a fatal error, because Archive::Extract B<only>
-extracts files it gives you B<zero> chance of listing them except after you
-already extract them.
-
-=back
-
-=over
-
 =item drop_privs() NOTES
 
 This section notes whatever problems you might come accross implementing and
