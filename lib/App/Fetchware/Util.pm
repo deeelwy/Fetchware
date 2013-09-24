@@ -1335,7 +1335,7 @@ EOD
 
 
 =head2 drop_privs()
-    
+
     my $output = drop_privs(sub {
         my $write_pipe = shift;
         # Do stuff as $regular_user
