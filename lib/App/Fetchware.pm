@@ -2057,13 +2057,13 @@ sub list_files {
             vmsg <<EOM;
 Listing files in your tar format archive [$package_path].
 EOM
-            @files = list_files_tar($package_path); 
+            $files = list_files_tar($package_path); 
         } when (/\.zip$/) {
             $format = 'zip';
             vmsg <<EOM;
 Listing files in your zip format archive [$package_path].
 EOM
-            @files = list_files_zip($package_path); 
+            $files = list_files_zip($package_path); 
         } default {
             die <<EOD;
 App-Fetchware: Fetchware failed to determine what type of archive your
@@ -2073,10 +2073,8 @@ EOD
         }
     }
 
-    # return a reference, because @files could perhaps be a few thousand
-    # elements long.
     # unarchive_package() needs $format, so return that too.
-    return $format, \@files;
+    return $format, $files;
 }
 
 
@@ -2084,26 +2082,31 @@ EOD
 
     my $tar_file_listing = list_files_tar($path_to_tar_archive);
 
-Returns a list of file names that are found in the given, $path_to_tar_archive,
+Returns a arrayref of file names that are found in the given, $path_to_tar_archive,
 tar file. Throws an exception if there is an error.
+
+It uses C<Archive::Tar-E<&gt>iter()> to avoid reading the entire tar archive
+into memory.
 
 =cut
 
 sub list_files_tar {
     my $path_to_tar_archive = shift;
 
-    my $tar = Archive::Tar->new($path_to_tar_archive);
-    die <<EOD unless $tar->isa('Archive::Tar');
-App-Fetchware: fetchware failed to create a new Archive::Tar object, and read
-the contents of your archive [$path_to_tar_archive] into memory. The
+    my $tar_iter = Archive::Tar->iter($path_to_tar_archive, 1, );
+    die <<EOD unless defined $tar_iter;
+App-Fetchware: fetchware failed to create a new Archive::Tar iterator. The
 Archive::Tar error message was [@{[Archive::Tar->error()]}].
 EOD
 
-    # Use list_files() method to return a list of files.
-    # Pass in the weird special case of the 'name' inside an array ref to tell
-    # list_files() to return just a list of file names instead of a list of
-    # hashrefs.
-    return $tar->list_files(['name']);
+    # Iterate over the the archive one file at a time to save memory on big
+    # archives suchs a say MariaDB or the Linux kernel.
+    my @files;
+    while (my $file = $tar_iter->() ) {
+        push @files, $file->full_path();
+    }
+
+    return \@files;
 }
 
 
@@ -2122,7 +2125,7 @@ my %zip_error_codes = (
 
     my $zip_file_listing = list_files_zip($path_to_zip_archive);
 
-Returns a list of file names that are found in the given, $path_to_zip_archive,
+Returns a arrayref of file names that are found in the given, $path_to_zip_archive,
 zip file. Throws an exception if there is an error.
 
 =cut
@@ -2152,7 +2155,7 @@ EOD
     }
 
     # Return list of "external" filenames.
-    return @external_filenames;
+    return \@external_filenames;
 }
 
 
@@ -3981,7 +3984,7 @@ good idea.
 =head2 PHP Programming Language
 
 PHP annoyingly uses a custom Web application on each of its mirror sites to
-server HTTP downloads. No simple directory listing is available. Therefore, to
+serve HTTP downloads. No simple directory listing is available. Therefore, to
 use php with fetchware, custom C<lookup>, C<download>, and C<verify> hooks are
 needed that override fetchware's internal behavior to customize fetchware as
 needed so that it can work with how PHP's site is up.
