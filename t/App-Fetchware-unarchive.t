@@ -65,7 +65,8 @@ subtest 'test list_files_tar()' => sub {
     ok(-e $tar_package_path,
         'checked list_files_tar() download tar file successful.');
 
-    my @file_list = list_files_tar($tar_package_path);
+    my $file_list = list_files_tar($tar_package_path);
+    my @file_list = @$file_list;
     for my $expected (qw(
         README
         LAYOUT
@@ -89,7 +90,8 @@ subtest 'test list_files_zip()' => sub {
     ok(-e $zip_package_path,
         'checked list_files_zip() download zip file successful.');
 
-    my @file_list = list_files_zip($zip_package_path);
+    my $file_list = list_files_zip($zip_package_path);
+    my @file_list = @$file_list;
     for my $expected (qw(
         README
         NEWS

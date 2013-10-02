@@ -2049,7 +2049,7 @@ sub list_files {
     my $package_path = shift;
 
     # List files based on archive format.
-    my @files;
+    my $files;
     my $format;
     given ($package_path) {
         when(/\.(t(gz|bz|xz|Z))|(tar\.(gz|bz2|xz|Z))|.fpkg$/) {
