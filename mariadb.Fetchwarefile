@@ -1,0 +1,111 @@
+use App::Fetchware;
+use App::Fetchware::Util ':UTIL';
+
+# Mariadb does *not* use a simple standard mirroring setup of a master mirror
+# that I can use for my lookup_url, and several download mirrors for mirror
+# config options. So, instead, I must figure something else out.
+# php had this same problem, and I overcame it with screen scraping, and
+# judicious use of hook. For MariaDB, instead, I'm going to use a VCS checkout.
+#
+# MariaDB, unfortunately uses bzr, which is actually written in python, which is
+# insane. Doing an intitial bzr clone (using git's terminology) took 2 or 3
+# hours and 1.2 gits of ram, which is completely insane!!! However, the MariaDB
+# folks know this is a problem, so they provide a downloadable archive of a bzr
+# checkout, so you don't have to wait 3 hours or waste 1.2 gigs of ram.
+#
+# This is linked off of this page under "Source Tree Tarball":
+# https://mariadb.com/kb/en/getting-the-mariadb-source-code/
+#
+# First in order for this to work, this Fetchwarefile needs to know where your
+# bzr checkout is. Place this path in the $mariadb-bzr-repo variable below.
+my $mariadb_bzr_repo = '/home/dly/Desktop/Code/maria/trunk';
+
+# Must set the user to chroot to be the same as the user the files are in.
+#user 'dly';
+stay_root 'On';
+
+# Lookup needs to determine a proper $download_path and return it.
+hook lookup => sub {
+    chdir("$mariadb_bzr_repo") or die <<EOD;
+mariadb.Fetchwarefile: Failed to chdir to mariadb bzr repo [$mariadb_bzr_repo].
+OS error [$!].
+EOD
+    
+    # Update bzr repo so I can access the latest changes, and see if a newer
+    # tag (new version of mariadb) has been released.
+    run_prog("bzr pull");
+
+    # Get listing of tags.
+    my @tags = `bzr tags`;
+
+    # Strip garbage after the actual tags.
+    @tags = map { (split ' ', $_)[0] } @tags;
+
+    # Find latest version.
+    #
+    # Note: this $filter is just like Fetchware's. There is tons of stuff in
+    # mariadb's bzr tags output, so it's important to get this right. You should
+    # probably leave the "mariadb-" part in. But you could change the 5.5 to
+    # 10.0 if you want to check out the latest alpha version.
+    my $filter = qr/mariadb-5.5/;
+    
+    my @download_paths;
+    @download_paths = grep /$filter/, @tags;
+
+    # Copy & past versionstring algo from lookup_by_versionstring(), because
+    # that function is too specific to how fetchware works to be useful to
+    # anyone else. I'll have to fix that.
+    my @sort_tags;
+    for my $tag (@download_paths) {
+        my @split_tag = split /\D+/, $tag;
+        push @sort_tags, [$tag, (join '', @split_tag)];
+    }
+
+    my @sorted_tags = sort { $b->[1] <=> $a->[1] } @sort_tags;
+
+    # Return the first latest version from @sorted_tags.
+msg "SORTEDTAGS[$sorted_tags[0][0]]";
+    return $sorted_tags[0][0];
+};
+
+# Download needs to checkout the latest tag [$download_path] from bzr, and
+# return a proper $package_path.
+hook download => sub {
+    my ($temp_dir, $download_path) = @_;
+    # Note these hooks are not using a temp dir, because we can just do a bzr
+    # update, and throw away all changes.
+
+    # Checkout the tag using bzr's nomenclature.
+    run_prog("bzr update $download_path");
+
+    # The download is the repo.
+    return $mariadb_bzr_repo;
+};
+
+
+# Currently no verification is performed, because none exists. bzr has a
+# recently added feature called 'bzr verify-signatures' that verifies gpg sigs
+# of commits, but MariaDB does *not* use it, so I cannot verify the releases.
+hook verify => sub {
+    do_nothing();
+};
+
+
+# unarchive also does nothing, because there is nothing to unpack as it's already
+# unarchive.
+hook unarchive => sub {
+    do_nothing();
+
+    # But retrurn $mariadb_bzr_repo as $build_path, so that I can reuse build().
+    my $build_path = $mariadb_bzr_repo;
+    return $build_path;
+};
+
+
+# build MariaDB using one of it's BUILD scripts. If you want to build it
+# manually, you could change it to do so.
+# Just use a build_commands
+build_commands 'BUILD/compile-pentium64-max';
+
+# install. Awesomely the default make install is exactly what's called for, so I
+# don't need to customize install().
