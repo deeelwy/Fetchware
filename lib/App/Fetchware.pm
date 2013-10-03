@@ -4195,6 +4195,112 @@ downloaded file, and compares it with the one C<lookup> parses out.
 
 =back
 
+
+=head2 MariaDB Database
+
+This example MariaDB Fetchwarefile parses the MariaDB download page to determine
+what the latest version is based on what C<filter> option you set up. Once this
+is determined, the download path is created based on the weird path that MariaDB
+uses on its mirrors.
+
+Like PHP MariaDB uses some annoying software on their Web site to presumably
+track downloads. This software makes use of AJAX, which is vastly beyone the
+capabilities of HTML::TreeBuilder to parse, because it needs a working
+JavaScript environment. Therefore, the example Fetchwarefile below has no way of
+verifying the MySQL downloads. This could be fixed by using a Perl Web scraping
+module that can deal with JavaScript.
+
+=over
+
+    use App::Fetchware;
+    
+    program 'MariaDB';
+    
+    # MariaDB uses ccache, which wants to create a ~/.ccache cache, which it can't
+    # do when it's running as nobody, so use a real user account to ensure ccache
+    # has a cache directory it can write to.
+    user 'dly';
+    
+    lookup_url 'https://downloads.mariadb.org/';
+    
+    # Below are the two USA mirrors where I live. Customize them as you need based
+    # on the mirrors listed on the download page (https://downloads.mariadb.org/ and
+    # then click on which version you want, and then click on the various mirrors
+    # by country. All you need is the scheme (ftp:// or http:// part) and the
+    # hostname without a slash (ftp.osuosl.org or mirror.jmu.edu). Not the full path
+    # for each mirror.
+    mirror 'http://ftp.osuosl.org';
+    mirror 'http://mirror.jmu.edu';
+    
+    # The filter option is key to the custom lookup hook working correctly. It must
+    # represent the text that corresponds to the latest GA release of MariaDB
+    # available. It should be 'Download 5.5' for 5.5 or 'Download 10.0' for the
+    # newver but not GA 10.0 version of MariaDB.
+    filter 'Download 5.5';
+    
+    hook lookup => sub {
+        vmsg "Downloading HTML download page listing MariaDB releases.";
+        my $dir_list = http_download_dirlist(config('lookup_url'));
+    
+        vmsg "Parsing HTML page listing MariaDB releases.";
+        my $tree = HTML::TreeBuilder->new_from_content($dir_list);
+    
+        # This parsing code assumes that the latest version of php is the first one
+        # we find, which seems like a dependency that's unlikely to change.
+        my @version_number;
+        $tree->look_down(
+            _tag => 'a',
+            sub {
+                my $h = shift;
+                
+                my $link = $h->as_text();
+    
+                # Find the filter which should be "Download\s[LATESTVERSION]"
+                my $filter = config('filter');
+                if ($link =~ /$filter/) {
+                    # Parse out the version number.
+                    # It's just the second space separated field.
+                    push @version_number, (split ' ', $link)[1];
+                }
+            }
+        );
+    
+        # Delete the $tree, so perl can garbage collect it.
+        $tree = $tree->delete;
+    
+        # Only one version should be found.
+        die <<EOD if @version_number > 1;
+    mariaDB.Fetchwarefile: multiple version numbers detected. You should probably
+    refine your filter option and try again. Filter [@{[config('filter')]}].
+    Versions found [@version_number].
+    EOD
+    
+        # Construct a download path using $version_number[0].
+        my $filename = 'mariadb-' . $version_number[0] . '.tar.gz';
+    
+        # Return a proper $download_path, so That I do not have to hook download(),
+        # but can reuse Fetchware's download() subroutine.
+        my $weird_prefix = '/mariadb-' . $version_number[0] . '/kvm-tarbake-jaunty-x86/';
+        my $download_path = '/pub/mariadb' . $weird_prefix .$filename;
+        return $download_path;
+    };
+    
+    # Make verify() failing to verify MariaDB ok, because parsing out the MD5 sum
+    # would require a Web scraper that supports javascript, which HTML::TreeBuilder
+    # obviously does not.
+    verify_failure_ok 'On';
+    
+    # Use build_commands to configure fetchware to use MariaDB's BUILD script to
+    # build it.
+    build_commands 'BUILD/compile-pentium64-max';
+    
+    # Use install_commands to tell fetchware how to install it. I could leave this
+    # out, but it nicely documents what command is needed to install MariaDB
+    # properly.
+    install_commands 'make install';
+
+=back
+
 =cut
 
 
