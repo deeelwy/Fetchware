@@ -10,10 +10,10 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '11'; #Update if this changes.
+use Test::More 0.98 tests => '12'; #Update if this changes.
 use File::Copy 'cp';
 use Path::Class;
-use File::Spec::Functions 'rel2abs';
+use File::Spec::Functions qw(rel2abs catfile);
 use Cwd 'cwd';
 
 use App::Fetchware::Config ':CONFIG';
@@ -50,8 +50,6 @@ subtest 'OVERRIDE_BUILD exports what it should' => sub {
 subtest 'test run_star_commands() success' => sub {
     # Just user the 'perl' command itself as the command to run that way we
     # don't need to use different commands for different platforms.
-    # Use the $^X variable as an easy way to find it, so we don't have to worry
-    # about what $ENV{PATH} is
 
     # Test just one simple command.
     # NOTE: run_star_commands() returns 0 on success, and nonzero on failure
@@ -78,15 +76,18 @@ my $package_path;
 my $build_path;
 subtest 'Do build() prereqs.' => sub {
     skip_all_unless_release_testing();
-    # Needed my all other subtests.
-    $package_path = $ENV{FETCHWARE_LOCAL_BUILD_URL};
 
     # Call start() to create & cd to a tempdir, so end() called later can delete all
     # of the files that will be downloaded.
     start();
     # Copy the $ENV{FETCHWARE_LOCAL_URL}/$package_path file to the temp dir, which
     # is what download would normally do for fetchware.
-    cp("$package_path", '.') or die "copy $package_path failed: $!";
+    cp("$ENV{FETCHWARE_LOCAL_BUILD_URL}", '.')
+        or die "copy $package_path failed: $!";
+
+    # Determine the copied $package_path.
+    my $package_path = catfile(cwd(),
+        file($ENV{FETCHWARE_LOCAL_BUILD_URL})->basename());
 
     # I have to unarchive the package before I can build it.
     $build_path = unarchive($package_path);
@@ -177,6 +178,9 @@ subtest 'test build() build_commands' => sub {
 
     # Clean up after previous build() run.
     make_clean();
+    __clear_CONFIG();
+
+diag("CWD[@{[cwd()]}]");
 
     build_commands './configure, make';
     ok(build($build_path), 'checked build() build_command success.');
@@ -186,7 +190,7 @@ subtest 'test build() build_commands' => sub {
 
     config_delete('build_commands');
     build_commands './configure', 'make';
-    ok(build($build_path), 'checked build() build_command success.');
+    ok(build($build_path), 'checked build() build_command success again.');
 
     # Clear $CONFIG of build_commands for next subtest.
     config_delete('build_commands');
@@ -242,6 +246,39 @@ EOD
 };
 
 
+subtest 'test build() build_commands and other options exception' => sub {
+    skip_all_unless_release_testing();
+
+    my %other_build_opts = (
+        make_options => '-j 4',
+        configure_options => '--enable-etags',
+        prefix => '/usr/local',
+    );
+
+    # Set build_commands *and* any of the other build() options.
+    for my $other_build_opt (keys %other_build_opts) {
+        # Clean up after previous build() run.
+        __clear_CONFIG();
+
+        # Set build_commands.
+        build_commands './configure, make';
+
+        # Now set the current $other_build_opt;
+        # Just use config() to avoid using crazy symbolic references.
+        config($other_build_opt => $other_build_opts{$other_build_opt});
+
+        eval_ok(sub {build($build_path)},
+            <<EOE, "checked build() build_command($other_build_opt) exception.");
+App-Fetchware: You cannot specify any other build options when you specify
+build_commands, because build_commands overrides all of those other options.
+Please fix your Fetchwarefile by adding the other options in with your
+build_commands or remove the build_commands, and just use the other options if
+possible.
+EOE
+    }
+};
+
+
 
 # Do *not* clean up after previous build() run, because make was not actually
 # run.
@@ -249,6 +286,9 @@ EOD
 
 subtest 'test build() make_options success' => sub {
     skip_all_unless_release_testing();
+
+    # Clean up after previous build() run.
+    __clear_CONFIG();
 
     make_options '-j4';
     ok(build($build_path), 'checked build() make_options success.');

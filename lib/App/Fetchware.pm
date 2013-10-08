@@ -2383,12 +2383,27 @@ and install will then chdir to $build_path.
 sub build {
     my $build_path = shift;
 
+    # The other build options are ignored if build_commands is specified. This
+    # should be an error.
+    ###BUGALERT### When you implement check_syntax() move this there.
+    if ( (config('build_commands') and config('configure_options') )
+        or ( config('build_commands') and config('make_options') )
+        or ( config('build_commands') and config('prefix') ) ) {
+        die <<EOD;
+App-Fetchware: You cannot specify any other build options when you specify
+build_commands, because build_commands overrides all of those other options.
+Please fix your Fetchwarefile by adding the other options in with your
+build_commands or remove the build_commands, and just use the other options if
+possible.
+EOD
+    }
+
     msg "Building your package in [$build_path]";
 
     vmsg "changing Directory to build path [$build_path]";
     chdir $build_path or die <<EOD;
 App-Fetchware: run-time error. Failed to chdir to the directory fetchware
-unarchived [$build_path]. See perldoc App::Fetchware.
+unarchived [$build_path]. OS error [$!].
 EOD
 
 
