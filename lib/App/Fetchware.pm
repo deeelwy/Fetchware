@@ -814,6 +814,9 @@ Runs the C<lookup_method> to determine what the lastest filename is, and that
 one is then concatenated with C<lookup_url> to determine the $download_path,
 which is then returned to the caller.
 
+Also calls lookup_determine_downloadpath() to determine the actual download path
+from the $sorted_filename_listing returned by C<lookup_by_*()>.
+
 =over
 =item SIDE EFFECTS
 determine_download_path(); returns $download_path the path that download() will
@@ -828,18 +831,23 @@ sub determine_download_path {
 
     # Base lookup algorithm on lookup_method configuration sub if it was
     # specified.
+    my $sorted_filename_listing;
     given (config('lookup_method')) {
         when ('timestamp') {
-            return lookup_by_timestamp($filename_listing);
+            $sorted_filename_listing = lookup_by_timestamp($filename_listing);
         } when ('versionstring') {
-            return lookup_by_versionstring($filename_listing);
+            $sorted_filename_listing = lookup_by_versionstring($filename_listing);
         # Default is to just use timestamp although timestamp will call
         # versionstring if it can't figure it out, because all of the timestamps
         # are the same.
         } default {
-            return lookup_by_timestamp($filename_listing);
+            $sorted_filename_listing = lookup_by_timestamp($filename_listing);
         }
     }
+
+    # Manage duplicate timestamps apropriately including .md5, .asc, .txt files.
+    # And support some hacks to make lookup() more robust.
+    return lookup_determine_downloadpath($sorted_filename_listing);
 }
 
 
@@ -1092,12 +1100,7 @@ sub  lookup_by_timestamp {
     # year, then month, then day of the month, and so on.
     my @sorted_listing = sort { $b->[1] <=> $a->[1] } @$file_listing;
 
-    # Manage duplicate timestamps apropriately including .md5, .asc, .txt files.
-    # And support some hacks to make lookup() more robust.
-    ###BUGALERT### Refactor this containing sub to call the sub below, and
-    #another one called lookup_hacks() for example, or perhaps provide a
-    #callback for this :)
-    return lookup_determine_downloadpath(\@sorted_listing);
+    return \@sorted_listing;
 }
 
 
@@ -1106,10 +1109,18 @@ sub  lookup_by_timestamp {
     my $download_url = lookup_by_versionstring($filename_listing);
 
 Determines the $download_url used by download() by cleverly C<split>ing the
-filenames on C</\D+/>, which will return a list of version numbers. Then
-they're just sorted normally. And lookup_determine_downloadpath() is used to
-take the sorted $file_listing, and determine the actual $download_url, which is
-returned.
+filenames (the first value of the array of arrays input, $filename_listing) on
+C</\D+/>, which will return a list of version numbers. Then, the cleverly
+splitted filename is pushed on to the input array, and then the array is sorted
+based on this new value using a custom sort block.
+
+=over
+
+=item WARNING: This subroutine modifies its input array by added a new value to
+it's array of arrays input, so watch out, but ususally just the first or perhaps
+second value is used.
+
+=back
 
 =cut
 
@@ -1123,21 +1134,17 @@ sub  lookup_by_versionstring {
         #split the string!!!
         my @split_fl = split /\D+/, $fl->[0];
         # Join each digit into one "super digit"
-        $fl->[2] = join '', @split_fl;
+        push @$fl, (join '', @split_fl);
         # And sort below sorts them into highest number first order.
     }
 
     # Sort $file_listing by the versionstring, and but $b in front of $a to get
     # a reverse sort, which will put the "bigger", later version numbers before
     # the "lower", older ones.
-    @$file_listing = sort { $b->[2] <=> $a->[2] } @$file_listing;
+    @$file_listing = sort { $b->[-1] <=> $a->[-1] } @$file_listing;
     
 
-    ###BUGALERT### This action at a distance crap should get its own high-level
-    #subroutine at least vmsg determine_downloadurl inside lookup().
-    # Manage duplicate timestamps apropriately including .md5, .asc, .txt files.
-    # And support some hacks to make lookup() more robust.
-    return lookup_determine_downloadpath($file_listing);
+    return $file_listing;
 }
 
 
@@ -2339,6 +2346,9 @@ commands of C<'./configure', 'make', 'make install'> unless your Fetchwarefile
 specifies some build options like C<build_commands 'exact, build, commands';>,
 C<make_options '-j4';>, C<configure_options '--prefix=/usr/local';>, or
 C<prefix '/usr/local'>.
+
+You can only specify C<build_commands> or any of the other three build options.
+You cannot combine C<build_commands> with any of the other buidl options.
 
 =over
 
@@ -4206,6 +4216,174 @@ downloaded file, and compares it with the one C<lookup> parses out.
         msg "ms5sums [$md5sum] [$calculated_digest] match.";
     
         return 'Package Verified';
+    };
+
+=back
+
+
+=head2 PHP Programming Language using its git VCS instead of download mirrors.
+
+PHP like most open source software you can easily download off the internet uses
+a version control system to track changes to its source code. This source code
+repository is basically the same thing as a normal source code distribution
+would be except VCS commands like C<git pull> are used to update it instead of
+checking a mirror for a new version. The Fetchwarefile below for php customizes
+Fetchware to work with php's VCS instead of the traditional downloading of
+actual source code archives.
+
+It overrides lookup() to use a local git repo stored in the $git_repo_dir
+variable. To create a repo just clone php's git repo (see
+http://us1.php.net/git.php for details.). It runs git pull to update the repo,
+and then it runs git tags, and ditches some older junk tags, and finds only the
+tags used for new versions of php. These are sorted using the C<versonstring>
+lookup() algorithm, and the latest one is returned.
+
+download() uses C<git checkout [latesttag]> to "download" php by simply changing
+the working directory to the latest tag. verify() uses git's cool C<verify-tag>
+command to verify the gpg signature. unarchive() is updated to do nothing since
+there is not archvie to unarchive. However, because we reuse build(), archive()
+must return a $build_path that build() will change its directory to. start() and
+end() are also overridden, because managing a temporary directory is not needed,
+so, instead, they just do a C<git checkout master> to switch from whatever the
+latest tag is back to master, because git pull bases what it does on what branch
+you're in, so we must actually be a real branch to update git.
+
+=over
+
+    # php-using-git.Fetchwarefile: example fetchwarefile using php's git repo
+    # for lookup(), download(), and verify() functionality.
+    use App::Fetchware qw(:DEFAULT :OVERRIDE_LOOKUP);
+    use App::Fetchware::Util ':UTIL';
+    use Cwd 'cwd';
+    
+    # The directory where the php source code's local git repo is.
+    my $git_repo_dir = '/home/dly/Desktop/Code/php-src';
+    
+    # By default Fetchware drops privs, and since the source code repo is stored in
+    # the user dly's home directory, I should drop privs to dly, so that I have
+    # permission to access it.
+    user 'dly';
+    
+    # Turn on verify failure ok, because the current version as of this writing (php
+    # 5.4.5) is signed by someone who has not shared uploaded their gpg key to a
+    # keyserver somewhere making git verifgy-tag fail, because I can't find the key.
+    # Hopefully, php bug# 65840 will result in this being fixed.
+    verify_failure_ok 'On';
+    
+    # Determine latest version by using the tags developers create to determine the
+    # latest version.
+    hook lookup => sub {
+        # chdir to git repo.
+        chdir $git_repo_dir or die <<EOD;
+    php.Fetchwarefile: Failed to chdir to git repo at
+    [$git_repo_dir].
+    OS error [$!].
+    EOD
+    
+        # Pull latest changes from php git repo.
+        run_prog('git pull');
+    
+        # First determine latest version that is *not* a development version.
+        # And chomp off their newlines.
+        chomp(my @tags = `git tag`);
+    
+        # Now sort @tags for only ones that begin with 'php-'.
+        @tags = grep /^php-/, @tags;
+    
+        # Ditch release canidates (RC, alphas and betas.
+        @tags = grep { $_ !~ /(RC\d+|beta\d+|alpha\d+)$/ } @tags;
+    
+        # Sort the tags to find the latest one.
+        # This is quite brittle, but it works nicely.
+        @tags = sort { $b cmp $a } @tags;
+    
+        # Return $download_path, which is only just the latest tag, because that's
+        # all I need to know to download it using git by checking out the tag.
+        my $download_path = $tags[0];
+    
+    diag("DOWNLOADPATH[$tags[0]]");
+        return $download_path;
+    };
+    
+    
+    # Just checkout the latest tag to "download" it.
+    hook download => sub {
+        my ($temp_dir, $download_path) = @_;
+    
+        # The latest tag is the download path see lookup.
+        my $latest_tag = $download_path;
+    
+        # checkout the $latest_tag to download it.
+        run_prog('git checkout', "$latest_tag");
+    
+        my $package_path = cwd();
+        return $package_path;
+    };
+    
+    
+    # You must manually add php's developer's gpg keys to your gpg keyring. Do
+    # this by  going to the page: http://us1.php.net/downloads.php . At the
+    # bottom the gpg key "names are listed such as "7267B52D" or "5DA04B5D."
+    # These are their key "names." Use gpg to download them and import them into
+    # your keyring using: gpg --keyserver pgp.mit.edu --recv-keys [key id]
+    hook verify => sub {
+        my ($download_path, $package_path) = @_;
+    
+        # the latest tag is the download path see lookup.
+        my $latest_tag = $download_path;
+    
+        # Run git verify-tag to verify the latest tag
+        my $success = eval { run_prog('git verify-tag', "$latest_tag"); 1;};
+    
+        # If the git verify-tag fails, *and* verify_failure_ok has been turned on,
+        # then ignore the thrown exception, but print an annoying message.
+        unless (defined $success and $success) {
+            unless (config('verify_failure_ok')) {
+                msg <<EOM;
+    Verification failure ok, becuase you've configured fetchware to continue even
+    if it cannot verify its downloads. Please reconsider, because mirror and source
+    code repos do get hacked. The exception that was caught was:
+    [$@]
+    EOM
+            }
+        }
+    };
+    
+    
+    hook unarchive => sub {
+        # there is nothing to archive due to use of git.
+        do_nothing(); # But return the $build_path, which is the cwd().
+        my $build_path = $git_repo_dir;
+        return $build_path;
+    };
+    
+    # It's a git tag, so it lacks an already generated ./configure, so I must use
+    # ./buildconf to generate one. But it won't work on php releases, so I have to
+    # force it with --force to convince ./buildconf to run autoconf to generate the
+    # ./configure program to configure php for building.
+    build_commands './buildconf --force', './configure', 'make';
+
+    # Add any custom configure options that you may want to add to customize
+    # your build of php, or control what php extensions get built.
+    #configure_options '--whatever you --need ok';
+    
+    # start() creates a tempdir in most cases this is exactly what you want, but
+    # because this Fetchwarefile is using git instead. I don't need to bother with
+    # creating a temporary directory.
+    hook start => sub {
+        # But checkout master anyway that way the repo can be in a known good state
+        # so lookup()'s git pull can succeed.
+        run_prog('git checkout master');
+    };
+    
+    
+    # Switch the local php repo back to the master branch to make using it less
+    # crazy. Furthermore, when using git pull to update the repo git uses what
+    # branch your on, and if I've checked out a tag, I'm not actually on a branch
+    # anymore; therefore, I must switch back to master, so that the git pull when
+    # this fetchwarefile is run again will still work.
+    hook end => sub {
+        run_prog('git checkout master');
     };
 
 =back

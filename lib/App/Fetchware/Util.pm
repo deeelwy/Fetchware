@@ -226,6 +226,20 @@ even if you provide an already split up list of arguments to run_prog().
 sub run_prog {
     my (@args) = @_;
 
+    # Kill weird "Insecure dependency in system while running with -T switch."
+    # fatal exceptions by clearing the taint flag with a regex. I'm not actually
+    # running in taint mode, but it bizarrely thinks I am.
+    for my $arg (@args) {
+        if ($arg =~ /(.*)/) {
+            $arg = $1;
+        } else {
+            die <<EOD;
+php.Fetchwarefile: Match anything pattern match failed! Huh! This shouldn't
+happen, and is probably a bug.
+EOD
+        }
+    }
+
     # Use Text::ParseWords quotewords() subroutine to deal with spliting the
     # arguments on whitespace, and to properly quote and keep single and double
     # quotes.
@@ -1462,11 +1476,23 @@ EOM
         # does not use. Furthemore, the creation of this extra tempdir is not
         # needed by cmd_new(), and this tempdir presumes start() was called
         # before drop_privs(), which is always the case except for cmd_new().
+        #
+        # But another case where this temp dir's creations should be skipped is
+        # if start() is overridden with hook() to make start() do something
+        # other than create a temp dir, because in some cases such as using VCS
+        # instead of Web sites and mirrors, you do not need to bother with
+        # creating a tempdir, because the working dir of the repo can be used
+        # instead. Therefore, if the parent directory is not /^fetchware-$$/,
+        # then we'll also skip creating the tempd dir, because it most likely
+        # means that a tempdir is not needed.
+        $opts{SkipTempDirCreation} = 1
+            unless cwd() =~  /^fetchware-$$/;
         unless (exists $opts{SkipTempDirCreation}
             and defined $opts{SkipTempDirCreation}
             and $opts{SkipTempDirCreation}) {
             # Ensure that $user_temp_dir can be accessed by my drop priv'd child.
-            # And only try to change perms to 0755 only if perms are not 0755 already.
+            # And only try to change perms to 0755 only if perms are not 0755
+            # already.
             my $st = stat(cwd());
             unless ((S_IMODE($st->mode) & 0755) >= 0755) {
                 chmod 0755, cwd() or die <<EOD;
@@ -1474,19 +1500,18 @@ App-Fetchware-Util: Fetchware failed to change the permissions of the current
 temporary directory [@{[cwd()]} to 0755. The OS error was [$!].
 EOD
             }
-            # Create a new tempdir for the droped prive user to use, and be sure to
-            # chown it so they can actually write to it as well.
-            #
-            # $new_temp_dir does not have a semaphore file, but its parent directory
-            # does, which will still keep fetchware clean from deleting this
-            # directory out from underneath us.
+            # Create a new tempdir for the droped prive user to use, and be sure
+            # to chown it so they can actually write to it as well.
+            # $new_temp_dir does not have a semaphore file, but its parent
+            # directory does, which will still keep fetchware clean from
+            # deleting this directory out from underneath us.
             #
             # Also note, that cwd() is "blindly" coded here, which makes it a
-            # "dependency," but drop_privs() is meant to be called after start() by
-            # fetchware::cmd_*(). It's not meant to be a generic subroutine to drop
-            # privs, and it's also not really meant to be used by fetchware
-            # extensions mostly just fetchware itself. Perhaps I should move it back
-            # to bin/fetchware???
+            # "dependency," but drop_privs() is meant to be called after start()
+            # by fetchware::cmd_*(). It's not meant to be a generic subroutine
+            # to drop privs, and it's also not really meant to be used by
+            # fetchware extensions mostly just fetchware itself. Perhaps I
+            # should move it back to bin/fetchware???
             my $new_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
                 DIR => cwd(), CLEANUP => 1);
             # Determine /etc/passwd entry for the "effective" uid of the
