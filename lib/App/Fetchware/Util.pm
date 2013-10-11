@@ -564,12 +564,28 @@ Uses HTTP::Tiny to download a HTML directory listing from a HTTP Web server.
 
 Returns an scalar of the HTML ladden directory listing.
 
+If an even number of other options are specified (a faux hash), then those
+options are forwarded on to L<HTTP::Tiny>'s new() method. See L<HTTP::Tiny> for
+details about what these options are. For example, you couse use this to add a
+C<Referrer> header to your request if a download site annoying checks referrers.
+
 =cut
 
 sub http_download_dirlist {
     my $http_url = shift;
 
-    my $response = HTTP::Tiny->new->get($http_url);
+    # Forward any other options over to HTTP::Tiny. This is used mostly to
+    # support changing user agent strings, but why not support them all.
+    my %opts = @_ if @_ % 2 == 0;
+
+    # Append user_agent if specified.
+    $opts{agent} = config('user_agent') if config('user_agent');
+
+    my $http = HTTP::Tiny->new(%opts);
+    ###BUGALERT### Should use request() instead of get, because request can
+    #directly write the chunks of the file to disk as they are downloaded. get()
+    #just uses RAM, so a 50Meg file takes up 50 megs of ram, and so on.
+    my $response = $http->get($http_url);
 
     die <<EOD unless $response->{success};
 App-Fetchware: run-time error. HTTP::Tiny failed to download a directory listing
@@ -1013,6 +1029,9 @@ sub download_http_url {
     # Forward any other options over to HTTP::Tiny. This is used mostly to
     # support changing user agent strings, but why not support them all.
     my %opts = @_ if @_ % 2 == 0;
+
+    # Append user_agent if specified.
+    $opts{agent} = config('user_agent') if config('user_agent');
 
     my $http = HTTP::Tiny->new(%opts);
     ###BUGALERT### Should use request() instead of get, because request can
