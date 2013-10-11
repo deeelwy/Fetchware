@@ -60,6 +60,7 @@ our @EXPORT = qw(
     gpg_sig_url
     sha1_url
     md5_url
+    user_agent
     verify_method
     no_install
     verify_failure_ok
@@ -258,6 +259,7 @@ extension see the section L<CREATING A FETCHWARE EXTENSION>
         [ gpg_sig_url => 'ONE' ],
         [ sha1_url => 'ONE' ],
         [ md5_url => 'ONE' ],
+        [ user_agent => 'ONE' ],
         [ verify_method => 'ONE' ],
         [ mirror => 'MANY' ],
         [ no_install => 'BOOLEAN' ],
@@ -3545,6 +3547,13 @@ to verify the integrity of the archive that fetchware downloads.
 You B<must> specify the master mirror site, which is your programs main mirror
 site, because if you download it from a mirror, its possible that both the
 archive and the checksum could have been tampered with.
+
+=head2 user_agent 'Mozilla/5.0 (X11; Linux x86_64; rv:24.0) Gecko/20100101 Firefox/24.0'
+
+Specifies what C<user_agent> you would like fetchware to pretend to be when
+downloading files using the HTTP protocol. Some site annoying prevent some
+user agents from working while allowing others. This allows you to pretend to
+be a real browser such as Firefox if you need to.
 
 =head2 verify_method 'gpg';
 
