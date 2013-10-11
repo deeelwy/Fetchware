@@ -4533,6 +4533,97 @@ module that can deal with JavaScript.
 
 =back
 
+
+=head2 PostgreSQL Database
+
+Below is a example Fetchwarefile that overrides lookup() to determine the latest
+version, but manages to avoid overriding anything else. It uses the same style
+as the rest downloading an HTML page that lists the version numbers on it
+somewhere. Then it parses the HTML with HTML::TreeBuilder. It populates an
+array, and then uses L<App::Fetchware>'s lookup_by_versionstring() to determine
+which version is the latest one. This is then concatenated with a bunch of other
+stuff to determine the $download_path.
+
+MD5 verification is supported by simply specifying a C<md5_url> option, because
+by default fetchware uses the C<lookup_url> to determine where to download the
+md5sum from, but that won't work with PostgreSQL, because it's downloads system
+has the md5sum on the download C<mirror> instead of the C<lookup_url>.
+
+=over
+
+    use App::Fetchware qw(:DEFAULT :OVERRIDE_LOOKUP);
+    use App::Fetchware::Util ':UTIL';
+    use Data::Dumper 'Dumper';
+    
+    use HTML::TreeBuilder;
+    
+    program 'postgres';
+    
+    # The Postgres file browser URL lists the available versions of Postgres.
+    lookup_url 'http://www.postgresql.org/ftp/source/';
+    
+    # Mirror URL where the file browser links to download them from.
+    my $mirror = 'http://ftp.postgresql.org';
+    mirror $mirror;
+    
+    # The Postgres file browser URL that is used for the lookup_url lists version
+    # numbers of Postgres like v9.3.0. this lookup hook parses out the list of
+    # theses numbers, determines the latest one, and constructs a $download_path to
+    # return for download to use to download based on what I set my mirror to.
+    hook lookup => sub {
+        my $dir_list = no_mirror_download_dirlist(config('lookup_url'));
+    
+        my $tree = HTML::TreeBuilder->new_from_content($dir_list);
+    
+        # Parse out version number directories.
+        my @ver_nums;
+        ($tree->look_down(
+            _tag => 'a',
+            sub {
+                my $h = shift;
+    
+                my $link = $h->as_text();
+    
+                # Is this link a version number or something to ignore?
+                if ($link =~ /^v\d+\.\d+(.\d+)?$/) {
+                    # skip version numbers that are beta's, alpha's or release
+                    # candidates (rc).
+                    return if $link =~ /beta|alpha|rc/i;
+                    # Strip useless "v" that just gets in the way later when I
+                    # create the $download_path.
+                    $link =~ s/^v//;
+                    push @ver_nums, $link;
+                }
+            }
+        )); # Weird parens are to force list context.
+    
+        # Turn @ver_num into the array of arrays that lookup_by_versionstring()
+        # needs its arguments to be in.
+        my $directory_listing = do {
+            my $arrayref_of_arrays_directory_listing = [];
+            for my $ver_num (@ver_nums) {
+                push @$arrayref_of_arrays_directory_listing,
+                    [$ver_num];
+            }
+            $arrayref_of_arrays_directory_listing;
+        };
+        # Find latest version.
+        my $latest_ver = lookup_by_versionstring($directory_listing);
+    
+        # Return $download_path.
+        my $download_path = '/pub/source/'. "v$latest_ver->[0][0]" .
+            "/postgresql-$latest_ver->[0][0].tar.bz2";
+        return $download_path;
+    };
+    
+    # MD5sums are stored on the download site, so use them to verify the package.
+    verify_method 'md5';
+    # But they are *not* stored on the original "lookup_url" site, so I must provide
+    # a md5_url pointing to the download site.
+    md5_url $mirror;
+
+=back
+
 =cut
 
 
