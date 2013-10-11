@@ -1106,13 +1106,16 @@ sub  lookup_by_timestamp {
 
 =head3 lookup_by_versionstring()
 
-    my $download_url = lookup_by_versionstring($filename_listing);
+    my $sorted_filename_listing = lookup_by_versionstring($filename_listing);
 
-Determines the $download_url used by download() by cleverly C<split>ing the
-filenames (the first value of the array of arrays input, $filename_listing) on
-C</\D+/>, which will return a list of version numbers. Then, the cleverly
-splitted filename is pushed on to the input array, and then the array is sorted
-based on this new value using a custom sort block.
+Determines the $sorted_filename_listing used by determine_download_path() by
+cleverly C<split>ing the filenames (the first value of the array of arrays
+input, $filename_listing) on C</\D+/>, which will return a list of version
+numbers. Then, the cleverly splitted filename is pushed on to the input array,
+and then the array is sorted based on this new value using a custom sort block.
+
+Also note, that both $filename_listing and $sorted_filename_listing B<must> both
+be arrayrefs of arrays. That is a scallar pointing to an array of arrays.
 
 =over
 
@@ -1124,27 +1127,78 @@ second value is used.
 
 =cut
 
+###BUGALERT### Should lookup_by_versionstring() require a AoA, or should it also
+#work on a regular array? But also still work on a AoA, by taking a second
+#parameter (have to use a fauxhash, named params) that indicates what index to
+#use to sort, and also a second named param that is the arrayref to sort and
+#return as an arrayref (And return a regular array if only an array is
+#specified).
+#This is a user facing subroutine, and this would make it much more useful, and
+#much less annoying to acutally use.
+#
+#Test new changes to avoid the uneven # of #'s bug, and then add the above
+#feature.
 sub  lookup_by_versionstring {
     my $file_listing = shift;
 
     # Implement versionstring algorithm.
-    for my $fl (@$file_listing) {
+    my @versionstrings;
+    for (my $i = 0; $i <= $#{$file_listing}; $i++) {
         # Split each filename on *non digits*
-        ###BUGALERT### Add error checking for if the /D+ split fails to actually
-        #split the string!!!
-        my @split_fl = split /\D+/, $fl->[0];
-        # Join each digit into one "super digit"
-        push @$fl, (join '', @split_fl);
-        # And sort below sorts them into highest number first order.
+        # And add that as an arrayref to @versionstrings;
+        # And store the index $i, so that we can actually sort $file_listing
+        # later on after sorting @versionstrings.
+        push @versionstrings, [$i,
+            # Use grep to strip leading empty strings (eg: '').
+            (grep {$_ ne ''} split(/\D+/, $file_listing->[$i][0]))]
+
+        # And the sort below sorts them into highest number first order.
     }
 
-    # Sort $file_listing by the versionstring, and but $b in front of $a to get
-    # a reverse sort, which will put the "bigger", later version numbers before
-    # the "lower", older ones.
-    @$file_listing = sort { $b->[-1] <=> $a->[-1] } @$file_listing;
-    
+    @versionstrings = sort {
+        # Return undef for filenames that don't have numbers in them, because
+        # without those numbers I can't actually sort them. It's really awesome
+        # and convienient that perl's sort does not explode or throw an
+        # exception when your custom sort subroutine returns undef instead of
+        # -1, 0, or 1, because without those numbers I can't actually sort them.
+        # It's really awesome and convienient that perl's sort does not explode
+        # or throw an exception when your custom sort subroutine returns undef
+        # instead of -1, 0, or 1.
+        return if $#{$a} < 2;
+        return if $#{$b} < 2;
+        # Figure out whoose ($b or $a) is larger and set $last_index to it.
+        my $last_index;
+        if ($#{$b} > $#{$a}) {
+            $last_index = $#{$b};
+        } else {
+            $last_index = $#{$a};
+        }
 
-    return $file_listing;
+        # Loop over the indexes of both $b and $a at the same time comparing
+        # them one by one with <=>...
+        # ...and be sure to start at index 1, because index 0 is the index of
+        # $file_listing that this entry in @versionstrings belongs to...
+        for my $x (1..$last_index) {
+            my $spaceship_result = $b->[$x] <=> $a->[$x];
+
+            # ...and as soon as they no longer equal each other return whatever
+            # result (-1 or 1) <=> gives.
+            return $spaceship_result if $spaceship_result != 0;
+        }
+    } @versionstrings;
+
+    # Now, "sort" $file_listing into the order @versionstrings was sorted into
+    # using the copy @sorted_file_listing.
+    my @sorted_file_listing;
+    for my $versionstring_arrayref (@versionstrings) {
+        push @sorted_file_listing,
+            # The $versionstring_arrayref->[0] part refers to the index that was
+            # saved first when @versionstrings was created.
+            $file_listing->[$versionstring_arrayref->[0]];
+    }
+
+    # Return the sorted $file_listing, @sorted_filename_listing.
+    return \@sorted_file_listing;
 }
 
 

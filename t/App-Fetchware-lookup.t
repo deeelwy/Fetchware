@@ -307,30 +307,51 @@ EOS
 subtest 'test lookup_by_timestamp()' => sub {
     __clear_CONFIG();
 
-    config(lookup_url => "$test_lookup_url");
-    config(filter => '2.2');
-
-    like(lookup_by_timestamp(test_filename_listing('no current')),
-        qr{/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
+    cmp_deeply(lookup_by_timestamp(test_filename_listing('no current')),
+        eval(expected_filename_listing()),
         'check lookup_by_timestamp() success.');
-
-    config_delete('lookup_url');
-    config_delete('filter');
 };
 
 
 subtest 'test lookup_by_versionstring()' => sub {
     __clear_CONFIG();
 
-    config(lookup_url => "$test_lookup_url");
-    config(filter => '2.2');
-
-    like(lookup_by_versionstring(test_filename_listing('no current')),
-        qr{/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
+    cmp_deeply(lookup_by_versionstring(test_filename_listing('no current')),
+        eval(expected_filename_listing()),
         'check lookup_by_versionstring() success.');
 
-    config_delete('lookup_url');
-    config_delete('filter');
+    # Also test for when lower numbered versionstrings sort higher using the
+    # previous buggy implementatino that just concatenated them resulting in
+    # version strings such as 9.0.13 (9013) being "technically" higher than
+    # 9.3.5 (935), but it really should be the other way around, because the 3
+    # is bigger than the 0.
+    my $more_digits_than_higher_one = [
+        ['v9.0.13', '51651653615161'],
+        ['v9.3.5', '645784816181814'],
+        ['v8.0.32', '48465843434848'],
+        ['v8.4.6', '648468484354848'],
+        ['v7.0.53', '45454675374874'],
+        ['v7.0.42', '32151651145545'],
+        ['v7.0.41', '25454546348484'],
+        ['v7.6.12', '75434843484844'],
+    ];
+
+    my $expected_more_digits_than_higher_one = [
+        ['v9.3.5', '645784816181814'],
+        ['v9.0.13', '51651653615161'],
+        ['v8.4.6', '648468484354848'],
+        ['v8.0.32', '48465843434848'],
+        ['v7.6.12', '75434843484844'],
+        ['v7.0.53', '45454675374874'],
+        ['v7.0.42', '32151651145545'],
+        ['v7.0.41', '25454546348484']
+    ];
+
+    my $sorted_file_listing =
+        lookup_by_versionstring($more_digits_than_higher_one);
+
+    is_deeply($sorted_file_listing, $expected_more_digits_than_higher_one,
+        'checked lookup_by_versionstring() unequal length bug fix.');
 }; 
 
 
