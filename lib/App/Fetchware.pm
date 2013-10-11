@@ -1129,17 +1129,6 @@ second value is used.
 
 =cut
 
-###BUGALERT### Should lookup_by_versionstring() require a AoA, or should it also
-#work on a regular array? But also still work on a AoA, by taking a second
-#parameter (have to use a fauxhash, named params) that indicates what index to
-#use to sort, and also a second named param that is the arrayref to sort and
-#return as an arrayref (And return a regular array if only an array is
-#specified).
-#This is a user facing subroutine, and this would make it much more useful, and
-#much less annoying to acutally use.
-#
-#Test new changes to avoid the uneven # of #'s bug, and then add the above
-#feature.
 sub  lookup_by_versionstring {
     my $file_listing = shift;
 
