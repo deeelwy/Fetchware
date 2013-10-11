@@ -1505,7 +1505,7 @@ EOM
         # then we'll also skip creating the tempd dir, because it most likely
         # means that a tempdir is not needed.
         $opts{SkipTempDirCreation} = 1
-            unless cwd() =~  /^fetchware-$$/;
+            unless file(cwd())->basename() =~  /^fetchware-$$/;
         unless (exists $opts{SkipTempDirCreation}
             and defined $opts{SkipTempDirCreation}
             and $opts{SkipTempDirCreation}) {
