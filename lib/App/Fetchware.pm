@@ -1888,25 +1888,12 @@ sub digest_verify {
     my $digest_file;
     # Obtain a sha sum file.
     if (defined config("${digest_ext}_url")) {
-        # Save old lookup_url and restore later like Perl's crazy local does.
-        my $old_lookup_url = config('lookup_url');
-        config_replace(lookup_url => config("${digest_ext}_url"));
-        ###BUGALERT### This is crap! Rip lookup()'s fetchware out, and have this
-        #subroutine call a new library function instead!
-        ###BUGALERT### the package fetchware; crap is not needed after the great
-        #override refactor. Or is it???
-        package fetchware; # Pretend to be bin/fetchware.
-        my $lookuped_download_path = lookup();
-        package App::Fetchware; # Switch back.
-        # Should I implement config_local() :)
-        config_replace(lookup_url => $old_lookup_url);
+        my (undef, undef, $path, undef, undef) = uri_split($download_path);
         my ($scheme, $auth, undef, undef, undef) =
             uri_split(config("${digest_ext}_url"));
-        my $digest_url =
-            uri_join($scheme, $auth, $lookuped_download_path, undef, undef);
+        my $digest_url = uri_join($scheme, $auth, $path, undef, undef);
         msg "Downloading $digest_ext digest using [$digest_url.$digest_ext]";
-        $digest_file =
-            no_mirror_download_file("$digest_url.$digest_ext");
+        $digest_file = no_mirror_download_file("$digest_url.$digest_ext");
     } else {
         eval {
             my (undef, undef, $path, undef, undef) = uri_split($download_path);
