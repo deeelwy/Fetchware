@@ -3957,6 +3957,7 @@ Apache built and configured. It also uses a heredoc to make its
 C<configure_options> configuration option much more legible.
 
 =over
+
     use App::Fetchware;
 
     program 'Apache';
