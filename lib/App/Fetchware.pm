@@ -4577,7 +4577,7 @@ has the md5sum on the download C<mirror> instead of the C<lookup_url>.
     
         # Parse out version number directories.
         my @ver_nums;
-        ($tree->look_down(
+        my @list_context = $tree->look_down(
             _tag => 'a',
             sub {
                 my $h = shift;
@@ -4595,7 +4595,7 @@ has the md5sum on the download C<mirror> instead of the C<lookup_url>.
                     push @ver_nums, $link;
                 }
             }
-        )); # Weird parens are to force list context.
+        );
     
         # Turn @ver_num into the array of arrays that lookup_by_versionstring()
         # needs its arguments to be in.
