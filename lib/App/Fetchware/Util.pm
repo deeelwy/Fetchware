@@ -380,8 +380,6 @@ EOD
 use Test::More;
     my ($scheme, $auth, undef, undef, undef) =
         uri_split(config('lookup_url'));
-diag("SCHEME[$scheme]auth[$auth]");
-diag("LOOKUP_URL[" . config('lookup_url') ."]");
     # Skip adding the "hostname" for local (file://) url's, because they don't
     # have a hostname.
     if ($scheme ne 'file') {
@@ -1058,14 +1056,14 @@ EOD
     # Contains $response->{content}, which may be binary terminal killing
     # garbage.
     #diag explain $response;
-use Test::More;
-diag("RESPONSE OBJECT[");
-diag explain $response->{status};
-diag explain $response->{headers};
-diag explain $response->{url};
-diag explain $response->{reason};
-diag explain $response->{success};
-diag("]");
+#use Test::More;
+#diag("RESPONSE OBJECT[");
+#diag explain $response->{status};
+#diag explain $response->{headers};
+#diag explain $response->{url};
+#diag explain $response->{reason};
+#diag explain $response->{success};
+#diag("]");
 
     # Must convert the worthless $response->{content} variable into a real file
     # on the filesystem. Note: start() should have cd()d us into a suitable
