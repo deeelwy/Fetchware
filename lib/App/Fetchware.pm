@@ -1643,7 +1643,7 @@ sub gpg_verify {
     # KEYS file.
     unless (config('user_keyring')
         or (-e './pubring.gpg' and -e './secring.gpg')) {
-        push @gpg_options, '--home-dir', '.';
+        push @gpg_options, '--homedir', '.';
         # Obtain a KEYS file listing everyone's key that signs this distribution.
         if (defined config('gpg_keys_url')) {
             $keys_file = no_mirror_download_file(config('gpg_keys_url'));
