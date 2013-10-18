@@ -20,7 +20,23 @@ commands, and its Fetchwarefile configuration file syntax.
 
 INTRODUCTION
 
-Fetchware is a package manager for source-code distributions.
+Fetchware is a command line program written in Perl with help from CPAN that
+brings package management to source code distributions.  It is able to do this,
+because most source code distributions use GNU autoconf, and thereby use the
+exact same commands to build and install.  Furthermore, everyone uses md5sums,
+shasums, and/or gpg sigs, and ftp/http mirrors.  Because everyone follows the
+pretty much the same format for their FOSS means a fairly simple command line
+program should be able provide package management for source code distributions
+with special thanks to Perl and CPAN.
+
+Fetchware is a command line perl program that supports install, uninstall (via
+make uninstall), upgrade (for just one package), upgrade-all (for all installed
+packages), and the best part a new command that is a console wizard question and
+answer interface that easily builds brand new packages based on fairly obvious
+information (mirrors, name, configure options, make options, and so on.).
+If you have the need for fetchware (You already know how to install source code
+distributions yourself.), then you should be able to figure out how to answer
+the questions easily.
 
 
 WHY DID YOU CREATE FETCHWARE?
@@ -46,7 +62,7 @@ AND A FETCHWARE PACKAGE?
 A Fetchware package is simply the original source-code distribution unarchived
 with your Fetchwarefile added to it. Then it is tared and gziped, but named with
 a .fpkg file extension instead of a .tar.gz file extension. This simple format
-is modelled after Slackware Linux's package format, which is also very simple.
+is modeled after Slackware Linux's package format, which is also very simple.
 
 
 WHAT'S THE DIFFERENCE?
@@ -68,10 +84,10 @@ and that is enough to build and install a Fetchware package. This means that
 instead of using something like Fedora/RHEL's EPEL, where you're a slave to each
 individual package maintainer's schedule and ability to release updated versions
 every time yet another security hole comes out, you can upgrade to latest,
-secure version whenever you want. 
+secure version whenever it is released. 
 
 However, Fetchware needs a full build environment on your server, and wherever
-you install the resulting Fetchware package. This may be a limiation in some
+you install the resulting Fetchware package. This may be a limitation in some
 enterprise/data center environments. However, if you set up your Fetchwarefile
 properly, you can build the Fetchware package on a testing or build server, and
 then only do the "make install" step on each of the production servers.
@@ -102,7 +118,7 @@ details after installing Fetchware.
 INSTALLATION INSTRUCTIONS
 
 (Note: currently Windows is not supported, but it may be supported in the
-future. But everything Linus or Unix is supported.)
+future. But everything Linux or Unix is supported.)
 
 Just use your platform's cpan command to install Fetchware.
 
@@ -149,9 +165,12 @@ install it now, or answer no, and Fetchware will just print the location of the
 Fetchwarefile it created for you. You can copy this file wherver you would like
 to keep it.
 
+###BUGALERT### Doesn't fetchware new create it as config('program') . '.Fetchwarefile'
+#instead!!!!!!!!!!!
+
 STEP 2:
 Next, use fetchware to install the generated Fetchwarefile. Now, if you answered
-yes in STEP1, then you can skip this step.
+yes in STEP 1, then you can skip this step.
 
 fetchware install <path/to/Fetchwarefile>
 
@@ -186,6 +205,10 @@ fetchware uninstall <name of already installed Fetchware package.>
 
 Like upgrade, uninstall only uninstalls already installed packages, and again
 use the list command to see what Fetchware packages you have installed.
+
+Furthermore, the uninstall command only works if the source code distribution's
+build system supports a 'make uninstall' make targe. If it does not, you can
+specify one with the uninstall_commands Fetchware configuration option.  
 
 STEP 6:
 Fetchware's lookup functionality, which determines if a version of your
