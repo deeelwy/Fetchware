@@ -1078,7 +1078,7 @@ note("FILENAME[$filename]");
     # The undef is a placeholder for the second arg. The error mesage is not a
     # named argument like WRITE is, because despite being optional, it's always
     # going to be used in fetchware for more helpful error messages.
-    is_fh(safe_open($filename, undef,WRITE => 1),
+    is_fh(safe_open($filename, undef,MODE => '>'),
         'checked safe_open write success');
 
     chmod 0640, $filename; 

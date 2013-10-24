@@ -2098,7 +2098,7 @@ EOM
 
     ###BUGALERT### Replace >, create or delete whole file and replace it with
     #what I write now, with >> for append to file if it already exists????
-        my $fh = safe_open($fetchwarefile_filename, <<EOD, WRITE => 1);
+        my $fh = safe_open($fetchwarefile_filename, <<EOD, MODE => '>');
 fetchware: failed to open your new fetchwarefile because of os error
 [$!]. This really shouldn't happen in this case. Probably a bug, or a weird race
 condition.
