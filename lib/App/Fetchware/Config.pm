@@ -127,7 +127,7 @@ that when called (ex: C<$mirror_iter-E<gt>()>) will return the next value. And
 the coolest part is that the iterator will keep track of where it is in the list
 of values that configuration option has itself, so you don't have to yourself.
 
-Iterators returned from config_iter() will return one or more elements that that
+Iterators returned from config_iter() will return one or more elements of the
 configuration option that you specify has stored. After you exceed the length of
 the internal array reference the iterator will return false (undef).
 
@@ -329,37 +329,8 @@ strings, and are listed in the L</DIAGNOSTICS> section below.
 ##TODO##=cut
 
 
-=head1 CAVEATS
-
-App::Fetchware::Config's represenation of your Fetchwarefile is per process. If
-you parse a new Fetchwarefile it will conflict with the existing C<%CONFIG>, and
-various exceptions may be thrown. 
-
-C<%CONFIG> is a B<global> per process variable! You B<can not> try to maniuplate
-more than one Fetchwarefile in memory at one time! It will not work! You can
-however use __clear_CONFIG() to clear the global %CONFIG, so that you can use it
-again. This is mostly just done in fetchware's test suite, so this design
-limitation is not such a big deal.
-
-=cut
-
 
 =head1 BUGS 
-
-App::Fetchware::Config's represenation of your Fetchwarefile is per process. If
-you parse a new Fetchwarefile it will conflict with the existing C<%CONFIG>, and
-various exceptions may be thrown. 
-
-C<%CONFIG> is a B<global> per process variable! You B<can not> try to maniuplate
-more than one Fetchwarefile in memory at one time! It will not work! You can
-however use __clear_CONFIG() to clear the global %CONFIG, so that you can use it
-again. This is mostly just done in fetchware's test suite, so this design
-limitation is not such a big deal.
-
-=cut
-
-
-=head1 RESTRICTIONS 
 
 App::Fetchware::Config's represenation of your Fetchwarefile is per process. If
 you parse a new Fetchwarefile it will conflict with the existing C<%CONFIG>, and
