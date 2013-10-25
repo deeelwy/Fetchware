@@ -30,72 +30,24 @@ more thuroughly.
 
 =head2 import()
 
-    # You don't actually call import() unless you're doing something weird.
-    # Instead, use calls import for you.
-    use App::Fetchware::ExportAPI KEEP => [qw(start end)],
-        OVERRIDE =>
-            [qw(lookup download verify unarchive build install uninstall)];
-
-    # But if you really do need to run import() itself.
-    BEGIN {
-        require App::Fetchware::ExportAPI;
-        App::Fetchware::ExportAPI->import(KEEP => [qw(start end)],
-            OVERRIDE =>
-                [qw(lookup download verify unarchive build install uninstall)]
-        );
-    }
-
-Adds fetchware's API subroutines (start(), lookup(), download(), verify(),
-unarchive(), build(), install(), and uninstall()) to the caller()'s  @EXPORT.
-Used by fetchware extensions to easily add fetchware's API subroutines to your
-extension's package exports.
-
-=cut
-
-sub import {
-    my ($class, @opts) = @_;
-use Test::More;
-note("CLASS[$class]OPTS[");
-note explain \@opts;
-note("]");
-note("CALLER!!!![@{[scalar caller()]}]");
-
-    # Just return success if user specified no options, because that just means
-    # the user wanted to load the module, but not actually import() anything.
-    return 'Success' if @opts == 0;
-
-    my $caller = caller;
-
-    # Forward call to _export_api(), which does all the work.
-    # Note how the caller of import() is forwarded on to
-    # _create_config_options().
-    _create_config_options($caller, @opts);
-}
-
-
-=head2 _create_config_options()
-
-    # _create_config_options() *must* be called in a BEGIN block, because it
+    # import() *must* be called in a BEGIN block, because it
     # creates subroutines that have prototypes, and prototypes *must* be known
     # about at compile time not run time!
-    BEGIN { 
-        _create_config_options(
-            $callers_package,
-            ONE => [qw(
-                page_name
-                html_page_url
-                user_agent
-                html_treebuilder_callback
-                download_links_callback
-            )],
-            BOOLEAN => [qw(
-                keep_destination_directory
-            )],
-            IMPORT => [qw(
-                temp_dir
-            )],
-        );
-    }
+    use App::Fetchware::CreateConfigOptions
+        ONE => [qw(
+            page_name
+            html_page_url
+            user_agent
+            html_treebuilder_callback
+            download_links_callback
+        )],
+        BOOLEAN => [qw(
+            keep_destination_directory
+        )],
+        IMPORT => [qw(
+            temp_dir
+        )],
+    ;
 
 Creates configuration options of the same types App::Fetchware uses. These
 are:
@@ -120,44 +72,143 @@ C<verify_failure_ok 1> or C<no_install 'True'>
 
 =back
 
-In addition to App::Fetchware's types, _create_config_options() features an
+In addition to App::Fetchware's types, import() features an
 additional type:
 
 =over
 
-=item 5. IMPORT - This option is documented only for completness, because it is
-recommended that you use export_api(), and any App::Fetchware API subroutines
-that you C<'KEEP'> export_api() will automatically call _create_config_options()
-for you to import any fetchware API subroutines that you want your fetchware
-extension to reuse. See L<App::Fetchware::ExportAPI> for details. You can specify the
-C<NOIMPORT> option, C<_create_config_options(..., NOIMPORT =E<gt> 1);>, to avoid
-the automatic importing of App::Fetchware configuration options.
+=item 5. IMPORT - the C<IMPORT> this hash key does not create new configuration
+options, but instead imports already defined ones from App::Fetchware allowing
+you to reuse popular configuration options like C<temp_dir> or C<no_install> in
+your fetchware extension.ou can specify the C<NOIMPORT> option,
+C<import(..., NOIMPORT =E<gt> 1);>, to avoid the automatic
+importing of App::Fetchware configuration options.
 
 =back
 
-Note: you must prepend your options with the $callers_package, which is the
-package that you want the specified subroutines to be created in.
-
 Just use any of C<ONE>, C<ONEARRREF>, C<MANY>, or C<BOOLEAN> as faux hash keys
 being sure to wrap their arguments in a array reference brackets C<[]>
-
-_create_config_options() also takes the faux hash key C<IMPORT> this hash key
-does not create new configuration options, but instead imports already defined
-ones from App::Fetchware allowing you to reuse popular configuration options
-like C<temp_dir> or C<no_install> in your fetchware extension.
 
 =over
 
 =item LIMITATION
 
-_create_config_options() creates subroutines that have prototypes, but in order
+import() creates subroutines that have prototypes, but in order
 for perl to honor those prototypes perl B<must> know about them at compile-time;
-therefore, that is why _create_config_options() must be called inside a C<BEGIN>
+therefore, that is why import() must be called inside a C<BEGIN>
 block.
 
 =back
 
 =cut
+
+sub import {
+    my ($class, @opts) = @_;
+
+    # Just return success if user specified no options, because that just means
+    # the user wanted to load the module, but not actually import() anything.
+    return 'Success' if @opts == 0;
+
+    my $caller = caller;
+
+    # Forward call to _create_config_options(), which does all the work.
+    # Note how the caller of import() is forwarded on to
+    # _create_config_options().
+    _create_config_options($caller, @opts);
+}
+
+
+
+# Make _export_api() "invisible." users should only ever actually use import(),
+# and technically they should never even use import; instead, they should just
+# use ExportAPI, and Perl will call import() for them.
+#=head2 _create_config_options()
+#
+#    # _create_config_options() *must* be called in a BEGIN block, because it
+#    # creates subroutines that have prototypes, and prototypes *must* be known
+#    # about at compile time not run time!
+#    BEGIN { 
+#        _create_config_options(
+#            $callers_package,
+#            ONE => [qw(
+#                page_name
+#                html_page_url
+#                user_agent
+#                html_treebuilder_callback
+#                download_links_callback
+#            )],
+#            BOOLEAN => [qw(
+#                keep_destination_directory
+#            )],
+#            IMPORT => [qw(
+#                temp_dir
+#            )],
+#        );
+#    }
+#
+#Creates configuration options of the same types App::Fetchware uses. These
+#are:
+#
+#=over
+#
+#=item 1. ONE - Stores one and only ever one value. If the configuration option
+#is used more than once, an exception is thrown.
+#
+#=item 2. ONEARRREF - Stores one or more values. But only stores a list when
+#provided a list when you call it such as
+#C<install_commands './configure', 'make', 'make install'> would create a
+#configuration option with three values. However, if a ONEARRREF is called more
+#than once, and exception is also thrown.
+#
+#=item 3. MANY - Stores many values one at a time just like ONEARRREF, but can
+#also be called any number of times, and  values are appended to any already
+#existing ones.
+#
+#=item 4. BOOLEAN - Stores true or false values such as C<stay_root 'On'> or
+#C<verify_failure_ok 1> or C<no_install 'True'>
+#
+#=back
+#
+#In addition to App::Fetchware's types, _create_config_options() features an
+#additional type:
+#
+#=over
+#
+#=item 5. IMPORT - This option is documented only for completness, because it is
+#recommended that you use L<ExportAPI|App::Fetchware::ExportAPI>, and any
+#App::Fetchware API subroutines that you C<'KEEP'>
+#L<ExportAPI|App::Fetchware::ExportAPI> will automatically call
+#_create_config_options() for you to import any fetchware API subroutines that
+#you want your fetchware extension to reuse. See L<App::Fetchware::ExportAPI> for
+#details. You can specify the C<NOIMPORT> option,
+#C<_create_config_options(..., NOIMPORT =E<gt> 1);>, to avoid the automatic
+#importing of App::Fetchware configuration options.
+#
+#=back
+#
+#Note: you must prepend your options with the $callers_package, which is the
+#package that you want the specified subroutines to be created in.
+#
+#Just use any of C<ONE>, C<ONEARRREF>, C<MANY>, or C<BOOLEAN> as faux hash keys
+#being sure to wrap their arguments in a array reference brackets C<[]>
+#
+#_create_config_options() also takes the faux hash key C<IMPORT> this hash key
+#does not create new configuration options, but instead imports already defined
+#ones from App::Fetchware allowing you to reuse popular configuration options
+#like C<temp_dir> or C<no_install> in your fetchware extension.
+#
+#=over
+#
+#=item LIMITATION
+#
+#_create_config_options() creates subroutines that have prototypes, but in order
+#for perl to honor those prototypes perl B<must> know about them at compile-time;
+#therefore, that is why _create_config_options() must be called inside a C<BEGIN>
+#block.
+#
+#=back
+#
+#=cut
 
 sub _create_config_options {
     my ($callers_package, %opts) = @_;
@@ -168,16 +219,14 @@ sub _create_config_options {
         # Also delete NOIMPORT, so it's not mistakenly looped through below.
         delete @opts{qw(IMPORT NOIMPORT)};
     }
-use Test::More;
-note explain \%opts;
     #if it works add error checking or c&p existing error checking!!!
+    ###BUGALERT### Actually add said error checking :)
     for my $value_key (keys %opts) {
         for my $sub_name (@{$opts{$value_key}}) {
 
-use Test::More;
-note("NAME[$sub_name]");
-note("ONEORMANY[$value_key]");
-note("CALLERSPACKAGE[$callers_package]");
+        # IMPORT subroutines are not actually "imported." Instead, they are
+        # "made" in the correct package by App::Fetchware's config subroutine
+        # function factory, _make_config_sub().
         if ($value_key ne 'IMPORT') {
             App::Fetchware::_make_config_sub($sub_name, $value_key,
                 $callers_package);

@@ -29,6 +29,11 @@ App::Fetchware::ExportAPI (ExportAPI) has only one user-servicable part--it's
 import() method. It works just like L<Exporter>'s import() method except it
 takes arguments differently, and checks it's arguments more thuroughly.
 
+It's import() method is what does the heavy lifting of actually importing any
+"inherited" Fetchware API subroutines from App::Fetchware, and also setting up
+the caller's exports, so that the caller also exports all of Fetchware's API
+subroutines.
+
 =cut
 
 =head2 import()
@@ -50,47 +55,17 @@ takes arguments differently, and checks it's arguments more thuroughly.
 
 Adds fetchware's API subroutines (start(), lookup(), download(), verify(),
 unarchive(), build(), install(), and uninstall()) to the caller()'s  @EXPORT.
-Used by fetchware extensions to easily add fetchware's API subroutines to your
-extension's package exports.
+It also imports L<Exporter>'s import() subroutine to the caller's package, so
+that the caller has a proper import() subroutine that Perl will use when someone
+uses your fetchware extension in their fetchware extension. Used by fetchware
+extensions to easily add fetchware's API subroutines to your extension's package
+exports.
 
-=cut
+This is how fetchware extensions I<inherit> whatever API subroutines that they
+want to reuse from App::Fetchware.
 
-sub import {
-    my ($class, @opts) = @_;
-
-    # Just return success if user specified no options, because that just means
-    # the user wanted to load the module, but not actually import() anything.
-    return 'Success' if @opts == 0;
-
-    my $caller = caller;
-
-    # Forward call to _export_api(), which does all the work.
-    _export_api($caller, @opts);
-}
-
-
-=head2 _export_api()
-
-    # Keep App::Fetchware's start() and end() API subroutines, but override the
-    # other ones.
-    _export_api(KEEP => [qw(start end)],
-        OVERRIDE =>
-        [qw(lookup download verify unarchive build install uninstall)]
-    );
-
-    # YOu can specify NOIMPORT => 1 to avoid the creation of any "KEEP"
-    # App::Fetchware configuration options.
-    _export_api(KEEP => [qw(start end)],
-        0VERRIDE =
-            [qw(lookup download verify unarchive build install uninstall)]
-        NOIMPORT => 1;
-    );
-
-
-Adds fetchware's API subroutines (start(), lookup(), download(), verify(),
-unarchive(), build(), install(), and uninstall()) to the caller()'s  @EXPORT.
-Used by fetchware extensions to easily add fetchware's API subroutines to your
-extension's package exports.
+Normally, you don't actually call import(); instead, you call it implicity by
+simply use()ing it.
 
 =over
 
@@ -111,6 +86,66 @@ is caught with an appropriate error message.
 =back
 
 =cut
+
+sub import {
+    my ($class, @opts) = @_;
+
+    # Just return success if user specified no options, because that just means
+    # the user wanted to load the module, but not actually import() anything.
+    return 'Success' if @opts == 0;
+
+    my $caller = caller;
+
+    # Forward call to _export_api(), which does all the work.
+    _export_api($caller, @opts);
+}
+
+
+# Make _export_api() "invisible." users should only ever actually use import(),
+# and technically they should never even use import; instead, they should just
+# use ExportAPI, and Perl will call import() for them.
+#=head2 _export_api()
+#
+#    # Keep App::Fetchware's start() and end() API subroutines, but override the
+#    # other ones.
+#    _export_api(KEEP => [qw(start end)],
+#        OVERRIDE =>
+#        [qw(lookup download verify unarchive build install uninstall)]
+#    );
+#
+#    # YOu can specify NOIMPORT => 1 to avoid the creation of any "KEEP"
+#    # App::Fetchware configuration options.
+#    _export_api(KEEP => [qw(start end)],
+#        0VERRIDE =
+#            [qw(lookup download verify unarchive build install uninstall)]
+#        NOIMPORT => 1;
+#    );
+#
+#
+#Adds fetchware's API subroutines (start(), lookup(), download(), verify(),
+#unarchive(), build(), install(), and uninstall()) to the caller()'s  @EXPORT.
+#Used by fetchware extensions to easily add fetchware's API subroutines to your
+#extension's package exports.
+#
+#=over
+#
+#=item WARNING
+#
+#_export_api() also imports Exporter's import() method into its
+#$callers_package_name. This is absolutely required, because when a user's
+#Fetchwarefile is parsed it is the C<use App::Fetchware::[extensionname];> line
+#that imports fetchware's API subrotines into fetchware's namespace so its
+#internals can call the correct fetchware extension. This mechanism simply uses
+#Exporter's import() method for the heavy lifting, so _export_api() B<must> also
+#ensure that its caller gets a proper import() method.
+#
+#If no import() method is in your fetchware extension, then fetchware will fail
+#to parse any Fetchwarefile's that use your fetchware extension, but this error
+#is caught with an appropriate error message.
+#
+#=back
+#
+#=cut
 
 sub _export_api {
     my ($callers_package_name, %opts) = @_;
