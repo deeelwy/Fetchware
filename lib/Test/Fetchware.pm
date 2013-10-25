@@ -103,20 +103,27 @@ $expected can be a C<SCALAR>, C<Regexp>, or C<CODEREF> as returned by Perl's
 L<ref()> function.
 
 =over
+
 =item * If $expected is a SCALAR according to ref()
+
 =over
+
 =item * Then Use eq to determine if the test passes.
 
 =back
 
 =item * If $expected is a Regexp according to ref()
+
 =over
+
 =item * Then use a regex comparision just like Test::More's like() function.
 
 =back
 
 =item * If $expected is a CODEREF according to ref()
+
 =over
+
 =item * Then execute the coderef with a copy of the $printer's STDOUT and use the result of that expression to determine if the test passed or failed .
 
 =back
@@ -545,7 +552,7 @@ directory listings have been parsed correctly by lookup().
 
 You must surround expected_filename_listing() with an eval, because Test::Deep's
 crazy subroutines for creating complex data structure tests are actual
-subroutines that need to be executed they are not strings that can just be
+subroutines that need to be executed. They are not strings that can just be
 returned by expected_filename_listing(), and then forwarded along to Test::Deep,
 they must be executed:
 
@@ -604,7 +611,7 @@ Just turns C<$fetchware::vebose> on, by setting it to 1. It does not do anything
 else. There is no corresponding verbose_off(). Just a vebose_on().
 
 Meant to be used in test suites, so that you can see any vmsg()s that print
-during testing.
+during testing for debugging purposes.
 
 =cut
 
@@ -660,6 +667,7 @@ use this testing subroutine. It tests if the specified $temp_dir still has a
 locked C<'fetchware.sem'> fetchware semaphore file. If the file is not locked,
 then end_ok() reports success, but if it cannot obtain a lock, end_ok reports
 failure simply using ok().
+
 =cut
 
 sub end_ok {
@@ -847,7 +855,8 @@ me.
 As with the rest of App::Fetchware, Test::Fetchware does not return any error
 codes; instead, all errors are die()'d if it's Test::Fetchware's error, or
 croak()'d if its the caller's fault. These exceptions are simple strings, and
-are listed in the L</DIAGNOSTICS> section below.
+usually more than just one line long to help further describe the problem to
+make fixing it easier.
 
 =cut
 
