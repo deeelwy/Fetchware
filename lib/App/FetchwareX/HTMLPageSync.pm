@@ -26,7 +26,7 @@ use File::Path 'remove_tree';
 use App::Fetchware::ExportAPI
     KEEP => [qw(start end)],
     OVERRIDE =>
-    [qw(lookup download verify unarchive build install uninstall)]
+        [qw(lookup download verify unarchive build install uninstall)]
 ;
 
 
@@ -85,6 +85,11 @@ This list of download urls is returned as an array reference, $download_url.
 
 =cut
 
+###BUGALERT### lookup() returns all files each time it is run; therefore, it
+#breaks the way Fetchware is supposed to work! lookup() is supposed to return
+#"the latest version." And in HTMLPageSync's case, it should not include files
+#already downloaded, because it should only return "new files" by comparing the
+#"availabe list of files" to the "already downloaded one."
 sub lookup {
     msg
     "Looking up download urls using html_page_url [@{[config('html_page_url')]}]";
@@ -878,13 +883,14 @@ in download().
 =cut
 
 
+###BUGALERT### Actually implement croak or more likely confess() support!!!
+
 =head1 ERRORS
 
 As with the rest of App::Fetchware, App::Fetchware::Config does not return any
 error codes; instead, all errors are die()'d if it's App::Fetchware::Config's
 error, or croak()'d if its the caller's fault. These exceptions are simple
 strings, and are listed in the L</DIAGNOSTICS> section below.
-###BUGALERT### Actually implement croak or more likely confess() support!!!
 
 =cut
 
