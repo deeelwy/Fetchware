@@ -380,10 +380,10 @@ installed fetchware packages.
 
 =item NOTICE
 
-cmd_uninstall() does B<not> call drop privileges, because it needs root
-privileges to copy the installed fetchware package from the system level
-fetchware package database, and it needs root to actually be able to delete
-files in system level directories.
+cmd_uninstall() does B<not> call drop_privs() to drop privileges, because it
+needs root privileges to copy the installed fetchware package from the system
+level fetchware package database, and it needs root to actually be able to
+delete files in system level directories.
 
 =back
 
@@ -528,10 +528,10 @@ user. The algorithm is dead stupid:
 cmd_new() uses Term::UI, which in turn uses Term::ReadLine to implement the
 character based question and anwser wizard interface.
 
-cmd_new() also asks the user if they would like fetchware to build their new
-program based on the Fetchwarefile cmd_new() created for them. If they answer
-yes, it builds it, and if now cmd_new() returns the path to the created
-Fetchwarefile for them.
+cmd_new() also asks the user if they would like fetchware to build and install
+their new program based on their newly created Fetchwarefile. If they answer
+yes, it builds and installs it, and if not, cmd_new() returns the path to the
+created Fetchwarefile for them.
 
 =cut
 
@@ -904,9 +904,11 @@ sub determine_mandatory_options {
 
 Asks the user to specify at least one mirror to use to download their archives.
 It also reiterates to the user that the C<lookup_url> should point to the
-author's original download site, and B<not> a 3rd party mirror. While C<mirror>
-should be configured to point to a 3rd party mirror to lessen the load on the
-author's offical download site.
+author's original download site, and B<not> a 3rd party mirror, because md5sums,
+sha1sums, and gpg signatures should B<only> be downloaded from the author's
+download site to avoid them being modified by a hacked 3rd party mirror. While
+C<mirror> should be configured to point to a 3rd party mirror to lessen the load
+on the author's offical download site.
 
 After the user enters at least one mirror, add_mirrors() asks the user if they
 would like to add any additional mirrors, and it adds them if the user specifies
@@ -997,7 +999,7 @@ to import the needed keys to be able to use those keys to verify package
 downloads. If this URL is not provided by the author, then add_verification()
 will ask the user if they would like to import the author's key into their own
 gpg public keyring. If they would, then add_verification() will use the
-C<user_keyring> C<'BOOLEAN'> option to use the user's public keyring instead of
+C<user_keyring> C<'On'> option to use the user's public keyring instead of
 fetchware's own keyring. And if the user does not want to use their own gpg
 public keyring, then add_verification will fall back to sha1 or md5 setting
 C<verify_method> to sha1 or md5 as needed.
@@ -1181,7 +1183,11 @@ fetchware to determine if a C<filter> configuration option is needed, and if it
 is what it should be. C<filter> is simply a perl regex that the list of files
 that fetchware downloads is checked against, and only files that match this
 regex will fetchware consider to be the latest version of the software package
-that you want to install.
+that you want to install. The C<filter> option is needed, because some mirrors
+will have multiple software packages in the same directory or multitple
+different versions of one piece of software in the same directory. An example
+would be Apache, which has Apache versions 2.0, 2.2, and 2.4 all in the same
+directory. The C<filter> option is how you differentiate between them.
 
 If a filter option was provided append_options_to_fetchwarefile() is used to
 append the provided filter option to the user's $fetchwarefile.
@@ -1290,7 +1296,7 @@ provided description.
 =over
 
 =item NOTE
-Notice the backslack infront of the $fetchwarefile argument above. It is there,
+Notice the backslash infront of the $fetchwarefile argument above. It is there,
 because the argument $fetchwarefile must be a reference to a scalar.
 
 =back
@@ -3225,7 +3231,11 @@ EOD
 
 Installs (just copies) the specified fetchware package to the fetchware
 database, which is /var/log/fetchware on UNIX, C:\FETCHWARE on Windows with
-root or Administrator. All others are whatever C<File::HomeDir> says.
+root or Administrator. All others are whatever L<File::HomeDir> says. For Unix
+or Unix-like systems such as linux, L<File::HomeDir> will put your own user
+fetchware database independent of the system-wide one in C</var/log/fetchware>
+in C<~/.local/share/Perl/dist/fetchware/>. This correctly follows some sort of
+standard. XDG or FreeDesktop perhaps?
 
 Creates the directory the fetchware database is stored in if it does not already
 exist.
@@ -3298,9 +3308,6 @@ __END__
 
 =head1 SYNOPSIS
 
-###BUGALERT### Make the examples explain Fetchwarefiles. Mention the manual
-#creation section in App::Fetchware, and say how to customize it more with a
-#link to that section too.
 
 =head2 Manpage synopsis.
 
@@ -3358,6 +3365,13 @@ __END__
     # Update all already installed fetchware packages.
     fetchware upgrade-all
 
+=head2 Or use crontab -e to put this in a user crontab if you don't want to fetchware system wide
+
+    # Check for updates using fetchware every night at 2:30AM.
+    # Minute   Hour   Day of Month     Month          Day of Week     Command    
+    # (0-59)  (0-23)     (1-31)  (1-12 or Jan-Dec) (0-6 or Sun-Sat)
+        30      2          *              *               *           fetchware upgrade-all
+
 =cut
 
 
@@ -3366,7 +3380,7 @@ __END__
 While sysadmining I liked to install my own compiled from source versions of
 popular programs like Apache, MySQL, or Perl without threading. However, doing
 so means that you have to manually recompile everytime a new security hole comes
-out, which is annoyingly frequent for Apache. So fetchware was created to bring
+out, which is annoyingly frequent for Apache. So, fetchware was created to bring
 the power of package management to source code distributions.
 
 =cut
@@ -3394,10 +3408,9 @@ a new Fetchwarefile for you. Then it will ask if you would like fetchware to
 install it for you.
 
 If your source code distribution exceeds fetchware's new command's capabilities,
-then see the section
-L<MANUALLY CREATING A App::Fetchware FETCHWAREFILE/App::Fetchware/MANUALLY CREATING A App::Fetchware FETCHWAREFILE>
-in L<App::Fetchware>. It details how to create a Fetchwarefile manually in a
-text editor of your choice.
+then see the section L<MANUALLY CREATING A App::Fetchware FETCHWAREFILE> in
+L<App::Fetchware>. It details how to create a Fetchwarefile manually in a text
+editor of your choice.
 
 Fetchware's commands are described next followed by its options. Following that
 is the section L<HOW FETCHWARE WORKS>, which describes in some detail how
@@ -3457,7 +3470,7 @@ command that downloads and unarchives the package, so you can "look" at it.
 
     fetchware new <name of program>
 
-C<new> asks you a bunch of questions, and uses the answers your provide in
+C<new> asks you a bunch of questions, and uses the answers you provide in
 addition to the contents of the directory listng fetchware downloads based on
 the C<lookup_url> you give fetchware, to create a Fetchwarefile for you with all
 the mandatory options filled in. It also gives you the opportunity to add any
@@ -3471,9 +3484,12 @@ the Fetchwarefile it has just created for you. If you say yes, then fetchware
 will install it, or if you say no, fetchware will skip installing it for you,
 and print out the path to the Fetchwarefile it just created for you.
 
-You can install that Fetchwarefile later:
+You can install that Fetchwarefile later with:
 
     fetchware install path/to/your/some-program.Fetchwarefile
+
+For more details about fetchware's configuration files Fetchwarefiles see
+L<App::Fetchware/CREATING A App::Fetchware FETCHWAREFILE>
 
 =head2 install
 
@@ -3543,7 +3559,8 @@ Afterwards, that program won't show up in a C<fetchware list> anymore.
 
 C<uninstall> is only capable of uninstalling programs that maintain a
 C<uninstall> make target. For example, C<ctags> has a C<make uninstall>, while
-Apache does not.
+Apache does not; therefore, without a prefix, fetchware can uninstall ctags, but
+it cannot uninstall Apache.
 
 The easiest way to be able to uninstall a program you install with fetchware
 that does not have a C<make uninstall> is to use the C<prefix> configuration
@@ -3892,7 +3909,7 @@ the section L<INTERNAL LIBRARY SUBROUTINES> for more. Then, install() will parse
 a user provided Fetchwarefile or a Fetchwarefile fetchware finds in a fetchware
 package. The act of parsing the Fetchwarefile will import the App::Fetchware API
 subroutines into fetchware's namespace. This gives fetchware access to
-App::Fetchwares API or whatever extension may have been used. These the API
+App::Fetchwares API or whatever extension may have been used. Then, the API
 subroutines are run providing whatever arguments they need and storing whatever
 their important return values may be in a variable to probably later be given to
 a later API subroutine as an argument.
@@ -3901,9 +3918,7 @@ a later API subroutine as an argument.
 
 Upgrade just cleverly calls the same subroutine that implementes install. And if
 the version install determines is the lastes is the same as the version that is
-already installed, then fetchware does not bother installing it again. If you
-run upgrade with the --force option, then upgrade will install whatever version
-it finds anyway.
+already installed, then fetchware does not bother installing it again.
 
 =item uninstall
 
