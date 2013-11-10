@@ -339,6 +339,10 @@ your fetchware extension.
 =cut
 
 
+###BUGALERT### All download routines should be modified to use HTTP::Tiny's
+#iterative download interface so I can write the downloaded files straight to
+#disk to avoid wasting 20, 30 or 120gigs or so or whatever the file size is in
+#memory for each downloaded file.
 
 =head2 download_dirlist()
 

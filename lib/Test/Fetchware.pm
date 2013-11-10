@@ -313,6 +313,8 @@ $destination_directory.
 ###    # that you specify the $destination_directory too.
 ###    my $test_dist_path = make_test_dist($file_name, $ver_num,
 ###        rel2abs($destination_directory), AppendOption => $config_option);
+###BUGALERT###Inflexible, and forces any fetchware extension writers to copy and
+#paste it and modify it, or come up with something else.. Not good :)
 sub make_test_dist {
     my $file_name = shift;
     my $ver_num = shift;

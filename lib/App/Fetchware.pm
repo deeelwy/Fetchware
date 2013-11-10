@@ -143,7 +143,7 @@ The subroutines below B<are> Fetchwarefile's API subroutines or helper
 subroutines for App::Fetchware's API subroutines. If you want information on
 fetchware's configuration file syntax, then see the section
 L<FETCHWAREFILE CONFIGURATION SYNTAX> for more information. For additional
-information on how to keep or override these APi subroutines in a fetchware
+information on how to keep or override these API subroutines in a fetchware
 extension see the section L<CREATING A FETCHWARE EXTENSION>
 
 =cut
@@ -566,6 +566,8 @@ fetchware comand at the same time.
 
 =item filter
 
+=item user_agent
+
 =back
 
 =back
@@ -672,7 +674,7 @@ check_lookup_config() also currently checks if a program config option is given,
 and throws an exception if it is not.
 
 It also ensures that you specify at least one mirror, and how to verify your
-program. If this is not done properly, and exception is thrown. For verification
+program. If this is not done properly, an exception is thrown. For verification
 to work properly, you must specify C<gpg_keys_url>, C<md5_url>, or C<sha1_url>.
 B<Only> if there is no verification availabe from your program's author should
 you use the C<verification_failure 'On';> option.
@@ -754,7 +756,9 @@ Downloads a directory listing that lookup() uses to determine what the latest
 version of your program is. It is returned.
 
 =over
+
 =item SIDE EFFECTS
+
 get_directory_listing() returns a SCALAR REF of the output of HTTP::Tiny
 or a ARRAY REF for Net::Ftp downloading that listing. Note: the output is
 different for each download type. Type 'http' will have HTML crap in it, and
@@ -861,7 +865,7 @@ Takes an array ref as its first parameter, and parses out the filenames and
 timstamps of what is assumed to be C<Net::FTP->dir()> I<long> directory listing
 output.
 
-Returns a array of arrays of filenames and timestamps.
+Returns an array of arrays of filenames and timestamps.
 
 =cut
 
@@ -946,7 +950,7 @@ Returns a array of arrays of filenames and timestamps.
     $filename_listing = http_parse_filelist($http_listing);
 
 Takes an scalar of downloaded HTML output, and parses it using
-HTML::Linkextractor to build and return an array of arrays of filenames and
+HTML::TreeBuilder to build and return an array of arrays of filenames and
 timestamps.
 
 =cut
@@ -1048,7 +1052,7 @@ EOD
     my $filename_listing = file_parse_filelist($file_listing);
 
 Parses the provided filelist by C<stat>ing each file, and creating a properly
-formatted timestamp to return in kdjfkdj format.
+formatted timestamp to return.
 
 Returns an array of arrays of filenames and timestamps.
 
@@ -1116,16 +1120,9 @@ input, $filename_listing) on C</\D+/>, which will return a list of version
 numbers. Then, the cleverly splitted filename is pushed on to the input array,
 and then the array is sorted based on this new value using a custom sort block.
 
-Also note, that both $filename_listing and $sorted_filename_listing B<must> both
-be arrayrefs of arrays. That is a scallar pointing to an array of arrays.
-
-=over
-
-=item WARNING: This subroutine modifies its input array by added a new value to
-it's array of arrays input, so watch out, but ususally just the first or perhaps
-second value is used.
-
-=back
+Also note, that both $filename_listing and lookup_by_versionstring()'s return
+value, $sorted_filename_listing, B<must> both be arrayrefs of arrays. That is a
+scallar pointing to an array of arrays.
 
 =cut
 
@@ -1200,7 +1197,7 @@ sub  lookup_by_versionstring {
 
 Given a $file_listing of files with the same timestamp or versionstring,
 determine which one is a downloadable archive, a tarball or zip file. And
-support some backs to make fetchware more robust. These are the C<filter>
+support some hacks to make fetchware more robust. These are the C<filter>
 configuration subroutine, ignoring "win32" on non-Windows systems, and
 supporting Apache's CURRENT_IS_ver_num and Linux's LATEST_IS_ver_num helper
 files.
@@ -1295,6 +1292,8 @@ EOD
 =over
 
 =item mirror
+
+=item user_agent
 
 =back
 
@@ -1412,19 +1411,21 @@ sub determine_package_path {
 
 =over
 
-=item gpg_keys_url 'a.browser/like.url';
+=item gpg_keys_url
 
-=item user_keyring 'On';
+=item user_keyring
 
-=item gpg_sig_url 'a.browser/like.url';
+=item gpg_sig_url
 
-=item sha1_url 'a browser-like url';
+=item sha1_url
 
-=item md5_url 'a browser-like url';
+=item md5_url
 
-=item verify_method 'md5,sha,gpg';
+=item verify_method
 
-=item verify_failure_ok 'True/False';
+=item verify_failure_ok
+
+=item user_agent
 
 =back
 
@@ -1612,7 +1613,7 @@ some other OpenPGP compliant program creating a digital signature file with the
 same filename as the software package, but usually with a C<.asc> file name
 extension. gpg_verify() downloads the author's keys, imports them into
 fetchware's own keyring unless the user sets C<user_keyring> to true in his
-Fetchwarefile. Then Fetchware downloads a the digital signature that usually
+Fetchwarefile. Then Fetchware downloads a digital signature that usually
 ends in C<.asc>. Afterwards, fetchware uses the gpg command line program to
 verify the digital signature. gpg_verify returns true if successful, and throws
 an exception otherwise.
@@ -2380,14 +2381,14 @@ C<make_options '-j4';>, C<configure_options '--prefix=/usr/local';>, or
 C<prefix '/usr/local'>.
 
 You can only specify C<build_commands> or any of the other three build options.
-You cannot combine C<build_commands> with any of the other buidl options.
+You cannot combine C<build_commands> with any of the other build options.
 
 =over
 
 =item LIMITATIONS
 build() like install() inteligently parses C<build_commands>, C<prefix>,
-C<make_options>, and C<configure_options> by C<split()ing> on C</,\s+/>, and
-then C<split()ing> again on C<' '>, and then execute them using fetchware's
+C<make_options>, and C<configure_options> by just using Test::Parsewords to
+parse out the string considering quotes, and then execute them using fetchware's
 built in run_prog() to properly support -q.
 
 Also, simply executes the commands you specify or the default ones if you
@@ -2626,7 +2627,9 @@ install() takes $build_path as its argument, because it must chdir() to this
 path if fetchware drops privileges.
 
 =over
+
 =item LIMITATIONS
+
 install() like build() inteligently parses C<install_commands> by C<split()ing>
 on C</,\s+/>, and then C<split()ing> again on C<' '>, and then execute them
 fetchware's built-in run_prog(), which supports -q.
@@ -2744,8 +2747,11 @@ EOD
     'uninstall succeeded' = uninstall($build_path)
 
 =over
+
 =item Configuration subroutines used:
+
 =over
+
 =item uninstall_commands
 
 =back
@@ -2757,7 +2763,9 @@ specified software, or executes whatever C<uninstall_commands 'uninstall, comman
 if its defined.
 
 =over
+
 =item LIMITATIONS
+
 uninstall() like install() inteligently parses C<install_commands> by C<split()ing>
 on C</,\s+/>, and then C<split()ing> again on C<' '>, and then execute them
 fetchware's built-in run_prog(), which supports -q.
@@ -2949,14 +2957,20 @@ sub end {
     mirror 'http://whatevermirror4.your/program/is/on';
     mirror 'http://whatevermirror5.your/program/is/on';
 
+    # filter is not required, but is often needed to tell fetchware which
+    # program in the lookup_url directory or what specific version you would
+    # want to install. For example, Apache maintains 3 versions 2.0, 2.2, and
+    # 2.4. filter is what allows you to select which version you want fetchware
+    # to use.
+    filter 'version-2.0';
+
     # Below are some popular options that may interest you.
     make_options '-j 4';
-    filter 'version-2';
 
     ### This is how Fetchwarefile's can replace lookup()'s or any other
     ### App::Fetchware API subroutine's default behavior.
     ### Remember your coderef must take the same parameters and return the same
-    ### value.
+    ### values.
     hook lookup => sub {
         # Callback that replaces lookup()'s behavior.
         # Callback receives the same arguments as lookup(), and is must return
@@ -3015,6 +3029,7 @@ see the section L<FETCHWAREFILE API SUBROUTINES>.
 
 =cut
 
+
 =head1 CREATING A App::Fetchware FETCHWAREFILE
 
 In order to create a new fetchware package, you need to create a new
@@ -3052,6 +3067,24 @@ you answer no, it will print out the path to the newly created Fetchwarefile it
 created for you. Then you can call C<fetchware install path/to/Fetchwarefile> to
 install it later on. Or you can follow the instructions below and manually
 create a Fetchwarefile in your text editor of choice.
+
+=head2 Fetchware's Fetchwarefile's configuration option syntax
+
+The syntax for setting configuration options is easy. It's just the name of the
+configuration option you want to specify like so:
+
+    program
+
+And then you add a space, and then whatever value you want it to have in quotes.
+
+    program 'Apache';
+
+And don't forget the semicolon C<;> on then end. The semicolon is required
+
+You can use comments as needed to help document you Fetchwarefile like so:
+
+    # Fetchwarefile for Apache.
+    program 'Apache';
 
 =over
 
@@ -3095,9 +3128,9 @@ Fetchwarefile.
 At the heart of App::Fetchware is its C<lookup_url>, which is
 the URL to the FTP or HTTP mirror you want App::Fetchware to use to obtain a
 directory listing to see if a new version of your program is available for
-download. To figure this out just use your browser to find the the program you
+download. To figure this out just use your browser to find the program you
 want fetchware to manage for you's Web site. Skip over the download link, and
-instead look for the gpg, sha1, or md5 verify links, and copy and paste on of
+instead look for the gpg, sha1, or md5 verify links, and copy and paste one of
 those between the single quotes above in the lookup_url. Then delete the file
 portion--from right to left until you reach a C</>. This is necessary, because
 fetchware uses the lookup_url as a basis to download your the gpg, sha1, or md5
@@ -3108,7 +3141,7 @@ and installs are exactly the same as the ones the author uploads.
 
 And then after you copy the url.
 
-    lookup_url 'http://some.url/something.html';
+    lookup_url 'http://www.apache.org/dist/httpd/';
 
 =item B<3. Determine your filter configuration option>
 
@@ -3194,15 +3227,8 @@ to it.
 
 =back
 
-Just copy and paste the example below replacing C<[new_directive]> with the name
-of the new directive you would like to add, and fill in the space between the
-single quotes C<'>.
-
-    [new_directive] '';
-
-After pasting it should look like.
-
-    [new_directive] '~/wallpapers';
+Just copy and paste the example above replacing the example between the single
+quotes C<'> with the actual value you need.
 
 =item B<5. Specify at least one mirror>
 
@@ -3221,23 +3247,24 @@ mirror. An example is below.
     mirror 'http://apache.mirrors.lucidnetworks.net//';
 
 You can specify as many mirrors as you want to. You could perhaps include all
-the mirrors your source code distribution has.
+the mirrors your source code distribution has. And the mirrors are tried in the
+order they are specified in your Fetchwarefile.
 
 =item B<6. Specifiy other options>
 
 That's all there is to it unless you need to further customize App::Fetchware's
 behavior to modify how your program is installed.
 
-At this point you can install your new Fetchwarefile as a fetchware package
-with:
+If your Fetchwarefile is now finished, you can install your new Fetchwarefile
+as a fetchware package with:
 
     fetchware install [path to your new fetchwarefile]
 
-Or you can futher customize it as shown next.
+Or you can futher customize it further as shown next if needed.
 
 =item B<7. Optionally add build and install settings>
 
-If you want to specify further settings the first to choose from are the
+If you want to specify additional settings the first to choose from are the
 build and install settings. These settings control how fetchware builds and
 installs your software. They are briefly listed below. For further details see
 the section L<App::Fetchware FETCHWAREFILE CONFIGURATION OPTIONS>.
@@ -3292,8 +3319,9 @@ install, upgrade, or uninstall your App::Fetchware Fetchwarefile.
 =item B<install>
 
 A C<fetchware install [path/to/Fetchwarefile]> while using a App::Fetchware
-Fetchwarefile causes fetchware to install your fetchwarefile to your computer
-as you have specified any build or install options.
+Fetchwarefile causes fetchware to install the program specified in your
+fetchwarefile to your computer as you have specified any build or install
+options.
 
 =item B<upgrade>
 
@@ -3316,6 +3344,22 @@ A C<fetchware upgrade-all> will cause fetchware to run C<fetchware upgrade> for
 all installed packages that fetchware is tracking in its internal fetchware
 database. This command can be used to have fetchware upgrade all currently
 installed programs that fetchware installed.
+
+If you would like C<fetchware upgrade-all> to be run every night automatically
+by cron, then just create a file say fetchware with the contents below in it,
+and add it to /etc/cron.daily.
+
+    #!/bin/sh
+    # Update all already installed fetchware packages.
+    fetchware upgrade-all
+
+And if you don't want to run it system wide as root, you can add it to your user
+crontab by pasting the snippet below in to your crontab by executing C<crontab -e>.
+
+    # Check for updates using fetchware every night at 2:30AM.
+    # Minute   Hour   Day of Month     Month          Day of Week     Command    
+    # (0-59)  (0-23)     (1-31)  (1-12 or Jan-Dec) (0-6 or Sun-Sat)
+        30      2          *              *               *           fetchware upgrade-all
 
 =back
 
@@ -3384,7 +3428,7 @@ Dropping privileges allows fetchware to avoid downloading files and executing
 anything inside the downloaded archive as root. Except of course the commands
 needed to install the software, which will still need root to able to write
 to system directories. This improves security, because the downloaded software
-won't have sytem privileges until after it is verified, prooviing that what you
+won't have sytem privileges until after it is verified, providing that what you
 downloaded is exactly what the author uploaded.
 
 Note this only works for unix like systems, and is not used on Windows and
@@ -3400,10 +3444,7 @@ configuration option as described below.
 
 Tells fetchware to B<not> drop privileges. Dropping privileges when run as root
 is fetchware's default behavior. It improves security, and allows fetchware to
-avoid exposing the root account by downloading files as root. Instead,
-everything but the API functions install(), which installs your program, and
-end(), which deletes fetchware's temporary directory, runs as C<nobody> or
-whatever C<user> option you provide. 
+avoid exposing the root account by downloading files as root.
 
 Do B<not> use this feature unless you are absolutely sure you need it.
 
@@ -3498,13 +3539,32 @@ file that can easily be downloaded and imported into gpg. This option allows you
 to import the author's key manually into your own gpg keyring, and then
 fetchware will use your own keyring instead of its own to verify your downloads.
 
+=over
+
+=item LIMITAITON
+
+C<user_keyring> when set to true requires that the user that fetchware is
+running under have a real gpg keyring with keys that have been imported into it.
+This is not the case B<unless> the C<user> option has been specified with a user
+account with a proper home directory and gpg keyring for gpg to use. Because of
+this limitation if you need to specify C<user_keyring> be sure to also specify
+the C<user> option to specify a I<real> user account instead of the default fake
+one C<nobody>.
+
+Typically you would import the keys into your own user accounts gpg keyring, and
+then you would specify your own username with the C<user> option to tell
+fetchware to drop privs to your own user account to have access to your own gpg
+keys.
+
+=back
+
 =head2 gpg_sig_url 'mirror.com/some/path';
 
 Specifies an alternate url to use to download the cryptographic signature that
 goes with your program. This is usually a file with the same name as the
 download url with a C<.asc> file extension added on. Fetchware will also append
 the extensions C<sig> and C<sign> if C<.asc> is not found, because some pgp
-programs and author use these extensions too.
+programs and authors use these extensions too.
 
 =head2 sha1_url 'mastermirror.com/some/path';
 
@@ -3527,7 +3587,7 @@ archive and the checksum could have been tampered with.
 =head2 user_agent 'Mozilla/5.0 (X11; Linux x86_64; rv:24.0) Gecko/20100101 Firefox/24.0'
 
 Specifies what C<user_agent> you would like fetchware to pretend to be when
-downloading files using the HTTP protocol. Some site annoying prevent some
+downloading files using the HTTP protocol. Some sites annoying prevent some
 user agents from working while allowing others. This allows you to pretend to
 be a real browser such as Firefox if you need to.
 
@@ -3564,9 +3624,10 @@ However, if the author of a program you want to use fetchware to manage for you
 does not offer a gpg, sha1, or md5 file to verify its integrity, then you can
 use this option to force Fetchware to install this program anyway. However, do
 not enable this option lightly. Please scour the program's mirrors and homepage
-to see which C<gpg_sig_url>, C<sha1_url>, or C<md5_url> you can use to ensure
-that your archive is verified before it is compiled and installed. Even mirrors
-from sites large and small get hacked regularly:
+to see which C<gpg_keys_url>, C<gpg_sig_url>, C<sha1_url>, C<md5_url>, or
+C<user_keyring> you can use to ensure that your archive is verified before it is
+compiled and installed. Even mirrors from sites large and small get hacked
+regularly:
 
 L<http://www.itworld.com/security/322169/piwik-software-installer-rigged-back-door-following-website-compromise?page=0,0>
 
@@ -3576,8 +3637,9 @@ L<http://www.csoonline.com/article/685037/wordpress-warns-server-admins-of-troja
 
 L<http://www.computerworld.com/s/article/9233822/Hackers_break_into_two_FreeBSD_Project_servers_using_stolen_SSH_keys>
 
-So, Please give searching for a C<gpg_sig_url>, C<sha1_url>, or C<md5_url> for
-your program another change before simply enabling this option.
+So, Please give searching for a C<gpg_keys_url>, C<gpg_sig_url>, C<sha1_url>,
+C<md5_url>, or C<user_keyring> for your program another try before simply
+enabling this option.
 
 =back
 
@@ -3640,7 +3702,7 @@ C<build_commands> configuration option.
 =head2 make_options '-j4';
 
 This option exists mostly just to enable parallel make using the C<-j> jobs
-option. But any list of options make excepts will work here too. Separate them
+option. But any list of options make accepts will work here too. Separate them
 using commas and surround each one with single quotes C<'> like in the example
 above.
 
@@ -3675,7 +3737,7 @@ distribution into your operating system's package format, or somehow magically
 monitoring C<make install> to track what files are installed where, and then
 using this information to be able to uninstall them.
 
-=head2 no_install
+=head2 no_install 'On';
 
 This boolean, see below, configuration option determines if fetchware should
 install your software or not install your software, but instead prints out the
@@ -3852,7 +3914,7 @@ what it returns by checking out the section L<FETCHWAREFILE API SUBROUTINES>:
         
         # Must return the same thing that the original lookup() does, so
         # download() and everything else works the same way.
-        return $download_url;
+        return $download_path;
     };
 
 Some App::Fetchware API subroutines take arguments, so be sure to account for
@@ -3860,7 +3922,7 @@ them:
 
     hook download => sub {
         # Take same args as App::Fetchware's download() does.
-        my $download_url = shift;
+        my $download_path = shift;
         
         # Your replacement for download() goes here.
         
@@ -3874,6 +3936,16 @@ importing one of the C<:OVERRIDE_*> export tags. These tags exist for most of th
 App::Fetchware API subroutines, and are listed below along with what helper
 subroutines they import with them. To check their documentation see the section 
 L<FETCHWAREFILE API SUBROUTINES>.
+
+=over
+
+=item WARNING
+
+If you specify a C<OVERRIDE_*> export tag to C<App::Fetchware> be sure to add
+the C<:DEFAULT> export tag to B<also> export C<App::Fetchware>'s default
+exports, which must be properly exported for fetchware to work properly.
+
+=back
 
 =over
 
@@ -3921,7 +3993,7 @@ An example:
         return lookup_by_versionstring($filename_listing);
         
         # Return what lookup() needs to return.
-        return $download_url;
+        return $download_path;
     };
 
 Feel free to specify a list of the specifc subroutines that you need to avoid
@@ -3930,12 +4002,9 @@ over imports.
 
 =head2 A real example
 
-A short, simple example fetchware extension is included with App::Fetchware
-called L<App::FetchwareX::HTMLPageSync>. It simply downloads an HTML page,
-parses out the links you want to download based on configuration options, and
-then downloads them to a directory of your choice. It is quite brief and
-compact, and does something useful. For example, I use it to keep a directory
-of wallpaper listed on a Web page up to date.  
+See the section L<EXAMPLE FETCHWAREFILES> for real examples of using hook() to
+change fetchware's behavior enough to make it work properly with different
+source code distributions that are popular.
 
 =cut
 
@@ -3987,22 +4056,23 @@ C<configure_options> configuration option much more legible.
 nginx has its distribution set up differently than Apache, so some changes are
 needed. First, nginx does not seem to use any mirrors at all, which means
 nginx's Fetchwarefile is going to look kind of stupid with the same exact URL
-being used for both the C<lookup_url> and the C<mirror>, but such aconfiguration
-is supported. Next, nginx does not have a KEYS file, but it does list it's
-developer's keys on its Website. So, they have to be imported manually into your
-keyring, and then specify the C<user_keyring> option to switch fetchware from
-usings its own keyring to using your own keyring. Also, note the comment
-regarding having to use the C<user> option to specify a real user account. This
-is needed, because the verify step is done by fetchware's child after that child
-drops its root privileges. This default user is nobody, and nobody has no real
-home, so gpg won't be able to read the keys you ask it to by using the
-C<user_keyring> option; therefore, user must be specified to change it to a real
-user. Also, worth noting that this nginx configuration does not use a C<filter>
-option. This is not actually needed, because the only source-code packages
-availabe at the C<lookup_url> are the nginx software packages themselves, but it
-might be a good idea to include them, because the nginx developers could always
-change how their download server is structured. So, including it is always a
-good idea.
+being used for both the C<lookup_url> and the C<mirror>, but such a
+configuration is supported. Next, nginx does not have a KEYS file, but it does
+list it's developer's keys on its Website. So, they have to be imported manually
+into your keyring, and then specify the C<user_keyring> option to switch
+fetchware from usings its own keyring to using your own keyring. Also, note the
+comment regarding having to use the C<user> option to specify a real user
+account. This is needed, because the verify step is done by fetchware's child
+after that child drops its root privileges. Th default user is nobody, and
+nobody has no real home, and therefore no keyring, so gpg won't be able to read
+the keys you ask it to by using the C<user_keyring> option; therefore, C<user>
+must be specified to change it to a real user, whoose keyring has had these keys
+imported into it. Also, worth noting that this nginx configuration does not use
+a C<filter> option. This is not actually needed, because the only source-code
+packages availabe at the C<lookup_url> are the nginx software packages
+themselves, but it might be a good idea to include one, because the nginx
+developers could always change how their download server is structured. So,
+including it is always a good idea.
 
 =over
 
@@ -4151,7 +4221,7 @@ downloaded file, and compares it with the one C<lookup> parses out.
         # Delete the $tree, so perl can garbage collect it.
         $tree = $tree->delete;
     
-        # Determine and return a properl $download_path.
+        # Determine and return a proper $download_path.
         # Switch it from [/from/a/mirror] to [/from/this/mirror], so the mirror will
         # actually return the file to download.
         $download_path =~ s!/a/!/this/!;
@@ -4281,7 +4351,7 @@ lookup() algorithm, and the latest one is returned.
 download() uses C<git checkout [latesttag]> to "download" php by simply changing
 the working directory to the latest tag. verify() uses git's cool C<verify-tag>
 command to verify the gpg signature. unarchive() is updated to do nothing since
-there is not archvie to unarchive. However, because we reuse build(), archive()
+there is no archive to unarchive. However, because we reuse build(), archive()
 must return a $build_path that build() will change its directory to. start() and
 end() are also overridden, because managing a temporary directory is not needed,
 so, instead, they just do a C<git checkout master> to switch from whatever the
@@ -4303,12 +4373,6 @@ you're in, so we must actually be a real branch to update git.
     # the user dly's home directory, I should drop privs to dly, so that I have
     # permission to access it.
     user 'dly';
-    
-    # Turn on verify failure ok, because the current version as of this writing (php
-    # 5.4.5) is signed by someone who has not shared uploaded their gpg key to a
-    # keyserver somewhere making git verifgy-tag fail, because I can't find the key.
-    # Hopefully, php bug# 65840 will result in this being fixed.
-    verify_failure_ok 'On';
     
     # Determine latest version by using the tags developers create to determine the
     # latest version.
@@ -4341,7 +4405,6 @@ you're in, so we must actually be a real branch to update git.
         # all I need to know to download it using git by checking out the tag.
         my $download_path = $tags[0];
     
-    diag("DOWNLOADPATH[$tags[0]]");
         return $download_path;
     };
     
@@ -4524,7 +4587,8 @@ module that can deal with JavaScript.
     verify_failure_ok 'On';
     
     # Use build_commands to configure fetchware to use MariaDB's BUILD script to
-    # build it.
+    # build it. See https://mariadb.com/kb/en/generic-build-instructions/ for
+    # instructions on the different BUILD  cmake scripts that are available.
     build_commands 'BUILD/compile-pentium64-max';
     
     # Use install_commands to tell fetchware how to install it. I could leave this
@@ -4547,14 +4611,13 @@ stuff to determine the $download_path.
 
 MD5 verification is supported by simply specifying a C<md5_url> option, because
 by default fetchware uses the C<lookup_url> to determine where to download the
-md5sum from, but that won't work with PostgreSQL, because it's downloads system
+md5sum from, but that won't work with PostgreSQL, because it's download system
 has the md5sum on the download C<mirror> instead of the C<lookup_url>.
 
 =over
 
     use App::Fetchware qw(:DEFAULT :OVERRIDE_LOOKUP);
     use App::Fetchware::Util ':UTIL';
-    use Data::Dumper 'Dumper';
     
     use HTML::TreeBuilder;
     
@@ -4630,6 +4693,18 @@ has the md5sum on the download C<mirror> instead of the C<lookup_url>.
 
 =head1 CREATING A FETCHWARE EXTENSION
 
+=over
+
+=item WARNING
+
+Currently, fetchware's extension system is B<ALPHA>, and is subject to change at
+any time. This, however, is unlikely, but it could happen. Most likely, some new
+API subroutines will just be introducted such as check_syntax() to check syntax
+for extensions, and new(), which will allow fetchware extensions to customize
+the C<fetchware new> command.
+
+=back
+
 Fetchware's main program C<fetchware> uses App::Fetchware's short and simple API
 to implement fetchware's default behavior; however, other styles of source code
 distributions exist on the internet that may not fit inside App::Fetchware's
@@ -4656,12 +4731,13 @@ returns.
 For more extensive changes you can create a App::Fetchware module that
 I<"subclasses"> App::Fetchware. Now App::Fetchware is not an object-oriented
 module, so you cannot use L<parent> or L<base> to add it to your program's
-inheritance tree using C<@INC>. You can, however, import whatever subroutines
-from App::Fetchware that you want to reuse such as start() and end(), and then
-simply implement the remaining  subroutines that make up App::Fetchware's API.
-Just like the C<CODEREF> extensions mentioned above, you must take the same
-arguments and return the same values that fetchware expects or using your
-App::Fetchware extension will blow up in your face.
+inheritance tree using C<@INC>. You can, however, use
+L<App::Fetchware::ExportAPI> to import whatever subroutines from App::Fetchware
+that you want to reuse such as start() and end(), and then simply implement the
+remaining  subroutines that make up App::Fetchware's API.  Just like the
+C<CODEREF> extensions mentioned above, you must take the same arguments and
+return the same values that fetchware expects or using your App::Fetchware
+extension will blow up in your face.
 
 This is described in much more detail below in L<CHANGING FETCHWARE'S BEHAVIOR>.
 
@@ -4697,12 +4773,11 @@ C<@INC> is not consulted.
 
 Means the same thing it does in object-oriented programming. Taking one class
 and replacing it with another class. Only since App::Fetchware is not
-object-oriented, it is implemented differently. You simply import from
-App::Fetchware the L<API subroutines> that you are B<not> going to override, and
-then actually implement the remaining subroutines, so that your App::Fetchware
-I<subclass> has the same interface that App::Fetchware does.
-L<App::Fetchware::CreateConfigOptions> is a great helper package that takes care
-of the heavy lifting and specifics for you.
+object-oriented, it is implemented differently. You simply use
+L<App::Fetchware::ExportAPI> to specify the L<API subroutines> that you are
+B<not> going to override, and then actually implement the remaining subroutines,
+so that your App::Fetchware I<subclass> has the same interface that
+App::Fetchware does.
 
 To create a fetchware extension you must understand how they work:
 
@@ -4723,8 +4798,9 @@ specifying specific subroutines in all but one of them.
 
 That's all there is to it. That simple C<use App::Fetchware...;> imports from
 App::Fetchware or a App::Fetchware extension such as
-App::FetchwareX::HTMLPageSync the API subroutines C<fetchware> needs to use to
-install, upgarde, or uninstall whatever program your Fetchwarefile specifies.
+App::FetchwareX::HTMLPageSync the API subroutines (such as start(), lookup(),
+..., install(), and uninstall()) C<fetchware> needs to use to install, upgrade,
+or uninstall whatever program your Fetchwarefile specifies.
 
 After understanding how they work, simply follow the instructons and consider
 the recommendations below. Obviously, knowing Perl is required. A great place to
@@ -4750,7 +4826,7 @@ consult their full documentation in L<FETCHWAREFILE API SUBROUTINES>.
 
 =over
 
-=item B<my $temp_dir = start(KeepTempDir => 0 | 1)> - Gives your extension a chance to do anything needed before the rest of the API subroutines get called. App::Fetchware's C<start()> manages App::Fetchware's temporary directory creation. If you would like to also use a temporary directory, you can just import App::Fetchware's start() instead of implementing it yourself.
+=item B<my $temp_dir = start(KeepTempDir => 0 | 1)> - Gives your extension a chance to do anything needed before the rest of the API subroutines get called.  App::Fetchware's C<start()> manages App::Fetchware's temporary directory creation. If you would like to also use a temporary directory, you can just use L<App::Fetchware::ExportAPI> to "inherit" App::Fetchware's start() instead of implementing it yourself.
 
 =item B<my $download_url = lookup()> - Determines and returns a download url that C<download()> receives and uses to download the archive for the program.o
 
@@ -5102,7 +5178,7 @@ stored in. It really should only be used during testing to clear
 App::Fetchware::Config's intenal state between tests.
 
 =item L<debug_CONFIG()|App::Fetchware::Config/debug_CONFIG()> - prints
-App::Fetchware::Congig's internal state directly to STDOUT. Meant for debugging
+App::Fetchware::Config's internal state directly to STDOUT. Meant for debugging
 only in your test suite.
 
 =back
@@ -5113,7 +5189,7 @@ only in your test suite.
 App::Fetchware's main API subroutines, especially the crazy complicated ones
 such as lookup(), are created by calling and passing data among many component
 subroutines. This is done to make testing much much easier, and to allow
-App::Fetchware extensions to also used some or most of these component
+App::Fetchware extensions to also use some or most of these component
 subroutines when they override a App::Fetchware API subroutine.
 
 =over
@@ -5153,14 +5229,14 @@ CPAN has a Digest based module for that correctly follow Digest's API.
 
 Exports subroutines that will help you unarchive software packages in tar and
 zip format. The most important part to remember is to use list_files() to list
-the files in your archive, and pass that list to check_archive_files() ensure
+the files in your archive, and pass that list to check_archive_files() to ensure
 that the archive will not overwrite any system files, and contains no absolute
 paths that could cause havok on your system. unarchive_package() does the actual
-unarchiveing of software packages.
+unarchiving of software packages.
 
 =item L<build()'s OVERRIDE_BUILD export tag.|build() API REFERENCE>
 
-Provides run_star_commands(), which is mean to execute common override commands
+Provides run_star_commands(), which is meant to execute common override commands
 that fetchware provides with the C<build_commands>, C<install_commands>, and
 C<uninstall_commands> configuration file directives. These directives are of
 type C<ONEARRREF> where they can only be called once, but you can supply a comma
@@ -5211,29 +5287,33 @@ in its test suite that you may find helpful. These include:
 
 =over
 
-=item B<eval_ok()> - A poor man's Test::Exception. Captures any exceptions that are thrown, and compares them to the provided exception text or regex.
+=item L<Test::Fetchware/eval_ok()> - A poor man's Test::Exception. Captures any
+exceptions that are thrown, and compares them to the provided exception text or
+regex.
 
-=item B<print_ok()> - A poor man's Test::Output. Captures STDOUT, and compares it to the provided text.
+=item L<Test::Fetchware/print_ok()> - A poor man's Test::Output. Captures
+STDOUT, and compares it to the provided text.
 
-=item B<skip_all_unless_release_testing()> - Fetchware is a package manager, but
-who wants software installed on their computer just to test it? This subroutine
-marks test files or subtests that should be skipped unless fetchware's extensive
-FETCHWARE_RELEASE_TESTING environement variables are set. This funtionality is
-described next.
+=item L<Test::Fetchware/skip_all_unless_release_testing()> - Fetchware is a
+package manager, but who wants software installed on their computer just to test
+it? This subroutine marks test files or subtests that should be skipped unless
+fetchware's extensive FETCHWARE_RELEASE_TESTING environement variables are set.
+This funtionality is described next.
 
-=item B<make_clean()> - Just runs C<make clean> in the current directory.
+=item L<Test::Fetchware/make_clean()> - Just runs C<make clean> in the current
+directory.
 
-=item B<make_test_dist()> - Creates a temporary distribution that is used for
-testing. This temporary distribution contains a C<./configure> and a C<Makefile>
-that create no files, but can still be executed in the standard AutoTools way.
+=item L<Test::Fetchware/make_test_dist()> - Creates a temporary distribution
+that is used for testing. This temporary distribution contains a C<./configure>
+and a C<Makefile> that create no files, but can still be executed in the
+standard AutoTools way.
 
-###BUGALERT### Add an API hook for customizing make_test_dist().
+=item L<Test::Fetchware/md5sum_file()> - Just md5sum's a file so verify() can be
+tested.
 
-=item B<md5sum_file()> - Just md5sum's a file so verify() can be tested.
-
-=item B<expected_filename_listing()> - Returns a string of crazy Test::Deep
-subroutines to test filename listings. Not quite as useful as the rest, but may
-come in handy if you're only changing the front part of lookup().
+=item L<Test::Fetchware/expected_filename_listing()> - Returns a string of crazy
+Test::Deep subroutines to test filename listings. Not quite as useful as the
+rest, but may come in handy if you're only changing the front part of lookup().
 
 =back
 
@@ -5248,12 +5328,12 @@ just to test its package manager functionality. To use it:
 
 =item 1. Set up an automated way of enabling FETCHWARE_RELEASE_TESTING.
 
-Just paste the frt() bash shell function below. Translating this to your favorit
-shell should be pretty straight forward. Do not just copy and paste it. You'll
-need to customize the specific C<FETCHWARE_*> environment variables to whatever
-mirrors you want to use or whatever actual programs you want to test with. And
-you'll have to point the local (file://) urls to directories that actually exist
-ono your computer.
+Just paste the frt() bash shell function below. Translating this to your
+favorite shell should be pretty straight forward. Do not just copy and paste it.
+You'll need to customize the specific C<FETCHWARE_*> environment variables to
+whatever mirrors you want to use or whatever actual programs you want to test
+with. And you'll have to point the local (file://) urls to directories that
+actually exist on your computer.
 
     # Sets FETCHWARE_RELEASE_TESTING env vars for fully testing fetchware.
     frt() {
@@ -5348,7 +5428,7 @@ understanding them easier and to make testing them a breeze.
 
 OO is awesome for massive systems that need to take advandtage of inheritance or
 perhaps composition. But fetchware is small and simple, and I wanted its
-implementation to also be small and simple. It is mostly just two three
+implementation to also be small and simple. It is mostly just two four
 thousand line programs with some smaller utility files. If it were OO there
 would be half or even a whole dozen number of smaller files, and they would have
 complicated relationships with each other. I did not want to bother with
@@ -5452,7 +5532,23 @@ failures on Windows, but Windows support should be just a few patches away.
 
 So the real answer is no, but I intend to support Windows in a future release.
 
-=head2 Anything else I think of....
+=head2 How do I configure a HTTP proxy for use with Fetchware?
+
+Fetchware uses Perl's L<HTTP::Tiny> module to download files over HTTP. So, all
+you need to do is configure HTTP::Tiny for use with proxies. This is done with
+environment variables that can easily be set from your shell.
+
+Set C<http_proxy> in the format C<http://host:port>. You can do this permanantly
+for this session with:
+
+    export http_proxy='http://example.com:8080'
+
+Or once just for this invocation of fetchware:
+
+    http_proxy='http://example.com:8080 fetchware new
+
+See your OS's shell for more details regarding using and exporting environment
+variables.
 
 =cut
 
@@ -5489,10 +5585,10 @@ App::Fetchware does not return any error codes; instead, all errors are die()'d
 if it's App::Fetchware::Config's error, or croak()'d if its the caller's fault.
 These exceptions are short paragraphs that give full details about the error
 instead of the vague one liner that perl's own errors give.
-###BUGALERT### Actually implement croak or more likely confess() support!!!
 
 =cut
 
+###BUGALERT### Actually implement croak or more likely confess() support!!!
 
 ##TODO##=head1 DIAGNOSTICS
 ##TODO##
@@ -5505,16 +5601,10 @@ instead of the vague one liner that perl's own errors give.
 ##TODO##=cut
 
 
-=head1 CAVEATS
-
-
-
-=cut
-
-
 =head1 BUGS 
 
-
+The official bug tracker for fetchware is its 
+L<github issues page.|https://github.com/deeelwy/Fetchware/issues>
 
 =cut
 
