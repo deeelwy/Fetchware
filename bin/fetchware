@@ -2589,7 +2589,7 @@ C<Fetchwarefile-*> for Fetchwarefiles cmd_new() creates for the user.
 flock() is used along with C<LOCK_{EX,NB}> from L<Fcntl>. C<LOCK_EX> gets an
 exclusive lock (only current process who got lock can access the file, and
 C<LOCK_NB>, which does a non-blocking attempt to get a lock returning success at
-getting the or not getting the lock immediately. flock() is used on a semaphore
+getting the lock or not getting the lock immediately. flock() is used on a semaphore
 file called C<fetchware.sem> it is a useless empty file, that is only used for
 locking each fetchware temporary directory.
 
@@ -2617,9 +2617,6 @@ receives as paths to whatever temporary directories it should clean.
 #clean them too?? Let it receive an arg to a dir to clean of fetchware crap???
 sub cmd_clean {
     my @fetchware_temp_dirs = @_;
-
-    # Add the system temp dir as File::Spec sees it.
-    unshift @fetchware_temp_dirs, tmpdir();
 
     my @globbed_fetchware_temp_dirs;
 
