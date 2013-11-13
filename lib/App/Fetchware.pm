@@ -5346,7 +5346,7 @@ actually exist on your computer.
             export FETCHWARE_FTP_MIRROR_URL='ftp://carroll.cac.psu.edu/pub/apache/httpd'
             export FETCHWARE_HTTP_MIRROR_URL='http://mirror.cc.columbia.edu/pub/software/apache//httpd/'
             export FETCHWARE_FTP_DOWNLOAD_URL='ftp://carroll.cac.psu.edu/pub/apache/httpd/httpd-2.2.24.tar.bz2'
-            export FETCHWARE_HTTP_DOWNLOAD_URL='http://newverhost.com/pub//httpd/httpd-2.2.24.tar.bz2'
+            export FETCHWARE_HTTP_DOWNLOAD_URL='http://apache.mirrors.pair.com//httpd/httpd-2.2.25.tar.bz2'
             export FETCHWARE_LOCAL_URL='file:///home/dly/software/httpd-2.2.22.tar.bz2'
             export FETCHWARE_LOCAL_ZIP_URL='file:///home/dly/software/ctags-zip/ctags58.zip'
             export FETCHWARE_LOCAL_BUILD_URL='/home/dly/software/ctags-5.8.tar.gz'
