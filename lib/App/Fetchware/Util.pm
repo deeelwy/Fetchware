@@ -47,10 +47,8 @@ our %EXPORT_TAGS = (
         download_ftp_url
         download_http_url
         download_file_url
-        just_filename
         do_nothing
         safe_open
-        forked
         drop_privs
         write_dropprivs_pipe
         read_dropprivs_pipe

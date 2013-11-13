@@ -54,7 +54,6 @@ subtest 'UTIL export what they should' => sub {
         download_ftp_url
         download_http_url
         download_file_url
-        just_filename
         do_nothing
         safe_open
         drop_privs
