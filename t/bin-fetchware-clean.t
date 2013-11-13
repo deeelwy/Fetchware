@@ -1,4 +1,5 @@
 #!perl
+
 # bin-fetchware-clean.t tests bin/fetchware's cmd_clean() subroutine, which
 # deletes left over unused fetchware temporary directories.
 use strict;
@@ -35,12 +36,19 @@ BEGIN {
 
 
 subtest 'test cmd_clean() success' => sub {
+    # Store cwd(), because I chdir(), so the cwd() might get messed up if a
+    # chdir() fails, so just store it once at the beginning.
+    my $cwd = cwd();
     # Use create_tempdir(), which creates a semaphore and print_ok to test if
     # cmd_clean skips locked temp dirs.
-    my $tempdir = create_tempdir();
+    # Use a localized TempDir, so that most likely only the current user has
+    # access to it, and so that I can test cmd_clean() under controlled
+    # circumstances so that a directory owned by root, for example, does not
+    # mess up what the error message is supposed to be causing the test to fail.
+    my $tempdir = create_tempdir(TempDir => $cwd);
     ok(-e $tempdir, 'checked creating a temporary directory.');
 
-    print_ok(sub {cmd_clean()},
+    print_ok(sub {cmd_clean(original_cwd)},
         qr/.*?] locked by another fetchware process\. Skipping\./,
         'checked cmd_clean skipping locked fetchware directories.');
 
@@ -48,16 +56,16 @@ subtest 'test cmd_clean() success' => sub {
 
     # Create one fetchware temporary directory to test cmd_clean()'s ability to
     # delete it.
-    $tempdir = tempdir("fetchware-$$-XXXXXX", TMPDIR => 1, CLEANUP => 1);
+    $tempdir = tempdir("fetchware-$$-XXXXXX", DIR => $cwd, CLEANUP => 1);
     ok(-e $tempdir, 'checked creating a temporary directory.');
 
     # Delete the newly created tempdir.
-    cmd_clean();
+    cmd_clean($cwd);
 
     ok(! -e $tempdir, 'checked cmd_clean() delete success.');
 
     # Test cmd_clean()'s ability to test user specfied directories.
-    $tempdir = tempdir("fetchware-$$-XXXXXX", TMPDIR => 1,
+    $tempdir = tempdir("fetchware-$$-XXXXXX", DIR => $cwd,
         CLEANUP => 1);
     my $extra_tempdir = tempdir("fetchware-$$-XXXXXX", DIR => $tempdir);
 
@@ -65,22 +73,22 @@ subtest 'test cmd_clean() success' => sub {
     ok(-e $extra_tempdir, 'checked creating an extra temporary directory.');
 
     # Delete the newly created tempdir.
-    cmd_clean($extra_tempdir);
+    cmd_clean($tempdir);
 
-    ok(! -e $tempdir, 'checked cmd_clean() delete success.');
+    ok(! -e $extra_tempdir, 'checked cmd_clean() delete success.');
 
     # Test cmd_clean()'s ability to delete temporary files that start with
     # fetchware-* or Fetchwarefile-*.
-    my $fetchware_tempdir = tempdir("fetchware-$$-XXXXXXXXX", TMPDIR => 1,
+    my $fetchware_tempdir = tempdir("fetchware-$$-XXXXXXXXX", DIR => $cwd,
         CLEANUP => 1);
-    my $fetchwarefile_tempdir = tempdir("Fetchwarefile-$$-XXXXXXXXX", TMPDIR => 1,
-        CLEANUP => 1);
+    my $fetchwarefile_tempdir = tempdir("Fetchwarefile-$$-XXXXXXXXX",
+        DIR => $cwd, CLEANUP => 1);
 
     ok(-e $fetchware_tempdir, 'checked creating fetchware temporary directory.');
     ok(-e $fetchwarefile_tempdir, 'checked creating Fetchwarefile temporary directory.');
 
     # Delete newly created tempfiles.
-    cmd_clean();
+    cmd_clean($cwd);
 
     ok(! -e $fetchware_tempdir,
         'checked deleting fetchware temporary directory success.');
