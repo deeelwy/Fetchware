@@ -1052,6 +1052,19 @@ sub download_http_url {
     #just uses RAM, so a 50Meg file takes up 50 megs of ram, and so on.
     my $response = $http->get($http_url);
 
+#use Test::More;
+#diag("RESPONSE OBJECT[");
+#diag explain $response->{status};
+#diag explain $response->{headers};
+#diag explain $response->{url};
+#diag explain $response->{reason};
+#diag explain $response->{success};
+## Should be commented out to avoid borking the terminal, but is needed when
+## HTTP::Tiny has internal 599 errors, because the error message is in the
+## content.
+##diag explain $response->{content}; 
+#diag("]");
+
     die <<EOD unless $response->{success};
 App-Fetchware: run-time error. HTTP::Tiny failed to download a file or directory
 listingfrom your provided url [$http_url]. HTTP status code
@@ -1068,17 +1081,6 @@ nothing.  HTTP status code [$response->{status} $response->{reason}]
 HTTP headers [@{[Data::Dumper::Dumper($response)]}].
 See man App::Fetchware.
 EOD
-    # Contains $response->{content}, which may be binary terminal killing
-    # garbage.
-    #diag explain $response;
-#use Test::More;
-#diag("RESPONSE OBJECT[");
-#diag explain $response->{status};
-#diag explain $response->{headers};
-#diag explain $response->{url};
-#diag explain $response->{reason};
-#diag explain $response->{success};
-#diag("]");
 
     # Must convert the worthless $response->{content} variable into a real file
     # on the filesystem. Note: start() should have cd()d us into a suitable
