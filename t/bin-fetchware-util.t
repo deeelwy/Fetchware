@@ -218,7 +218,7 @@ subtest 'check determine_fetchware_package_path()' => sub {
     # Write some test files to my fetchware_database_path() to test determining
     # if they're there or not.
     my $fetchware_db_path = fetchware_database_path();
-    my @test_files = qw(fake-apache fake-apache2 mariadb qmail nginx);
+    my @test_files = qw(fake-apache fake-apache2 fake-mariadb fake-qmail fake-nginx);
     for my $file (@test_files) {
         ok(open( my $fh, '>', catfile($fetchware_db_path, $file)),
             "check determine_fetchware_package_path() test file creation [$file]");
