@@ -2616,7 +2616,9 @@ receives as paths to whatever temporary directories it should clean.
 ###BUGALERT### Use --force to parse all temp_dir's in installed packages, and
 #clean them too?? Let it receive an arg to a dir to clean of fetchware crap???
 sub cmd_clean {
-    my @fetchware_temp_dirs = @_;
+    # If user specified no specific directories to clean, then clean the default
+    # system tmpdir().
+    my @fetchware_temp_dirs = scalar @_ ? @_ : tmpdir();
 
     my @globbed_fetchware_temp_dirs;
 
