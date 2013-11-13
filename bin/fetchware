@@ -2233,9 +2233,6 @@ EOD
         # Clean up 
         $P_file_listing_0_0 = $file_listing[0][0];
 
-note("DOWNLOADURLBASENAME[$P_download_url_basename]");
-note("FILE_LISTING[$P_file_listing_0_0]");
-
         if ($P_file_listing_0_0 eq $P_download_url_basename
             # Make cmd_upgrade() not upgrade when the ver
             and $P_file_listing_0_0 ne $P_upgrade_name_basename) {
