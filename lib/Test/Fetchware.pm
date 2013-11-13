@@ -166,19 +166,22 @@ sub print_ok {
 
         close STDOUT
             or $error = 'WTF! closing STDOUT actually failed! Huh?';
+    } or do {
+        $error = $@ if $@;
+        fail($error) if defined $error;
     };
-    $error = $@ if $@;
-    fail($error) if defined $error;
 
+    # Since Test::More's testing subroutines return true or false if the test
+    # passes or fails, return this true or false value back to the caller.
     if (ref($expected) eq '') {
-        is($stdout, $expected,
+        return is($stdout, $expected,
             $test_name);
     } elsif (ref($expected) eq 'Regexp') {
-        like($stdout, $expected,
+        return like($stdout, $expected,
             $test_name);
     } elsif (ref($expected) eq 'CODE') {
         # Call the provided callback with what $printer->() printed.
-        ok($expected->($stdout),
+        return ok($expected->($stdout),
             $test_name);
     }
 }
