@@ -33,8 +33,8 @@ SKIP: {
     # skip_all_unless_release_testing() tests for here as well :(
     # Then, check for FETCHWARE_INSANE_TESTING, and skip all if its not set.
     if (not exists $ENV{FETCHWARE_INSANE_TESTING}
-        and not defined $ENV{FETCHWARE_INSANE_TESTING}
-        and $ENV{FETCHWARE_INSANE_TESTING} ne 'On'
+        or not defined $ENV{FETCHWARE_INSANE_TESTING}
+        or $ENV{FETCHWARE_INSANE_TESTING} ne 'On'
         # And we're *not* running as root, which is needed for each Fetchware file's
         # make install.
         and ($< != 0 and $> != 0)) {
