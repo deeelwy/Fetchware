@@ -1666,11 +1666,7 @@ EOD
         # Import downloaded KEYS file into a local gpg keyring using gpg
         # command.
         eval {
-            unless (config('user_keyring')) {
-                run_prog('gpg', @gpg_options, '--import', $keys_file);
-            } else {
-                run_prog('gpg', '--import', $keys_file);
-            }
+            run_prog('gpg', @gpg_options, '--import', $keys_file);
             1;
         } or msg <<EOM;
 App-Fetchware: Warning: gpg exits nonzero when importing large KEY files such as
@@ -1743,6 +1739,7 @@ EOD
 ###BUGALERT###    } else {
 ###BUGALERT###        ###BUGALERT### eval the run_prog()'s below & add better error reporting in
 ###BUGALERT###        ###BUGALERT### if Crypt::OpenPGP works ok remove gpg support & this if &
+###BUGALERT###    }
         #IPC::System::Simple dependency.
         #my standard format.
         # Use automatic key retrieval & a cool pool of keyservers
@@ -1759,12 +1756,7 @@ EOD
         #    '--homedir', '.',  "$sig_file");
 
         # Verify sig.
-        unless (config('user_keyring')) {
-            run_prog('gpg', @gpg_options, '--verify', $sig_file);
-        } else {
-            run_prog('gpg', '--verify', $sig_file);
-        }
-###BUGALERT###    }
+        run_prog('gpg', @gpg_options, '--verify', $sig_file);
 
     # Return true indicating the package was verified.
     return 'Package Verified';

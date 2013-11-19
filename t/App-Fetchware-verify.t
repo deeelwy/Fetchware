@@ -167,7 +167,6 @@ subtest 'test gpg_verify()' => sub {
 
     # Test gpg_verify() success.
     lookup_url 'http://www.apache.org/dist/httpd';
-note("DOWNLOADURL    [$download_path]");
     ok(gpg_verify($download_path), 'checked gpg_verify() success');
 
     # Test gpg_verify() success using gpg_keys_url.
