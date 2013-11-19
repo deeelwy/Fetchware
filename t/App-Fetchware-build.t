@@ -180,7 +180,7 @@ subtest 'test build() build_commands' => sub {
     make_clean();
     __clear_CONFIG();
 
-diag("CWD[@{[cwd()]}]");
+note("CWD[@{[cwd()]}]");
 
     build_commands './configure, make';
     ok(build($build_path), 'checked build() build_command success.');
@@ -288,7 +288,7 @@ subtest 'test build() make_options success' => sub {
     skip_all_unless_release_testing();
 
     # Clean up after previous build() run.
-    __clear_CONFIG();
+    __clear_CONFIG()
 
     make_options '-j4';
     ok(build($build_path), 'checked build() make_options success.');
