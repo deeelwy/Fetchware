@@ -24,15 +24,26 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 # This test file requires root access and the special FETCHWARE_INSANE_TESTING
 # environment variable to be set in order to run, because I only want to run
 # these tests when I specifically ask for them to be run.
-# The SKIP block is needed, because skip_all_unless_insane_testing() can not
-# call plan a second time, which is how skip_all_unless_release_testing() works,
-# so instead I have to use a regular skip block.
+# The SKIP block is needed, because skip() can not be called a second time.
 SKIP: {
-    skip_all_unless_insane_testing();
+    # First be sure release testing is also set.
+    # But I can't actually just call skip_all_unless_release_testing() to do
+    # this, because it calls Test::More's plan(), but plan() apparently can only
+    # be called once, so I have to check the same stuff that
+    # skip_all_unless_release_testing() tests for here as well :(
+    # Then, check for FETCHWARE_INSANE_TESTING, and skip all if its not set.
+    if (not exists $ENV{FETCHWARE_INSANE_TESTING}
+        and not defined $ENV{FETCHWARE_INSANE_TESTING}
+        and $ENV{FETCHWARE_INSANE_TESTING} ne 'On'
+        # And we're *not* running as root, which is needed for each Fetchware file's
+        # make install.
+        and ($< != 0 and $> != 0)) {
+        my $how_many = 6;
+        skip 'Skipping insane lengthy Fetchwarefile tests.', $how_many;
+    }
 
 
 subtest 'test Apache Fetchwarefile success' => sub {
-    skip_all_unless_insane_testing();
 
     my $apache_fetchwarefile = <<'EOF';
 use App::Fetchware;
@@ -72,7 +83,6 @@ EOF
 
 
 subtest 'test Nginx Fetchwarefile success' => sub {
-    skip_all_unless_insane_testing();
 
     my $nginx_fetchwarefile = <<'EOF';
 use App::Fetchware;
@@ -129,7 +139,6 @@ EOF
 
 
 subtest 'test PHP Fetchwarefile success' => sub {
-    skip_all_unless_insane_testing();
 
     my $php_fetchwarefile = <<'EOF';
 use App::Fetchware qw(
@@ -339,7 +348,6 @@ EOF
 
 
 subtest 'test PHP git Fetchwarefile success' => sub {
-    skip_all_unless_insane_testing();
 
     my $php_git_fetchwarefile = <<'EOF';
 # php-using-git.Fetchwarefile: example fetchwarefile using php's git repo
@@ -494,7 +502,6 @@ EOF
 
 
 subtest 'test MariaDB Fetchwarefile success' => sub {
-    skip_all_unless_insane_testing();
 
     my $mariadb_fetchwarefile = <<'EOF';
 use App::Fetchware;
@@ -601,7 +608,6 @@ EOF
 
 
 subtest 'test PostgreSQL Fetchwarefile success' => sub {
-    skip_all_unless_insane_testing();
 
     my $postgresql_fetchwarefile = <<'EOF';
 use App::Fetchware qw(:DEFAULT :OVERRIDE_LOOKUP);
@@ -689,32 +695,6 @@ EOF
         'Checked PostgreSQL Fetchwarefile success.');
 };
 
-
-# This test file should only been run, when you *really* want to run it.
-sub skip_all_unless_insane_testing {
-    # First be sure release testing is also set.
-    # But I can't actually just call skip_all_unless_release_testing() to do
-    # this, because it calls Test::More's plan(), but plan() apparently can only
-    # be called once, so I have to check the same stuff that
-    # skip_all_unless_release_testing() tests for here as well :(
-    if (not exists $ENV{FETCHWARE_RELEASE_TESTING}
-        or not defined $ENV{FETCHWARE_RELEASE_TESTING}
-        or $ENV{FETCHWARE_RELEASE_TESTING}
-        ne '***setting this will install software on your computer!!!!!!!***'
-    ) {
-
-        # Then, check for FETCHWARE_INSANE_TESTING, and skip all if its not set.
-        if (not exists $ENV{FETCHWARE_INSANE_TESTING}
-            or not defined $ENV{FETCHWARE_INSANE_TESTING}
-            or $ENV{FETCHWARE_INSANE_TESTING} ne 'On'
-            # And we're running as root, which is needed for each Fetchware file's
-            # make install.
-            and ($< == 0 and $> == 0)) {
-            my $how_many = 6;
-            skip 'Skipping insane lengthy Fetchwarefile tests.', $how_many;
-        }
-    }
-}
 
 # End annoying SKIP block.
 }
