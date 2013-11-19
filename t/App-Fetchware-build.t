@@ -288,7 +288,7 @@ subtest 'test build() make_options success' => sub {
     skip_all_unless_release_testing();
 
     # Clean up after previous build() run.
-    __clear_CONFIG()
+    __clear_CONFIG();
 
     make_options '-j4';
     ok(build($build_path), 'checked build() make_options success.');
