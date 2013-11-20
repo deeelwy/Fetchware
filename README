@@ -49,8 +49,7 @@ WHAT'S THE DIFFERENCE?
 
 There really isn't any other than file size and name. They both contain a
 Fetchwarefile, which is really what is needed to install, upgrade, and uninstall
-fetchware packages. They both can be used as arguments to fetchware's main
-commands such as install and upgrade.
+fetchware packages.
 
 
 WHY SHOULD I USE FETCHWARE INSTEAD OF MY OWN PLATFORM'S PACKAGE MANAGER?
