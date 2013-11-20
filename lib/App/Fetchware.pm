@@ -2127,7 +2127,7 @@ EOD
 Returns a arrayref of file names that are found in the given, $path_to_tar_archive,
 tar file. Throws an exception if there is an error.
 
-It uses C<Archive::Tar-E<&gt>iter()> to avoid reading the entire tar archive
+It uses C<Archive::Tar-E<gt>iter()> to avoid reading the entire tar archive
 into memory.
 
 =cut
@@ -2548,6 +2548,7 @@ Runs C<./configure> as part of build() or uninstall(), which also annoying needs
 to run it.
 
 =over
+
 =item NOTE
 run_configure() is a piece of build() that was chopped out, because uninstall()
 needs to run C<./configure> too. The only reason uninstall() must do this is
@@ -2858,8 +2859,11 @@ EOM
     end();
 
 =over
+
 =item Configuration subroutines used:
+
 =over
+
 =item none
 
 =back

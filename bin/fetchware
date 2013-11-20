@@ -2410,6 +2410,7 @@ and downloads, verifies, and unarchives the specified source code distribution,
 and then prints out the location of this archive.
 
 =over
+
 =item LIMITATION
 
 cmd_look() unarchive's the desired source code distribution into the same sort
@@ -2540,6 +2541,7 @@ Lists B<all> of the packages fetchware has stored in its
 fetchware_database_path().
 
 =over
+
 =item LIMITATION
 
 There is no ability to limit this listing with a
