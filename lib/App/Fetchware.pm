@@ -1627,7 +1627,6 @@ location of where the C<.asc> digital signature is stored.
 sub gpg_verify {
     my $download_path = shift;
 
-    my @gpg_options;
     my $keys_file;
     # Attempt to download KEYS file in lookup_url's containing directory.
     # If that fails, try gpg_keys_url if defined.
@@ -1644,7 +1643,6 @@ sub gpg_verify {
     # KEYS file.
     unless (config('user_keyring')
         or (-e './pubring.gpg' and -e './secring.gpg')) {
-        push @gpg_options, '--homedir', '.';
         # Obtain a KEYS file listing everyone's key that signs this distribution.
         if (defined config('gpg_keys_url')) {
             $keys_file = no_mirror_download_file(config('gpg_keys_url'));
@@ -1666,7 +1664,12 @@ EOD
         # Import downloaded KEYS file into a local gpg keyring using gpg
         # command.
         eval {
-            run_prog('gpg', @gpg_options, '--import', $keys_file);
+            # Add --homedir option if needed.
+            if (config('user_keyring')) {
+                run_prog('gpg', '--import', $keys_file);
+            } else {
+                run_prog('gpg', '--homedir', '.', '--import', $keys_file);
+            }
             1;
         } or msg <<EOM;
 App-Fetchware: Warning: gpg exits nonzero when importing large KEY files such as
@@ -1756,7 +1759,12 @@ EOD
         #    '--homedir', '.',  "$sig_file");
 
         # Verify sig.
-        run_prog('gpg', @gpg_options, '--verify', $sig_file);
+        # Add --homedir option if needed.
+        if (config('user_keyring')) {
+            run_prog('gpg', '--verify', $sig_file);
+        } else {
+            run_prog('gpg', '--homedir', '.', '--verify', $sig_file);
+        }
 
     # Return true indicating the package was verified.
     return 'Package Verified';
