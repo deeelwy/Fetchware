@@ -129,6 +129,7 @@ Digest::MD5
 Privileges::Drop, which is only a Unix module, but it simply does nothing on
 Windows; however it is still required even on Windows systems.
 Text::ParseWords
+Sub::Mage
 
 Test::Deep is required for testing, but you could skip it if you skip make test,
 which is not recommended.
