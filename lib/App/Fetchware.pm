@@ -522,8 +522,6 @@ fetchware comand at the same time.
 
 =back
 
-=back
-
 =cut
 
     sub start {
@@ -1781,6 +1779,7 @@ specified by the C<sha_url 'ftp://sha.url/package.sha'> config option. Returns
 true for sucess dies on error.
 
 =over
+
 =item SECURITY NOTE
 If an attacker cracks a mirror and modifies a software package, they can also
 modify the MD5 sum of that software package on that B<same mirror>. Because of
@@ -1815,6 +1814,7 @@ specified by the C<md5_url 'ftp://sha.url/package.sha'> config option. Returns
 true for sucess and dies on error.
 
 =over
+
 =item SECURITY NOTE
 If an attacker cracks a mirror and modifies a software package, they can also
 modify the MD5 sum of that software package on that B<same mirror>. Because of
@@ -1850,6 +1850,7 @@ C<"$digest_type_url" 'ftp://sha.url/package.sha'> config option. Returns
 true for sucess and returns false for failure.
 
 =over
+
 =item OVERRIDE NOTE
 If you need to override verify() in your Fetchwarefile to change the type of
 digest used, you can do this easily, because digest_verify() uses L<Digest>,
@@ -1860,6 +1861,7 @@ C<digest_verify('Digest's name for your Digest::* algorithm');>
 =back
 
 =over
+
 =item SECURITY NOTE
 If an attacker cracks a mirror and modifies a software package, they can also
 modify the $digest_type sum of that software package on that B<same mirror>.
@@ -3303,6 +3305,8 @@ single quotes C<'>.
 After pasting it should look like.
 
     [new_directive] '~/wallpapers';
+
+=back
 
 =cut
 

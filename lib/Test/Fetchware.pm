@@ -131,6 +131,7 @@ L<ref()> function.
 =back
 
 =over
+
 NOTICE: C<print_ok()'s> manipuation of STDOUT only works for the current Perl
 process. STDOUT may be inherited by forks, but for some reason my knowledge of
 Perl and Unix lacks a better explanation other than that print_ok() does not
