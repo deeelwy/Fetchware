@@ -24,6 +24,7 @@ use POSIX '_exit';
 use Sub::Mage;
 use URI::Split qw(uri_split uri_join);
 use Text::ParseWords 'quotewords';
+use Data::Dumper;
 
 # Enable Perl 6 knockoffs, and use 5.10.1, because smartmatching and other
 # things in 5.10 were changed in 5.10.1+.
@@ -1303,12 +1304,12 @@ EOD
     ###BUGALERT### What does this actually test?????
     if ($info->mode() & 022) { # Someone else can write this $fh.
         die <<EOD
-App-Fetchware-Util: The file fetchware attempted to open is writable by someone
-other than just the owner. Fetchwarefiles and fetchware packages must only be
-writable by the owner. Do not only change permissions to fix this error. This
-error may have allowed someone to alter the contents of your Fetchwarefile or
-fetchware packages. Ensure the file was not altered, then change permissions to
-644.
+App-Fetchware-Util: The file fetchware attempted to open [$file_to_check] is
+writable by someone other than just the owner. Fetchwarefiles and fetchware
+packages must only be writable by the owner. Do not only change permissions to
+fix this error. This error may have allowed someone to alter the contents of
+your Fetchwarefile or fetchware packages. Ensure the file was not altered, then
+change permissions to 644.
 EOD
     }
     
@@ -1361,12 +1362,14 @@ EOD
         if ($info->mode() & 022) { # Someone else can write this $fh...
             # ...except if this file has the sticky bit set and its a directory.
             die <<EOD unless $info->mode & 01000 and S_ISDIR($info->mode);
-App-Fetchware-Util: The file fetchware attempted to open is writable by someone
-other than just the owner. Fetchwarefiles and fetchware packages must only be
-writable by the owner. Do not only change permissions to fix this error. This
-error may have allowed someone to alter the contents of your Fetchwarefile or
-fetchware packages. Ensure the file was not altered, then change permissions to
-644.
+App-Fetchware-Util: The file fetchware attempted to open [$file_to_check] is
+writable by someone other than just the owner. Fetchwarefiles and fetchware
+packages must only be writable by the owner. Do not only change permissions to
+fix this error. This error may have allowed someone to alter the contents of
+your Fetchwarefile or fetchware packages. Ensure the file was not altered, then
+change permissions to 644. Permissions on failed directory were:
+@{[Dumper($info)]}
+Umask [@{[umask]}].
 EOD
         }
 

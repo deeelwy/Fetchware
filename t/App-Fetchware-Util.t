@@ -1091,14 +1091,8 @@ note("FILENAME[$filename]");
     # Change perms to bad perms and check both group and owner
     chmod 0660, $filename;
     eval_ok(sub {safe_open($filename)},
-        <<EOE, 'checked safe_open() file group perms unsafe');
-App-Fetchware-Util: The file fetchware attempted to open is writable by someone
-other than just the owner. Fetchwarefiles and fetchware packages must only be
-writable by the owner. Do not only change permissions to fix this error. This
-error may have allowed someone to alter the contents of your Fetchwarefile or
-fetchware packages. Ensure the file was not altered, then change permissions to
-644.
-EOE
+        qr/App-Fetchware-Util: The file fetchware attempted to open \[/,
+        'checked safe_open() file group perms unsafe');
 
     # Make a directory inside the tempdir.
     mkdir ('testdir') or fail ('Failed to make testing directory [testdir]');
@@ -1127,14 +1121,8 @@ note("FILENAME[$subdirfilename]");
     # recheck.
     chmod 0660, $subdirfilename;
     eval_ok(sub {safe_open($subdirfilename)},
-        <<EOE, 'checked safe_open() file group perms unsafe');
-App-Fetchware-Util: The file fetchware attempted to open is writable by someone
-other than just the owner. Fetchwarefiles and fetchware packages must only be
-writable by the owner. Do not only change permissions to fix this error. This
-error may have allowed someone to alter the contents of your Fetchwarefile or
-fetchware packages. Ensure the file was not altered, then change permissions to
-644.
-EOE
+        qr/App-Fetchware-Util: The file fetchware attempted to open \[/,
+        'checked safe_open() file group perms unsafe');
 
     # chdir back to $original_cwd so File::Temp can delete temp files.
     chdir $original_cwd;
