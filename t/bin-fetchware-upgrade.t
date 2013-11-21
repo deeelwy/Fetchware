@@ -93,14 +93,14 @@ note("$fetchwarefile");
     # Also copy over the latest version of httpd, so that I don't have to change
     # the lookup_url in the Fetchwarefile of the httpd fetchware package.
     my $parent_upgrade_path = dir($striped_upgrade_path)->parent();
-    my $httpd_upgrade = catfile($parent_upgrade_path, 'httpd-2.2.22.tar.bz2');
-    my $httpd_upgrade_asc = catfile($parent_upgrade_path,
+    my $httpd_upgrade_path2 = catfile($parent_upgrade_path, 'httpd-2.2.22.tar.bz2');
+    my $httpd_upgrade_asc2 = catfile($parent_upgrade_path,
         'httpd-2.2.22.tar.bz2.asc');
-note("httpd_upgrade[$httpd_upgrade] stripedupgradepath[$striped_upgrade_path]");
-    ok(cp($httpd_upgrade, $striped_upgrade_path),
+note("httpd_upgrade_path2[$httpd_upgrade_path2] stripedupgradepath[$striped_upgrade_path]");
+    ok(cp($httpd_upgrade_path2, $striped_upgrade_path),
         'checked cmd_upgrade() cp new version to local upgrade url');
-note("httpd_upgrade_asc[$httpd_upgrade_asc]");
-    ok(cp($httpd_upgrade_asc, $striped_upgrade_path),
+note("httpd_upgrade_asc2[$httpd_upgrade_asc2]");
+    ok(cp($httpd_upgrade_asc2, $striped_upgrade_path),
         'checked cmd_upgrade() cp new version asc to local upgrade url');
 
     # cmd_uninstall accepts a string that needs to be found in the fetchware
@@ -123,10 +123,10 @@ note("httpd_upgrade_asc[$httpd_upgrade_asc]");
 
     # Clean up upgrade path.
     my $httpd_upgrade_to_delete = catfile($striped_upgrade_path,
-        file($httpd_upgrade)->basename());
-    my $httpd_upgrade_asc_to_delete = catfile($striped_upgrade_path,
-        file($httpd_upgrade_asc)->basename());
-    ok(unlink($httpd_upgrade_to_delete, $httpd_upgrade_asc_to_delete),
+        file($httpd_upgrade_path2)->basename());
+    my $httpd_upgrade_asc2_to_delete = catfile($striped_upgrade_path,
+        file($httpd_upgrade_asc2)->basename());
+    ok(unlink($httpd_upgrade_to_delete, $httpd_upgrade_asc2_to_delete),
         'checked cmd_upgrade() delete temp upgrade files');
 };
 
