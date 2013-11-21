@@ -178,7 +178,7 @@ EOE
 
 subtest 'test prompt_for_other_options() success' => sub {
     plan(skip_all => 'Optional Test::Expect testing module not installed.')
-        unless eval {use Test::Expect; 1;};
+        unless eval {require Test::Expect; Test::Expect->import(); 1;};
 
     # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
     # something crazy like Test::Expect, this will have to be tested "manually."
