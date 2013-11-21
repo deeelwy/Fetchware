@@ -230,18 +230,16 @@ __clear_CONFIG();
 subtest 'test debug_CONFIG()' => sub {
     # Create a test %CONFIG.
     config(a => 1);
-    config(b => 1);
     is(config('a'), 1,
-        'checked __clear_CONFIG() inital data setup');
-    is(config('b'), 1,
         'checked __clear_CONFIG() inital data setup');
 
     # Now test debug_CONFIG()'s output.
+    # Note: Only one value is stored in %CONFIG so that I do not have to worry
+    # about any hash ordering randomization issues.
     print_ok(sub {debug_CONFIG()},
         <<'EOP', 'checked debug_CONFIG() success');
 $VAR1 = {
           'a' => 1,
-          'b' => 1
         };
 EOP
 
