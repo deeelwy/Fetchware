@@ -165,7 +165,7 @@ subtest 'check fetchware_database_path()' => sub {
                 'checked fetchware_database_path() as root');
         # else use a "user" directory.
         } else {
-            is(fetchware_database_path(), '/home/dly/.local/share/Perl/dist/fetchware',
+            like(fetchware_database_path(), qr!Perl/dist/fetchware$!i,
                 'checked fetchware_database_path() as user');
         }
     } elsif ($^O eq "MSWin32") {
