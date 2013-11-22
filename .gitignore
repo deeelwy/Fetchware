@@ -5,5 +5,5 @@ test-dist*.tar.gz
 .prove
 *.html
 .build
-App-Fetchware-1.000.tar.gz
-App-Fetchware-1.000
+App-Fetchware-*.tar.gz
+App-Fetchware-*
