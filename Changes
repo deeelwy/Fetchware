@@ -1,6 +1,15 @@
 Revison History for App::Fetchware
 
 {{$NEXT}}
+    * Fixed numerous simple test failures reported automatically from CPAN
+      Testers.
+      * See: http://www.cpantesters.org/distro/A/App-Fetchware.html for listing
+        of failed test reports. All of them failed :) Be sure to select the
+        reports for version 1.00, which corresponds to the version of fetchware
+        that was tested.
+    * Replaced given/when with regular ifs due to 5.18 deprecation of given/when. 
+      * RIP given/when and smartmatch and ~~. With any luck you'll be
+        reincarnated soon.
 
 1.000     2013-11-20 00:29:13 America/New_York
     * Initial release!
