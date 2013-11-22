@@ -1605,11 +1605,17 @@ EOD
         # (http://blogs.perl.org/users/aristotle/2012/10/concise-fork-idiom.html)
         for ( scalar fork ) {
             # Fork failed.
-            die <<EOD if not defined; # defined() operates on default variable, $_.
+            # defined() operates on default variable, $_.
+            #if (not defined $_) {
+            if ($_ eq undef) {
+                die <<EOD;
 App-Fetchware-Util: Fork failed! This shouldn't happen!?! Os error [$!].
 EOD
+            }
+
             # Fork succeeded, Parent code goes here.
-            if ( my $kidpid = $_; ) {
+            my $kidpid = $_;
+            if ( $kidpid ) {
                 close $writeonly or die <<EOD;
 App-Fetchware-Util: Failed to close $writeonly pipe in parent. Os error [$!].
 EOD
@@ -1726,7 +1732,8 @@ suitably unlikely.
 
 { # Bareblock just for the $MAGIC_NUMBER.
     # Determine $front_magic
-    my $front_magic = int(rand(8128389023));
+    my $front_magic;
+    $front_magic = int(rand(8128389023));
     # For no particular reason convert the random integer into hex, because I
     # never  store something in decimal and then exact same thing in hex.
     $front_magic = $front_magic . sprintf("%x", $front_magic);
