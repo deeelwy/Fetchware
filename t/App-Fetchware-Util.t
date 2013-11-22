@@ -993,28 +993,10 @@ subtest 'test drop_privs()' => sub {
 
             pipe (READONLY, WRITEONLY)
                 or fail("Failed to create pipe??? Os error [$!]");
-            given (scalar fork) {
-                when (undef) {
-                    fail("Fork failed??? OS error [$!]");
-                # For worked. Child goes here.
-                } when (0) {
-                    close READONLY
-                        or fail("child readonly pipe close failed??? [$!].");
-                    my $write_pipe = *WRITEONLY;
-                    # Test goes here.
-
-
-                    # Finally test write_dropprivs_pipe().
-                    write_dropprivs_pipe($write_pipe, @expected);
-
-
-                    # End test start fork and pipe boilerplate.
-                    close WRITEONLY
-                        or fail("child writeonly pipe close failed??? [$!].");
-                    exit 0;
-                # For worked. Parent goes here.
-                } default {
-                    my $kidpid = $_;
+            for (scalar fork) {
+                fail("Fork failed??? OS error [$!]") if not defined;
+                # For worked. parent goes here.
+                if (my $kidpid = $_) {
                     close WRITEONLY
                         or fail("parent writeonly pipe close failed??? [$!].");
                     my $readonly = *READONLY;
@@ -1038,6 +1020,22 @@ subtest 'test drop_privs()' => sub {
                     waitpid($kidpid, 0);
                     fail("Chil exited with nonzero exit code!")
                         if (($? >>8) != 0);
+                # For worked. child goes here.
+                } else {
+                    close READONLY
+                        or fail("child readonly pipe close failed??? [$!].");
+                    my $write_pipe = *WRITEONLY;
+                    # Test goes here.
+
+
+                    # Finally test write_dropprivs_pipe().
+                    write_dropprivs_pipe($write_pipe, @expected);
+
+
+                    # End test start fork and pipe boilerplate.
+                    close WRITEONLY
+                        or fail("child writeonly pipe close failed??? [$!].");
+                    exit 0;
                 }
             }
 

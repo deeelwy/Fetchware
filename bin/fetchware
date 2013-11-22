@@ -160,28 +160,27 @@ EOM
         # tell the user that they can clean it up with fetchware clean??
         # Also, add cmdline options to control what to do when this happens???
         vmsg 'Determining which command to run based on command line options.';
-        given (shift @ARGV) {
-            when('install') {
-                cmd_install(@ARGV);
-            } when('uninstall') {
-                cmd_uninstall(@ARGV);
-            } when('new') {
-                cmd_new(@ARGV);
-            } when('upgrade') {
-                cmd_upgrade(@ARGV);
-            } when('upgrade-all') {
-                cmd_upgrade_all(@ARGV);
-            } when('list') {
-                cmd_list(@ARGV);
-            } when('look') {
-                cmd_look(@ARGV);
-            } when('clean') {
-                cmd_clean(@ARGV);
-            } when('help') {
-                cmd_help(@ARGV);
-            } default {
-                cmd_help(@ARGV);
-            }
+        my $command = shift @ARGV;
+        if ($command eq 'install') {
+            cmd_install($command eq @ARGV);
+        } elsif ($command eq 'uninstall') {
+            cmd_uninstall($command eq @ARGV);
+        } elsif ($command eq 'new') {
+            cmd_new($command eq @ARGV);
+        } elsif ($command eq 'upgrade') {
+            cmd_upgrade($command eq @ARGV);
+        } elsif ($command eq 'upgrade-all') {
+            cmd_upgrade_all($command eq @ARGV);
+        } elsif ($command eq 'list') {
+            cmd_list($command eq @ARGV);
+        } elsif ($command eq 'look') {
+            cmd_look($command eq @ARGV);
+        } elsif ($command eq 'clean') {
+            cmd_clean($command eq @ARGV);
+        } elsif ($command eq 'help') {
+            cmd_help(@ARGV);
+        } else {
+            cmd_help(@ARGV);
         }
         # Exit success, because if any of the main subroutines run into any
         # problems they die() exceptions, which get caught in eval above, and
@@ -973,13 +972,11 @@ EOP
                 default => 'done',
                 allow => qr!(^(ftp|http|file)://)|done!,
             );
-            given ($mirror_or_done) {
-                when ('done') {
-                    last;
-                } default {
-                    # Append $mirror_or_done to $fetchwarefile.
-                    append_options_to_fetchwarefile({mirror => $mirror_or_done}, $fetchwarefile);
-                }
+            if ($mirror_or_done eq 'done') {
+                last;
+            } else {
+                # Append $mirror_or_done to $fetchwarefile.
+                append_options_to_fetchwarefile({mirror => $mirror_or_done}, $fetchwarefile);
             }
         }
     }
@@ -1024,14 +1021,12 @@ sub add_verification {
     my %available_verify_methods;
     # Determine what types of verification are available.
     for my $file_and_timestamp (@$filename_listing) {
-        given ($file_and_timestamp->[0]) {
-            when (/\.(asc|sig|sign)$/) {
-                $available_verify_methods{gpg}++;
-            } when (/\.sha1?$/) {
-                $available_verify_methods{sha1}++;
-            } when (/\.md5$/) {
-                $available_verify_methods{md5}++;
-            }
+        if ($file_and_timestamp->[0] eq /\.(asc|sig|sign)$/) {
+            $available_verify_methods{gpg}++;
+        } elsif ($file_and_timestamp->[0] eq /\.sha1?$/) {
+            $available_verify_methods{sha1}++;
+        } elsif ($file_and_timestamp->[0] eq /\.md5$/) {
+            $available_verify_methods{md5}++;
         }
     }
 

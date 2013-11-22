@@ -508,21 +508,19 @@ sub no_mirror_download_dirlist {
     my $url = shift;
 
     my $dirlist;
-    given ($url) {
-        when (m!^ftp://.*$!) {
-            $dirlist = ftp_download_dirlist($url);
-        } when (m!^http://.*$!) {
-            $dirlist = http_download_dirlist($url);
-        } when (m!^file://.*$!) {
-          $dirlist = file_download_dirlist($url);
-        } default {
-            die <<EOD;
+    if ($url =~ m!^ftp://.*$!) {
+        $dirlist = ftp_download_dirlist($url);
+    } elsif ($url =~ m!^http://.*$!) {
+        $dirlist = http_download_dirlist($url);
+    } elsif ($url =~ m!^file://.*$!) {
+      $dirlist = file_download_dirlist($url);
+    } else {
+        die <<EOD;
 App-Fetchware: run-time syntax error: the url parameter your provided in
 your call to download_dirlist() [$url] does not have a supported URL scheme (the
 http:// or ftp:// part). The only supported download types, schemes, are FTP and
 HTTP. See perldoc App::Fetchware.
 EOD
-        }
     }
 
     return $dirlist;
@@ -926,21 +924,19 @@ sub no_mirror_download_file {
     my $url = shift;
 
     my $filename;
-    given ($url) {
-        when (m!^ftp://!) {
-            $filename = download_ftp_url($url);
-        } when (m!^http://!) {
-            $filename = download_http_url($url);
-        } when (m!^file://!) {
-            $filename = download_file_url($url);   
-        } default {
-            die <<EOD;
+    if ($url =~ m!^ftp://!) {
+        $filename = download_ftp_url($url);
+    } elsif ($url =~ m!^http://!) {
+        $filename = download_http_url($url);
+    } elsif ($url =~ m!^file://!) {
+        $filename = download_file_url($url);   
+    } else {
+        die <<EOD;
 App-Fetchware: run-time syntax error: the url parameter your provided in
 your call to download_file() [$url] does not have a supported URL scheme (the
 http:// or ftp:// part). The only supported download types, schemes, are FTP and
 HTTP. See perldoc App::Fetchware.
 EOD
-        }
     }
 
     return $filename;
@@ -1607,47 +1603,13 @@ EOD
         
         # Code below based on a cool forking idiom by Aristotle.
         # (http://blogs.perl.org/users/aristotle/2012/10/concise-fork-idiom.html)
-        given ( scalar fork ) {
+        for ( scalar fork ) {
             # Fork failed.
-            when ( undef ) {
-                die <<EOD; 
+            die <<EOD if not defined; # defined() operates on default variable, $_.
 App-Fetchware-Util: Fork failed! This shouldn't happen!?! Os error [$!].
 EOD
-            # Fork succeeded, Child code goes here.
-            } when ( 0 ) {
-                close $readonly or die <<EOD;
-App-Fetchware-Util: Failed to close $readonly pipe in child. Os error [$!].
-EOD
-                # Drop privs.
-                # drop_privileges() dies on an error just let drop_privs() caller
-                # catch it.
-                my ($uid, $gid) = drop_privileges($regular_user); 
-
-
-                # Execute the coderef that is supposed to be done as non-root.
-                $child_code->($writeonly);
-
-                # Now close the pipe, to avoid creating a dead pipe causing a
-                # SIGPIPE to be sent to the parent.
-                close $writeonly or die <<EOD;
-App-Fetchware-Util: Failed to close $writeonly pipe in child. Os error [$!].
-EOD
-
-                # Exit success, because failure is only indicated by a thrown
-                # exception that bin/fetchware's main eval {} will catch, print,
-                # and exit non-zero indicating failure.
-                # Use POSIX's _exit() to avoid calling END{} blocks. This *must*
-                # be done to prevent File::Temp's END{} block from attempting to
-                # delete the temp directory that the parent still needs to
-                # finish installing or uninstalling. The parent's END{} block's
-                # will still be called, so this just turns off the child
-                # deleting the temp dir not the parent.
-                _exit 0;
-
-            # Fork succeeded, parent code goes here.
-            } default {
-                my $kidpid = $_;
-
+            # Fork succeeded, Parent code goes here.
+            if ( my $kidpid = $_; ) {
                 close $writeonly or die <<EOD;
 App-Fetchware-Util: Failed to close $writeonly pipe in parent. Os error [$!].
 EOD
@@ -1693,6 +1655,36 @@ EOD
                 } else {
                     return \$output;
                 }
+            # Fork succeeded, child code goes here.
+            } else {
+                close $readonly or die <<EOD;
+App-Fetchware-Util: Failed to close $readonly pipe in child. Os error [$!].
+EOD
+                # Drop privs.
+                # drop_privileges() dies on an error just let drop_privs() caller
+                # catch it.
+                my ($uid, $gid) = drop_privileges($regular_user); 
+
+
+                # Execute the coderef that is supposed to be done as non-root.
+                $child_code->($writeonly);
+
+                # Now close the pipe, to avoid creating a dead pipe causing a
+                # SIGPIPE to be sent to the parent.
+                close $writeonly or die <<EOD;
+App-Fetchware-Util: Failed to close $writeonly pipe in child. Os error [$!].
+EOD
+
+                # Exit success, because failure is only indicated by a thrown
+                # exception that bin/fetchware's main eval {} will catch, print,
+                # and exit non-zero indicating failure.
+                # Use POSIX's _exit() to avoid calling END{} blocks. This *must*
+                # be done to prevent File::Temp's END{} block from attempting to
+                # delete the temp directory that the parent still needs to
+                # finish installing or uninstalling. The parent's END{} block's
+                # will still be called, so this just turns off the child
+                # deleting the temp dir not the parent.
+                _exit 0;
             }
         }    
     # Non-Unix OSes just execute the $child_code.
