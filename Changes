@@ -1,6 +1,8 @@
 Revison History for App::Fetchware
 
 {{$NEXT}}
+
+1.004     2013-11-23 02:19:58 America/New_York
     * Attempt to fix bin/fetchware not properly being indexed again :)
       bin/fetchware was missing a shebang line. This has been fixed. Perhaps
       this is the snag preventing bin/fetchware from being indexed properly.
