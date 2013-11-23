@@ -3,9 +3,6 @@
 # with C<use lib 'bin'; require fetchware; fetchware->import();>, and it
 # bypasses a limitation in dzil regarding creating the POD properly.
 #
-# Tell everybody to call this file fetchware, and to index it properly on CPAN.
-# http://blogs.perl.org/users/polettix/2011/11/distzilla-podweaver-and-bin.html
-# PODNAME: fetchware
 package fetchware;
 # ABSTRACT: Fetchware is a package manager for source code distributions.
 use strict;
