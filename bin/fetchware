@@ -1021,11 +1021,11 @@ sub add_verification {
     my %available_verify_methods;
     # Determine what types of verification are available.
     for my $file_and_timestamp (@$filename_listing) {
-        if ($file_and_timestamp->[0] eq /\.(asc|sig|sign)$/) {
+        if ($file_and_timestamp->[0] =~ /\.(asc|sig|sign)$/) {
             $available_verify_methods{gpg}++;
-        } elsif ($file_and_timestamp->[0] eq /\.sha1?$/) {
+        } elsif ($file_and_timestamp->[0] =~ /\.sha1?$/) {
             $available_verify_methods{sha1}++;
-        } elsif ($file_and_timestamp->[0] eq /\.md5$/) {
+        } elsif ($file_and_timestamp->[0] =~ /\.md5$/) {
             $available_verify_methods{md5}++;
         }
     }
