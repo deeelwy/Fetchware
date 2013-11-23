@@ -239,7 +239,7 @@ subtest 'test debug_CONFIG()' => sub {
     print_ok(sub {debug_CONFIG()},
         <<'EOP', 'checked debug_CONFIG() success');
 $VAR1 = {
-          'a' => 1,
+          'a' => 1
         };
 EOP
 
