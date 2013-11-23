@@ -1,6 +1,9 @@
 Revison History for App::Fetchware
 
 {{$NEXT}}
+    * Fix in 1.002 failed to fix bin/fetchware indexing. Going to try giving
+      package fetchware; a blank line around itself maybe that will do the
+      trick.
 
 1.002     2013-11-23 01:23:55 America/New_York
     * Fixed bin/fetchware not being properly indexed by PAUSE due to using both

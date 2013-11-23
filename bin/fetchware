@@ -2,8 +2,9 @@
 # such as perlbrew and dzil. It makes loading this program for testing very easy
 # with C<use lib 'bin'; require fetchware; fetchware->import();>, and it
 # bypasses a limitation in dzil regarding creating the POD properly.
-#
+
 package fetchware;
+
 # ABSTRACT: Fetchware is a package manager for source code distributions.
 use strict;
 use warnings;
