@@ -1,6 +1,8 @@
 Revison History for App::Fetchware
 
 {{$NEXT}}
+    * Fixed bin/fetchware not being properly indexed by PAUSE due to using both
+      # PODNAME and a package fetchware; in the same file.
 
 1.001     2013-11-23 00:31:02 America/New_York
     * Fixed numerous simple test failures reported automatically from CPAN
