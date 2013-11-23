@@ -1,6 +1,8 @@
 Revison History for App::Fetchware
 
 {{$NEXT}}
+
+1.002     2013-11-23 01:23:55 America/New_York
     * Fixed bin/fetchware not being properly indexed by PAUSE due to using both
       # PODNAME and a package fetchware; in the same file.
 
