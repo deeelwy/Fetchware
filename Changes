@@ -1,6 +1,8 @@
 Revison History for App::Fetchware
 
 {{$NEXT}}
+
+1.003     2013-11-23 01:42:54 America/New_York
     * Fix in 1.002 failed to fix bin/fetchware indexing. Going to try giving
       package fetchware; a blank line around itself maybe that will do the
       trick.
