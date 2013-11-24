@@ -3,35 +3,35 @@ Revison History for App::Fetchware
 {{$NEXT}}
 
 1.005     2013-11-24 01:19:18 America/New_York
-    * Another attempt at fixing the indexing being messed up. Turns out my
+    - Another attempt at fixing the indexing being messed up. Turns out my
       dist.init is missing a [PkgVersion] directive. I use Pod::Weaver, so I
       probably removed it when I removed [PodVersion], but I should not have,
       because it is still needed.
 
 1.004     2013-11-23 02:19:58 America/New_York
-    * Attempt to fix bin/fetchware not properly being indexed again :)
+    - Attempt to fix bin/fetchware not properly being indexed again :)
       bin/fetchware was missing a shebang line. This has been fixed. Perhaps
       this is the snag preventing bin/fetchware from being indexed properly.
 
 1.003     2013-11-23 01:42:54 America/New_York
-    * Fix in 1.002 failed to fix bin/fetchware indexing. Going to try giving
+    - Fix in 1.002 failed to fix bin/fetchware indexing. Going to try giving
       package fetchware; a blank line around itself maybe that will do the
       trick.
 
 1.002     2013-11-23 01:23:55 America/New_York
-    * Fixed bin/fetchware not being properly indexed by PAUSE due to using both
+    - Fixed bin/fetchware not being properly indexed by PAUSE due to using both
       # PODNAME and a package fetchware; in the same file.
 
 1.001     2013-11-23 00:31:02 America/New_York
-    * Fixed numerous simple test failures reported automatically from CPAN
+    - Fixed numerous simple test failures reported automatically from CPAN
       Testers.
-      * See: http://www.cpantesters.org/distro/A/App-Fetchware.html for listing
+      - See: http://www.cpantesters.org/distro/A/App-Fetchware.html for listing
         of failed test reports. All of them failed :) Be sure to select the
         reports for version 1.00, which corresponds to the version of fetchware
         that was tested.
-    * Replaced given/when with regular ifs due to 5.18 deprecation of given/when. 
-      * RIP given/when and smartmatch and ~~. With any luck you'll be
+    - Replaced given/when with regular ifs due to 5.18 deprecation of given/when. 
+      - RIP given/when and smartmatch and ~~. With any luck you'll be
         reincarnated soon.
 
 1.000     2013-11-20 00:29:13 America/New_York
-    * Initial release!
+    - Initial release!
