@@ -2,6 +2,12 @@ Revison History for App::Fetchware
 
 {{$NEXT}}
 
+1.005     2013-11-24 01:19:18 America/New_York
+    * Another attempt at fixing the indexing being messed up. Turns out my
+      dist.init is missing a [PkgVersion] directive. I use Pod::Weaver, so I
+      probably removed it when I removed [PodVersion], but I should not have,
+      because it is still needed.
+
 1.004     2013-11-23 02:19:58 America/New_York
     * Attempt to fix bin/fetchware not properly being indexed again :)
       bin/fetchware was missing a shebang line. This has been fixed. Perhaps
