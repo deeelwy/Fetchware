@@ -41,9 +41,9 @@ subtest 'OVERRIDE_DOWNLOAD exports what it should' => sub {
         determine_package_path
     );
     # sort them to make the testing their equality very easy.
-    @expected_overide_download_exports = sort @expected_overide_download_exports;
     my @sorted_download_tag = sort @{$App::Fetchware::EXPORT_TAGS{OVERRIDE_DOWNLOAD}};
-    ok(@expected_overide_download_exports ~~ @sorted_download_tag, 
+    @expected_overide_download_exports = sort @expected_overide_download_exports;
+    is_deeply(\@sorted_download_tag, \@expected_overide_download_exports,
         'checked for correct OVERRIDE_DOWNLOAD @EXPORT_TAG');
 
 };

@@ -46,9 +46,9 @@ subtest 'OVERRIDE_LOOKUP exports what it should' => sub {
         lookup_determine_downloadpath
     );
     # sort them to make the testing their equality very easy.
-    @expected_overide_lookup_exports = sort @expected_overide_lookup_exports;
     my @sorted_lookup_tag = sort @{$App::Fetchware::EXPORT_TAGS{OVERRIDE_LOOKUP}};
-    ok(@expected_overide_lookup_exports ~~ @sorted_lookup_tag, 
+    @expected_overide_lookup_exports = sort @expected_overide_lookup_exports;
+    is_deeply(\@sorted_lookup_tag, \@expected_overide_lookup_exports,
         'checked for correct OVERRIDE_LOOKUP @EXPORT_TAG');
 };
 

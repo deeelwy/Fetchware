@@ -52,13 +52,8 @@ subtest 'TESTING export what they should' => sub {
     # sort them to make the testing their equality very easy.
     @expected_testing_exports = sort @expected_testing_exports;
     my @sorted_testing_tag = sort @{$Test::Fetchware::EXPORT_TAGS{TESTING}};
-
-    for my $i (0..$#sorted_testing_tag) {
-        unless ($sorted_testing_tag[$i] eq $expected_testing_exports[$i]) {
-            fail('checked for correct TESTING @EXPORT_TAG failed');
-        }
-    }
-    pass('checked for correct TESTING @EXPORT_TAG');
+    is_deeply(\@sorted_testing_tag, \@expected_testing_exports,
+        'checked for correct exports.');
 };
 
 

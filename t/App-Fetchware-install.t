@@ -41,9 +41,9 @@ subtest 'OVERRIDE_INSTALL exports what it should' => sub {
         chdir_unless_already_at_path
     );
     # sort them to make the testing their equality very easy.
-    @expected_overide_install_exports = sort @expected_overide_install_exports;
     my @sorted_install_tag = sort @{$App::Fetchware::EXPORT_TAGS{OVERRIDE_INSTALL}};
-    ok(@expected_overide_install_exports ~~ @sorted_install_tag, 
+    @expected_overide_install_exports = sort @expected_overide_install_exports;
+    is_deeply(\@sorted_install_tag, \@expected_overide_install_exports,
         'checked for correct OVERRIDE_INSTALL @EXPORT_TAG');
 };
 

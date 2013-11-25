@@ -40,9 +40,9 @@ subtest 'OVERRIDE_BUILD exports what it should' => sub {
         run_configure
     );
     # sort them to make the testing their equality very easy.
-    @expected_overide_build_exports = sort @expected_overide_build_exports;
     my @sorted_build_tag = sort @{$App::Fetchware::EXPORT_TAGS{OVERRIDE_BUILD}};
-    ok(@expected_overide_build_exports ~~ @sorted_build_tag, 
+    @expected_overide_build_exports = sort @expected_overide_build_exports;
+    is_deeply(\@sorted_build_tag, \@expected_overide_build_exports,
         'checked for correct OVERRIDE_BUILD @EXPORT_TAG');
 };
 

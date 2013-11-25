@@ -45,9 +45,9 @@ subtest 'OVERRIDE_VERIFY exports what it should' => sub {
         digest_verify
     );
     # sort them to make the testing their equality very easy.
-    @expected_overide_verify_exports = sort @expected_overide_verify_exports;
     my @sorted_verify_tag = sort @{$App::Fetchware::EXPORT_TAGS{OVERRIDE_VERIFY}};
-    ok(@expected_overide_verify_exports ~~ @sorted_verify_tag, 
+    @expected_overide_verify_exports = sort @expected_overide_verify_exports;
+    is_deeply(\@sorted_verify_tag, \@expected_overide_verify_exports,
         'checked for correct OVERRIDE_VERIFY @EXPORT_TAG');
 };
 

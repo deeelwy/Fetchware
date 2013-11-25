@@ -47,10 +47,10 @@ subtest 'OVERRIDE_UNARCHIVE exports what it should' => sub {
         unarchive_zip
     );
     # sort them to make the testing their equality very easy.
-    @expected_overide_unarchive_exports = sort @expected_overide_unarchive_exports;
     my @sorted_unarchive_tag = sort
         @{$App::Fetchware::EXPORT_TAGS{OVERRIDE_UNARCHIVE}};
-    ok(@expected_overide_unarchive_exports ~~ @sorted_unarchive_tag, 
+    @expected_overide_unarchive_exports = sort @expected_overide_unarchive_exports;
+    is_deeply(\@sorted_unarchive_tag, \@expected_overide_unarchive_exports,
         'checked for correct OVERRIDE_UNARCHIVE @EXPORT_TAG');
 };
 

@@ -65,10 +65,9 @@ subtest 'UTIL export what they should' => sub {
     );
 
     # sort them to make the testing their equality very easy.
-    @expected_util_exports = sort @expected_util_exports;
     my @sorted_util_tag = sort @{$App::Fetchware::Util::EXPORT_TAGS{UTIL}};
-
-    ok(@expected_util_exports ~~ @sorted_util_tag, 
+    @expected_util_exports = sort @expected_util_exports;
+    is_deeply(\@sorted_util_tag, \@expected_util_exports,
         'checked for correct UTIL @EXPORT_TAG');
 };
 
