@@ -289,7 +289,7 @@ subtest 'test add_mirrors() success' => sub {
     skip_all_unless_release_testing();
 
     plan(skip_all => 'Optional Test::Expect testing module not installed.')
-        unless eval {use Test::Expect; 1;};
+        unless eval {require Test::Expect; Test::Expect->import(); 1;};
 
     # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
     # something crazy like Test::Expect, this will have to be tested "manually."
@@ -373,7 +373,7 @@ subtest 'test add_verification() success' => sub {
     skip_all_unless_release_testing();
 
     plan(skip_all => 'Optional Test::Expect testing module not installed.')
-        unless eval {use Test::Expect; 1;};
+        unless eval {require Test::Expect; Test::Expect->import(); 1;};
 
     # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
     # something crazy like Test::Expect, this will have to be tested "manually."
@@ -416,7 +416,7 @@ subtest 'test determine_mandatory_options() success' => sub {
     skip_all_unless_release_testing();
 
     plan(skip_all => 'Optional Test::Expect testing module not installed.')
-        unless eval {use Test::Expect; 1;};
+        unless eval {require Test::Expect; Test::Expect->import(); 1;};
 
     # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
     # something crazy like Test::Expect, this will have to be tested "manually."
@@ -460,7 +460,7 @@ subtest 'test determine_filter_option() success' => sub {
     skip_all_unless_release_testing();
 
     plan(skip_all => 'Optional Test::Expect testing module not installed.')
-        unless eval {use Test::Expect; 1;};
+        unless eval {require Test::Expect; Test::Expect->import(); 1;};
 
     # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
     # something crazy like Test::Expect, this will have to be tested "manually."
@@ -492,7 +492,7 @@ subtest 'test analyze_lookup_listing() success' => sub {
     skip_all_unless_release_testing();
 
     plan(skip_all => 'Optional Test::Expect testing module not installed.')
-        unless eval {use Test::Expect; 1;};
+        unless eval {require Test::Expect; Test::Expect->import(); 1;};
 
     # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
     # something crazy like Test::Expect, this will have to be tested "manually."
@@ -643,7 +643,7 @@ note("$fetchwarefile");
 ##BROKEN##    skip_all_unless_release_testing();
 ##BROKEN##
 ##BROKEN##    plan(skip_all => 'Optional Test::Expect testing module not installed.')
-##BROKEN##        unless eval {use Test::Expect; 1;};
+##BROKEN##        unless eval {require Test::Expect; Test::Expect->import(); 1;};
 ##BROKEN##
 ##BROKEN##    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
 ##BROKEN##    # something crazy like Test::Expect, this will have to be tested "manually."
