@@ -2,6 +2,12 @@ Revison History for App::Fetchware
 
 {{$NEXT}}
 
+1.007     2013-11-25 23:53:58 America/New_York
+    - Fixed a bunch of CPAN Testers FAILs. Including:
+        - Weird t/bin-fetchware-upgrade.t test-dist fail bug.
+        - Added SKIP block unless -t to t/bin-fetchware-new.t testing.
+        - Fixed sort block returning undef bug, and added extra tests too.
+
 1.006     2013-11-25 02:59:52 America/New_York
     - Fixed Test::Expect CPAN Testers FAILs by switching from use to requires.
 
