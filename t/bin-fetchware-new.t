@@ -37,6 +37,12 @@ BEGIN {
 }
 
 
+SKIP: {
+    # Must be 1 less than the number of tests in the Test::More use line above.
+    my $how_many = 16;
+    skip 'Not on a terminal', $how_many unless -t; 
+
+
 subtest 'test opening_message() success' => sub {
    print_ok(sub {opening_message()},
        <<EOM, 'test opening_message() success.');
@@ -723,6 +729,8 @@ note("$fetchwarefile");
 ##BROKEN##
 ##BROKEN##    expect_quit();
 ##BROKEN##};
+
+} # #End of gigantic skip block.
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.
