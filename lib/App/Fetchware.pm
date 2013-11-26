@@ -3623,7 +3623,7 @@ cannot be verified. The availabel options are:
 
 =item sha1 - Uses the SHA-1 hash function to verify the integrity of the download. This is much less secure than gpg.
 
-=item sha1 - Uses the MD5 hash function to verify the integrity of the download. This is much less secure than gpg.
+=item md5 - Uses the MD5 hash function to verify the integrity of the download. This is much less secure than gpg.
 
 =back
 
