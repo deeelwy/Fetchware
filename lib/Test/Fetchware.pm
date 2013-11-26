@@ -363,6 +363,9 @@ program '$file_name';
 # Need to filter out the cruft.
 filter '$file_name';
 
+# Just use MD5 to verify it.
+verify_method 'md5';
+
 EOF
         ,
 
