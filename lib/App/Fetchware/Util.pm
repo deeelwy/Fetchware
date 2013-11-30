@@ -1606,8 +1606,7 @@ EOD
         for ( scalar fork ) {
             # Fork failed.
             # defined() operates on default variable, $_.
-            #if (not defined $_) {
-            if ($_ eq undef) {
+            if (not defined $_) {
                 die <<EOD;
 App-Fetchware-Util: Fork failed! This shouldn't happen!?! Os error [$!].
 EOD
