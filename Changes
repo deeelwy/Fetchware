@@ -2,6 +2,23 @@ Revison History for App::Fetchware
 
 {{$NEXT}}
 
+1.008     2013-11-30 04:46:59 America/New_York
+    - Fixed github#1 by fixing mistakenly commented out code that was poorly
+      half refactored.
+    - Fixed github#2 and 3 by fixing botched removal of given/when in
+      bin/fetchware's run() subroutine.
+    - Fixed 2 miscellaneous bugs while fixing github#1-3.
+        - Fixed a bizarre HEREDOC parsing bug, caused by perl not parsing the
+          HEREDOC properly. Vim's syntax highlighting were also confused.
+          Perhaps the bug was my code? Probably was. Not bothering p5p with it.
+        - Fixed bug leaving test-dists in user's fetchware package database.
+          These really should be deleted, because test-dist and friends made by
+          Util's make_test_dist() subroutine do *not* actually install anything
+          or touch your computer at all. They just contain fake build and
+          install commands that just print to your screen to support testing
+          building and installing software without actually building or
+          installing stuff.
+
 1.007     2013-11-25 23:53:58 America/New_York
     - Fixed a bunch of CPAN Testers FAILs. Including:
         - Weird t/bin-fetchware-upgrade.t test-dist fail bug.
