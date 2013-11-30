@@ -88,6 +88,8 @@ our $dry_run = 0;
 
 # Be a modulino, so I can "use fetchware" in my test suite, so I can test
 # bin/fetchware normally like any other perl module.
+###BUGALERT## Add a test suite for run(), and also one that directly calls
+#bin/fetchware to test its command line options.
 run() unless caller();
 
 sub run {
@@ -161,21 +163,21 @@ EOM
         vmsg 'Determining which command to run based on command line options.';
         my $command = shift @ARGV;
         if ($command eq 'install') {
-            cmd_install($command eq @ARGV);
+            cmd_install(@ARGV);
         } elsif ($command eq 'uninstall') {
-            cmd_uninstall($command eq @ARGV);
+            cmd_uninstall(@ARGV);
         } elsif ($command eq 'new') {
-            cmd_new($command eq @ARGV);
+            cmd_new(@ARGV);
         } elsif ($command eq 'upgrade') {
-            cmd_upgrade($command eq @ARGV);
+            cmd_upgrade(@ARGV);
         } elsif ($command eq 'upgrade-all') {
-            cmd_upgrade_all($command eq @ARGV);
+            cmd_upgrade_all(@ARGV);
         } elsif ($command eq 'list') {
-            cmd_list($command eq @ARGV);
+            cmd_list(@ARGV);
         } elsif ($command eq 'look') {
-            cmd_look($command eq @ARGV);
+            cmd_look(@ARGV);
         } elsif ($command eq 'clean') {
-            cmd_clean($command eq @ARGV);
+            cmd_clean(@ARGV);
         } elsif ($command eq 'help') {
             cmd_help(@ARGV);
         } else {
