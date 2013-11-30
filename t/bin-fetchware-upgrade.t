@@ -237,6 +237,10 @@ note("]");
     ok(unlink($old_test_dist_path, $old_test_dist_path_md5,
             $new_test_dist_path, $new_test_dist_path_md5),
         'checked cmd_upgrade() delete temp upgrade files');
+
+    # Clean up installed and upgraded test-dist!
+    ok(unlink(catfile(fetchware_database_path(), 'test-dist-1.01.fpkg')),
+        'checked cmd_ugprade() delete useless test-dist from package database.');
 };
 
 

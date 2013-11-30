@@ -244,6 +244,12 @@ note("UPGRADED_PACKAGES[@upgraded_packages]");
         $new_test_dist_path, $new_test_dist_path_md5,
         $new_another_dist_path, $new_another_dist_path_md5,
         ), 'checked cmd_upgrade() delete temp upgrade files');
+
+    # Clean up installed and upgraded test-dist!
+    ok(unlink(catfile(fetchware_database_path(), 'test-dist-1.01.fpkg')),
+        'checked cmd_ugprade() delete useless test-dist from package database.');
+    ok(unlink(catfile(fetchware_database_path(), 'another-dist-1.01.fpkg')),
+        'checked cmd_ugprade() delete useless test-dist from package database.');
 };
 
 
