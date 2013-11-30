@@ -2081,9 +2081,10 @@ EOM
         # Get a name for the Fetchwarefile that does not already exist.
         if (-e $fetchwarefile_filename) {
             while (1) {
-                $fetchwarefile_filename = $term->get_reply(prompt => <<EOP,
-What would you like your new Fetchwarefile's filename to be? 
-EOP                 
+                $fetchwarefile_filename = $term->get_reply(
+                    prompt => <<EOP,
+What would you like your new Fetchwarefile's filename to be?
+EOP
                     print_me => <<EOP
 Fetchware by default uses the program name you specified at the beginning of
 running fetchware new plus a '.Fetchwarefile' extension to name your
