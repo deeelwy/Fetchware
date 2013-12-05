@@ -2297,8 +2297,8 @@ EOM
         # name that would support multiple versions being in the fetchware
         # package database at the same time.
         ###BUGALERT### The above Note is a ridiculous bug. Fix it!
-        vmsg 'Uninstalled the old fetchware package from the fetchware database.';
         uninstall_fetchware_package_from_database($fetchware_package_path);
+        vmsg 'Uninstalled the old fetchware package from the fetchware database.';
 
         my $installed_fetchware_package_path
             = copy_fpkg_to_fpkg_database($updated_fetchware_package_path);
@@ -3270,7 +3270,7 @@ EOD
 
 =head2 uninstall_fetchware_package_from_database()
 
-    my uninstall_fetchware_package_from_database($uninstall_package_name);
+    uninstall_fetchware_package_from_database($uninstall_package_name);
 
 Deletes the specified $uninstall_package_name from the fetchware package
 database. Throws an exception on error.
