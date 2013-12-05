@@ -604,6 +604,11 @@ sub http_download_dirlist {
     ###BUGALERT### Should use request() instead of get, because request can
     #directly write the chunks of the file to disk as they are downloaded. get()
     #just uses RAM, so a 50Meg file takes up 50 megs of ram, and so on.
+    ###BUGALERT### Also, if you use request instead, and get chunks of bytes
+    #instead of just writing them to disk, you could also use a
+    #Term::ProgressBar to print a cool progress bar during the download!
+    #This could also be added to the ftp downloaders too, but probably not the
+    #local file:// downloaders though.
     my $response = $http->get($http_url);
 
     die <<EOD unless $response->{success};
