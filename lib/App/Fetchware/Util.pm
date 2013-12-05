@@ -609,7 +609,7 @@ sub http_download_dirlist {
     die <<EOD unless $response->{success};
 App-Fetchware: run-time error. HTTP::Tiny failed to download a directory listing
 of your provided lookup_url. HTTP status code [$response->{status} $response->{reason}]
-HTTP headers [@{[Data::Dumper::Dumper($response->{headers})]}].
+HTTP headers [@{[Data::Dumper::Dumper($response)]}].
 See man App::Fetchware.
 EOD
 
