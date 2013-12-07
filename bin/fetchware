@@ -78,6 +78,7 @@ our %EXPORT_TAGS  = (
         edit_manually
         check_fetchwarefile
         ask_to_install_now_to_test_fetchwarefile
+        run
     )]
 );
 our @EXPORT_OK = @{$EXPORT_TAGS{TESTING}};
@@ -409,7 +410,7 @@ EOM
             =
             extract_fetchwarefile($fetchware_package_path, cwd());
         vmsg <<EOM;
-Extracting out Fetchwarefile from [$fetchware_package_path] to [$fetchwarefile]
+Extracting out Fetchwarefile from [$fetchware_package_path] to [$$fetchwarefile]
 EOM
     } else {
         die <<EOD;
@@ -424,7 +425,7 @@ EOD
     # to the imported subroutines and modified fetchware configuration (%CONFIG)
     # just as the child does.
     parse_fetchwarefile($fetchwarefile);
-    vmsg "Parsed Fetchwarefile [$fetchwarefile].";
+    vmsg "Parsed Fetchwarefile [$$fetchwarefile].";
 
     # start() runs as root before the fork, because it uses
     # App::Fetchware::Util's create_tempdir() to create a $temp_dir. This
@@ -2170,7 +2171,7 @@ EOD
     # to the imported subroutines and modified fetchware configuration (%CONFIG)
     # just as the child does.
     parse_fetchwarefile($fetchwarefile);
-    vmsg "Parsed Fetchwarefile [$fetchwarefile].";
+    vmsg "Parsed Fetchwarefile [$$fetchwarefile].";
 
     # start() runs as root before the fork, because it uses
     # App::Fetchware::Util's create_tempdir() to create a $temp_dir. This
@@ -2434,7 +2435,7 @@ sub cmd_look {
     if ($filename =~ /\.fpkg$/) {
         $fetchwarefile = extract_fetchwarefile($filename);
         vmsg <<EOM;
-Extracting out Fetchwarefile from [$filename] to [$fetchwarefile]
+Extracting out Fetchwarefile from [$filename] to [$$fetchwarefile]
 EOM
     } else {
         my $fh = safe_open($filename, <<EOD);
@@ -2445,14 +2446,14 @@ EOD
         # Add a \ to turn the slurped scalar into a scalar ref for calling
         # parse_fetchwarefile() properly.
         $fetchwarefile = \do {local $/; <$fh>};
-        vmsg  "Slurped [$filename] into fetchware: [$fetchwarefile]";
+        vmsg  "Slurped [$filename] into fetchware: [$$fetchwarefile]";
     }
 
     # Must parse the Fetchwarefile in the parent, so that the parent has access
     # to the imported subroutines and modified fetchware configuration (%CONFIG)
     # just as the child does.
     parse_fetchwarefile($fetchwarefile);
-    vmsg "Parsed Fetchwarefile [$fetchwarefile].";
+    vmsg "Parsed Fetchwarefile [$$fetchwarefile].";
 
     # start() runs as root before the fork, because it uses
     # App::Fetchware::Util's create_tempdir() to create a $temp_dir. This
