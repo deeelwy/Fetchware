@@ -48,7 +48,7 @@ subtest 'test cmd_clean() success' => sub {
     my $tempdir = create_tempdir(TempDir => $cwd);
     ok(-e $tempdir, 'checked creating a temporary directory.');
 
-    print_ok(sub {cmd_clean(original_cwd)},
+    print_ok(sub {cmd_clean(original_cwd())},
         qr/.*?] locked by another fetchware process\. Skipping\./,
         'checked cmd_clean skipping locked fetchware directories.');
 
