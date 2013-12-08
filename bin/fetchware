@@ -138,7 +138,7 @@ EOM
         # run time instead of compile time, so that I can test fetchware without
         # running dzil test.
         'version|V' => sub { eval 'say "Fetchware version $VERSION"; '; exit 0},
-        'help|h|?' => \&help,
+        'help|h|?' => \&cmd_help,
         'verbose|v' => \$verbose,
         'quiet|q' => \$quiet,
         ###BUGALERT### dry-run functionality is *not* implemented!!!
