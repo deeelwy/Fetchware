@@ -48,26 +48,8 @@ subtest 'test cmd_list() success' => sub {
         'checked cmd_list() by installing a test-dist to list');
 note("CWD[@{[cwd()]}]");
 
-    my $stdout;
-    my $error;
-    {
-        # localize stdout, and open it for reading to test cmd_list()'s output.
-        local *STDOUT;
-        open STDOUT, '>', \$stdout
-            or $error = "Can't open STDOUTto test cmd_list()'s output: $!";
-
-        # Writes to STDOUT, which is redirected to $stdout above.
-        cmd_list();
-
-        close STDOUT
-            or $error = "WTF! close STDOUT actually failed Huh?!?: $!";
-    }
-    # Catch any errors that will be screwed up, because of STDOUT being stolen.
-    fail($error) if defined $error;
-
-    # Test cmd_list()'s output.
-        ok(grep { $_ eq 'test-dist-1.00' } (split "\n", $stdout),
-            'checked cmd_list() success');
+    print_ok(sub {cmd_list()}, qr/test-dist-1\.00/,
+        'checked cmd_list() success.');
 
 # Annoyingly clean up CONFIG. Shouln't end() do this!!!!:)
 __clear_CONFIG();
