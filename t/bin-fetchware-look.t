@@ -83,8 +83,9 @@ subtest 'test cmd_look() test-dist success' => sub {
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
     my $look_path = cmd_look($test_dist_path);
+note("LOOKPATH[$look_path]");
 
-    like($look_path, qr//,
+    like($look_path, qr/test-dist-1\.00/,
         'check cmd_look(test-dist) success.');
 
     # Cleanup the test-dist crap.
