@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '7'; #Update if this changes.
+use Test::More 0.98 tests => '8'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir);
 use Path::Class;
@@ -38,6 +38,7 @@ subtest 'TESTING export what they should' => sub {
     my @expected_testing_exports = qw(
         eval_ok
         print_ok
+        fork_ok
         skip_all_unless_release_testing
         make_clean
         make_test_dist
@@ -211,6 +212,21 @@ subtest 'test add_prefix_if_nonroot() success' => sub {
         'checked add_prefix_if_nonroot() tempfile creation.');
     ok(-e $prefix,
         'checked add_prefix_if_nonroot() prefix existence.');
+};
+
+
+subtest 'test fork_ok()' => sub {
+    fork_ok(sub {ok(1, 'successful fork_ok() test.')},
+        'checked fork_ok() success.');
+
+    # Abuse a TODO block to test fork_ok() failure by turning that failure into
+    # success. When this test fails it succeeds, because it is testing failure.
+    TODO: {
+        todo_skip 'Turn failure into success.', 1;
+
+        fork_ok(sub { return 0 },
+            'checked fork_ok() failure.');
+    }
 };
 
 

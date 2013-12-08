@@ -38,6 +38,7 @@ our %EXPORT_TAGS = (
     TESTING => [qw(
         eval_ok
         print_ok
+        fork_ok
         skip_all_unless_release_testing
         make_clean
         make_test_dist
@@ -185,6 +186,66 @@ sub print_ok {
         return ok($expected->($stdout),
             $test_name);
     }
+}
+
+
+=head2 fork_ok()
+
+    fork_ok(&code_fork_should_do, $test_name);
+
+Simply properly forks, and runs the caller's provided coderef in the child,
+and tests that the child's exit value is 0 for success using a simple ok() call from
+Test::More. The child's exit value is controlled by the caller based on what
+&code_fork_should_do returns. If &code_fork_should_do returns true, then the
+child returns C<0> for success, and if &code_fork_should_do returns false, then
+the child returns C<1> for failure.
+
+Because the fork()ed child is a copy of the current perl process you can still
+access whatever Test::More or Test::Fetchware testing subroutines you may have
+imported for use in the test file that uses fork_ok().
+
+This testing helper subroutine only exists for testing fetchware's command line
+interface. This interface is fetchware's run() subroutine and when you actually
+execute the fetchware program from the command line such as C<fetchware help>.
+
+=over
+
+=item WARNING
+
+fork_ok() has a major bug that makes any tests you attempt to run in
+&code_fork_should_do that fail never report this failure properly to
+Test::Builder. Also, any success is not reported either. This is not fork_ok()'s
+fault it is Test::Builder's fault for still not having support for forking. This
+lack of support for forking may be fixed in Test::Builder 1.5 or perhaps 2.0,
+but those are still in development.
+
+=back
+
+=cut
+
+sub fork_ok {
+    my $coderef = shift;
+    my $test_name = shift;
+
+
+    my $kid = fork;
+    die "Couldn't fork: $!\n" if not defined $kid;
+    # ... parent code here ...
+    if ( $kid ) {
+        # Block waiting for the child process ($kid) to exit.
+        waitpid($kid, 0);
+    }
+    # ... child code here ...
+    else {
+        # Run caller's code wihtout any args.
+        # And exit based on the success or failure of $coderef.
+        $coderef->() ? exit 0 : exit 1;
+    }
+
+    # And test that the child returned successfully.
+    ok($? == 0, $test_name);
+
+    return $?;
 }
 
 
