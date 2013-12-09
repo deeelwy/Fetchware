@@ -435,6 +435,16 @@ subtest 'test run() command line options' => sub {
         },
             'checked run() -h success.');
     }
+
+    {
+        local @ARGV = '-?';
+        fork_ok(sub {
+            print_ok(sub {run()},
+                qr/fetchware is a package manager for source code distributions.  It gives you the/,
+                'Checked run() @ARGV = -? with print_ok().');
+        },
+            'checked run() -? success.');
+    }
     
     {
         local @ARGV = '--help';
