@@ -322,8 +322,6 @@ subtest 'test run() list' => sub {
             },
             'Checked run() @ARGV list success');
     }
-    print_ok(sub {cmd_list()}, qr/test-dist-1\.00/,
-        'checked cmd_list() success.');
 
 # Annoyingly clean up CONFIG. Shouln't end() do this!!!!:)
 __clear_CONFIG();
