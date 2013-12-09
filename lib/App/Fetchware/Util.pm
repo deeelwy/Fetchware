@@ -291,16 +291,13 @@ EOD
 
 =head2 Executing external commands without using run_prog()
 
-Subify the -q checking code, and paste it below, and tell users to use that if
-they want to use something else, and document the $fetchware::quiet variable for
-other users too.
-
 msg(), vmsg(), and run_prog() determine if -v and if -q were specified by
 checking the values of the global variables listed below:
 
 =over
 
 =item * $fetchware::quiet - is C<0> if -q was B<not> specified.
+
 =item * $fetchware::verbose - is C<0> if -v was B<not> specified.
 
 =back
