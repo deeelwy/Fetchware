@@ -2782,28 +2782,28 @@ exceed the ability of fetchware's q&a configuration see perldoc App::Fetchware
 for instructions on manual Fetchwarefile configuration.
 
 USAGE:
-	fetchware new|install|uninstall|upgrade|upgrade-all|list|look|clean|help
-		[--help|-h|-?|--version|-V|--verbose|-v|--quiet|-q]
-		package-name
+    fetchware new|install|uninstall|upgrade|upgrade-all|list|look|clean|help
+        --help|-h|-?|--version|-V|--verbose|-v|--quiet|-q]
+        package-name
 
 COMMANDS:
     new - creates a new Fetchwarefile for use with fetchware.
-	install - installs a fetchware package, which is a .tar.gz ending with
-		.fpkg, which includes the source code distribution unmodified,
-		but with an included Fetchwarefile. See perldoc fetchware.
-	uninstall - uninstalls a fetchware package.
-	upgrade - upgrades a fetchware package if a newer version is available.
-	upgrade-all - upgrades *all* installed fetchware packages.
+    install - installs a fetchware package, which is a .tar.gz ending with
+        .fpkg, which includes the source code distribution unmodified,
+        but with an included Fetchwarefile. See perldoc fetchware.
+    uninstall - uninstalls a fetchware package.
+    upgrade - upgrades a fetchware package if a newer version is available.
+    upgrade-all - upgrades *all* installed fetchware packages.
     list - lists all installed fetchware packages.
     look - downloads and unarchives a fetchware package for viewing.
     clean - deletes any left over messes caused by fetchware in your tempdir.
-	help - prints this help message
+    help - prints this help message
 OPTIONS:
-	--help|-h|-? - prints this help message.
-	--version|-V - prints a version message.
-	--verbose|-v - prints additional logging information.
-	--quiet|-q - prints *no* logging invormation. Determine success or
-		failure with fetchware's exit status. 0 = success. Non-zero = failure.
+    --help|-h|-? - prints this help message.
+    --version|-V - prints a version message.
+    --verbose|-v - prints additional logging information.
+    --quiet|-q - prints *no* logging invormation. Determine success or
+        failure with fetchware's exit status. 0 = success. Non-zero = failure.
 
 For more information see perldoc fetchware and perldoc App::Fetchware.
 HELP
