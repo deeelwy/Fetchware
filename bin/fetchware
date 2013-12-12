@@ -162,7 +162,7 @@ EOM
         # tell the user that they can clean it up with fetchware clean??
         # Also, add cmdline options to control what to do when this happens???
         vmsg 'Determining which command to run based on command line options.';
-        my $command = shift @ARGV;
+        my $command = shift @ARGV // 'defined but not an actual command';
         if ($command eq 'install') {
             cmd_install(@ARGV);
         } elsif ($command eq 'uninstall') {
@@ -2770,7 +2770,6 @@ And then C<exit()>s with an exit status of 0 indicating success.
 
 sub cmd_help {
 	print <<'HELP';
-
 fetchware is a package manager for source code distributions. It gives you the
 ability to install, uninstall, and even upgrade your source code distributions
 just like you can with your binary packages using yum, apt-get, or slackpkg.
