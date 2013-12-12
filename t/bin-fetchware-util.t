@@ -290,7 +290,7 @@ subtest 'check copy_fpkg_to_fpkg_database()' => sub {
     my $fetchwarefile = '# Fake Fetchwarefile just for testing';
     my $fetchware_package_path = create_fetchware_package(\$fetchwarefile, cwd());
 
-    copy_fpkg_to_fpkg_database($fetchware_package_path);
+    my $fpkg_copy = copy_fpkg_to_fpkg_database($fetchware_package_path);
 
     # Get filename from the test packages original path.
     my ($fetchware_package_filename) = ( splitpath($fetchware_package_path) )[2];
@@ -307,7 +307,7 @@ subtest 'check copy_fpkg_to_fpkg_database()' => sub {
     my $cwd_lastdir = $cwd->dir_list(-1, 1);
 
     # Delete generated files.
-    ok(unlink("../Fetchwarefile", "../$cwd_lastdir.fpkg"),
+    ok(unlink("../Fetchwarefile", "../$cwd_lastdir.fpkg", $fpkg_copy),
         'checked extract_fetchwarefile() delete generated files');
 };
 
