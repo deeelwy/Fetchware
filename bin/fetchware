@@ -137,7 +137,7 @@ EOM
         # $VERSION is managed by dzil; therefore, I use eval to access it at
         # run time instead of compile time, so that I can test fetchware without
         # running dzil test.
-        'version|V' => sub { eval 'say "Fetchware version $VERSION"; '; exit 0},
+        'version|V' => sub { eval 'say "Fetchware version $fetchware::VERSION"; '; exit 0},
         'help|h|?' => \&cmd_help,
         'verbose|v' => \$verbose,
         'quiet|q' => \$quiet,
