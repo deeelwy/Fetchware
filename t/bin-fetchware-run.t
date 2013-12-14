@@ -51,6 +51,9 @@ subtest 'test run() install' => sub {
         'Checked run() test-dist install success');
     }
 
+    ok(-e catfile(fetchware_database_path(), 'test-dist-1.00.fpkg'),
+        'checked test-dist install copied to fetchware db.');
+
     # Now uninstall the useless test dist.
     ok(cmd_uninstall('test-dist-1.00'),
         'checked cmd_install() clean up installed test-dist.');
