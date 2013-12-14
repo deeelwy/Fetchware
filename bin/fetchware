@@ -162,8 +162,8 @@ EOM
         # tell the user that they can clean it up with fetchware clean??
         # Also, add cmdline options to control what to do when this happens???
         vmsg 'Determining which command to run based on command line options.';
-        my $command = 0;
-        $command = shift @ARGV;
+        my $command;
+        @ARGV ? $command = shift @ARGV : $command = 0;
         if ($command eq 'install') {
             cmd_install(@ARGV);
         } elsif ($command eq 'uninstall') {
