@@ -1981,21 +1981,30 @@ App-Fetchware: run-time error. Fetchware failed to open the $digest_type file it
 downloaded while trying to read it in order to check its $digest_type sum. The file was
 [$digest_file]. See perldoc App::Fetchware.
 EOD
-    # Will only check the first md5sum it finds.
+    # Will only check the first checksum it finds.
     while (<$digest_fh>) {
         next if /^\s+$/; # skip whitespace only lines just in case.
         my @fields = split ' '; # Defaults to $_, which is filled in by <>
 
-        if ($fields[0] eq $calculated_digest) {
+        # Search the @fields for a regex that is either 32 hex for md5 or 40 hex
+        # for sha1.
+        my ($checksum) = grep /^[0-9a-f]{32}(?:[0-9a-f]{8})?$/i, @fields;
+
+        # Skip trying to verify the $checksum if we failed to find it in this
+        # line, and instead skip to the next line in the checksum file to try to
+        # find a $checksum.
+        next unless defined $checksum;
+
+        if ($checksum eq $calculated_digest) {
             return 'Package verified';
         # Sometimes a = is appended to make it 32bits.
-        } elsif ("$fields[0]=" eq $calculated_digest) {
+        } elsif ("$checksum=" eq $calculated_digest) {
             return 'Package verified';
         }
     }
     close $digest_fh;
 
-    # Return failure, because fetchware failed to verify by md5sum
+    # Return failure, because fetchware failed to verify by checksum
     return undef;
 }
 
