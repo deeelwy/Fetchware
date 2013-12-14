@@ -2,6 +2,16 @@ Revison History for App::Fetchware
 
 {{$NEXT}}
 
+1.010     2013-12-14 04:10:18 America/New_York
+    - Fixed github#4 by added a more reliable checksum parser that should be
+      generic enough to parse anything simple and reasonable.
+    - Fixed a bug related to github#4 that caused ftp timestamp parsing to fail
+      if file listing had symbolic links in it.
+    - Also fixed the "uninitialized variables" bug again. The previous fix was
+      horrible. It took a few tries to figure it out, and almost resulted in
+      breaking fetchware's command line interface again, but my command line
+      tests saved me from that nightmare. Tests rule!
+
 1.009     2013-12-11 22:41:13 America/New_York
     - Fixed github#2-3 for good by introducing tests for both run() and actually
       running the program with arguments to check its command line arguments.
