@@ -6,4 +6,4 @@ test-dist*.tar.gz
 *.html
 .build
 App-Fetchware-*.tar.gz
-App-Fetchware-*
+App-Fetchware-*/
