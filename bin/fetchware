@@ -2139,9 +2139,9 @@ well.
 sub cmd_upgrade {
     my $upgrade_name = shift;
 
-    my ($P_file_listing_0_0,
-        $P_download_url_basename,
-        $P_upgrade_name_basename,
+    my ($P_download_path,
+        $P_fetchware_package_path,
+        $P_upgrade,
         $P_build_path);
 
     ###BUGALERT### the or --force cmdline option will skip the checking of
@@ -2193,67 +2193,36 @@ EOD
         ###BUGALERT### Have lookup() replace the timestamp of what we should
         #download too to make upgrade() be able to use the lookup_by_timestamp
         #algorithm too, which is a better default anyway.
-        my $download_url = lookup();
+        my $download_path = lookup();
 
-        my $P_download_url_basename = file($download_url)->basename();
-        my $P_upgrade_name_basename =
-            file( $fetchware_package_path)->basename();
-        vmsg <<EOM;
-Shortened the new download url [$P_download_url_basename] and the installed
-package's [$P_upgrade_name_basename] into just their basenames.
-EOM
-        # Strip trailing garbage to normalize their names, so that they can be
-        # compared to each other.
-        ###BUGALERT### This comparision is quite fragile. Figure out a better way to
-        #do this!!!
-        $P_upgrade_name_basename =~ s/\.fpkg$//;
-        $P_download_url_basename
-            =~ s/(\.(?:zip|tgz|tbz|txz|fpkg)|(?:\.tar\.(gz|bz2|xz|Z)?))$//;
-        vmsg <<EOM;
-Striped the new download url [$P_download_url_basename] and the installed
-package's [$P_upgrade_name_basename] of their file extensions.
-EOM
+        # Call upgrade() to determine if the currently available version
+        # ($download_path) is newer than the currenlty installed version
+        # ($fetchware_package_path).
+        $P_upgrade = upgrade($download_path, $fetchware_package_path);
 
-        # Transform both competing filenames into a string of version numbers.
-        my @file_listing = map { [$_, (join '', split /\D+/, $_)] }
-            $P_download_url_basename, $P_upgrade_name_basename;
-        die <<EOD if grep { not defined $_->[1] } @file_listing;
-fetchware: Of the installed filename [$P_upgrade_name_basename] and the
-potential replacement filename [$P_download_url_basename] fetchware cannot tell
-which one is newer, and if a new package is available. Please report this as a
-bug, so I can make fetchware's upgrade functionality more robust.
-EOD
-        vmsg 'Transformed competing filenames into a string of version numbers.';
-        vmsg Dumper(\@file_listing);
-        @file_listing = sort { $b->[1] <=> $a->[1] } @file_listing;
-        # If the highest sorted, "latest version," filename is the same as the one
-        # lookup() lookedup, then a new version is available, and we should install
-        # it.
-        # Clean up 
-        $P_file_listing_0_0 = $file_listing[0][0];
-
-        if ($P_file_listing_0_0 eq $P_download_url_basename
-            # Make cmd_upgrade() not upgrade when the ver
-            and $P_file_listing_0_0 ne $P_upgrade_name_basename) {
+        if ($P_upgrade) {
             msg 'New version available upgrading now.';
 
-            my $package_path = download($temp_dir, $download_url);
+            my $package_path = download($temp_dir, $download_path);
 
             ###BUGALERT### Add support for caching the key files gpg creates to the
             #fetchwarefile, and for actually using them later on inside the fpkg.
-            verify($download_url, $package_path);
+            verify($download_path, $package_path);
 
             $P_build_path = unarchive($package_path);
             build($P_build_path);
-        } # End If new version available.
+        } else {
+            # If a new version is not available, then the child should do
+            # nothing, and let the parent call end() to clean up below.
+        }
 
         # Tell the parent, root, process the values of the variables the
         # child calculated in this coderef, and write them across this pipe
         # back to the parent
         write_dropprivs_pipe($write_pipe,
-            $P_download_url_basename,
-            $P_upgrade_name_basename,
-            $P_file_listing_0_0,
+            $P_download_path,
+            $P_fetchware_package_path,
+            $P_upgrade,
             $P_build_path);
     }, config('user')
     ); # End drop_privs()
@@ -2266,16 +2235,14 @@ EOD
     #
     # Uses and abuses Perl's list calling and and returning semantics to
     # fakes support for writting an array (@file_listing)
-    ($P_download_url_basename,
-    $P_upgrade_name_basename,
-    $P_file_listing_0_0,
+    ($P_download_path,
+    $P_fetchware_package_path,
+    $P_upgrade,
     $P_build_path) = read_dropprivs_pipe($output);
 
     # Test if a new version is available again due to drop_priv() ending
     # half way through this if statement.
-    if ($P_file_listing_0_0 eq $P_download_url_basename
-        # Make cmd_upgrade() not upgrade when the ver
-        and $P_file_listing_0_0 ne $P_upgrade_name_basename) {
+    if ($P_upgrade) {
         install($P_build_path);
 
         my $updated_fetchware_package_path
@@ -2301,9 +2268,23 @@ EOM
         # Return the path of the created and installed fetchware package.
         return $installed_fetchware_package_path;
     } else {
+
+        # I only need the basename.
+        my $download_path_basename = file($P_download_path)->basename();
+        my $upgrade_name_basename =
+            file( $P_fetchware_package_path)->basename();
+
+        # Strip trailing garbage to normalize their names, so that they can be
+        # compared to each other.
+        ###BUGALERT### This comparision is quite fragile. Figure out a better way to
+        #do this!!!
+        $upgrade_name_basename =~ s/\.fpkg$//;
+        $download_path_basename
+            =~ s/(\.(?:zip|tgz|tbz|txz|fpkg)|(?:\.tar\.(gz|bz2|xz|Z)?))$//;
+
         msg <<EOM;
-The latest version [$P_download_url_basename] is the same as the currently
-installed version [$P_upgrade_name_basename]. So no upgrade is needed. 
+The latest version [$download_path_basename] is the same as the currently
+installed version [$upgrade_name_basename]. So no upgrade is needed. 
 EOM
         # Clean up temp dir.
         end();

@@ -78,6 +78,7 @@ our @EXPORT = qw(
     install
     end
     uninstall
+    upgrade
 
     hook
 );
@@ -125,6 +126,7 @@ our %EXPORT_TAGS = (
         chdir_unless_already_at_path
     )],
     OVERRIDE_UNINSTALL => [qw()],
+    OVERRIDE_UPGRADE => [qw()],
 );
 # OVERRIDE_ALL is simply all other tags combined.
 @{$EXPORT_TAGS{OVERRIDE_ALL}} = map {@{$_}} values %EXPORT_TAGS;
@@ -2881,6 +2883,117 @@ Package uninstalled from system, but still installed in Fetchware's database.
 EOM
     # Return success.
     return 'uninstall succeeded';
+}
+
+
+
+=head2 upgrade()
+
+    my $upgrade = upgrade($download_path, $fetchware_package_path)
+
+    if ($upgrade) {
+        ...
+    }
+
+=over
+
+=item Configuration subroutines used:
+
+=over
+
+=item none
+
+=back
+
+=back
+
+Uses its two arguments ($download_path and $fetchware_package_path) to determine
+if the new version of your program that has been downloaded (from
+$download_path) is newer than the currently installed version (from
+$fetchware_package_path).
+
+Returns true if $download_path is newer than $fetchware_package_path.
+
+Returns false if $download_path is not newer than $fetchware_package_path.
+
+=over
+
+=item drop_privs() NOTES
+
+This section notes whatever problems you might come accross implementing and
+debugging your Fetchware extension due to fetchware's drop_privs mechanism.
+
+See L<Util's drop_privs() subroutine for more info|App::Fetchware::Util/drop_privs()>.
+
+=over
+
+=item *
+
+upgrade() is run in the B<child> process as nobody or C<user>, because the child
+needs to know if it should actually bother running the rest of fetchware's API
+subroutines.
+
+=back
+
+=back
+
+=cut
+
+sub upgrade {
+    my ($download_path, $fetchware_package_path) = @_;
+
+    # I only need the basename.
+    my $download_path_basename = file($download_path)->basename();
+    my $upgrade_name_basename =
+        file( $fetchware_package_path)->basename();
+    vmsg <<EOM;
+Shortened the new download url [$download_path_basename] and the installed
+package's [$upgrade_name_basename] into just their basenames.
+EOM
+
+    # Strip trailing garbage to normalize their names, so that they can be
+    # compared to each other.
+    ###BUGALERT### This comparision is quite fragile. Figure out a better way to
+    #do this!!!
+    $upgrade_name_basename =~ s/\.fpkg$//;
+    $download_path_basename
+        =~ s/(\.(?:zip|tgz|tbz|txz|fpkg)|(?:\.tar\.(gz|bz2|xz|Z)?))$//;
+    vmsg <<EOM;
+Striped the new download url [$download_path_basename] and the installed
+package's [$upgrade_name_basename] of their file extensions.
+EOM
+
+    # Check if $upgrade_name_basename and $download_path_basename are eq, and if
+    # they are return false indicating that this program should not be upgraded,
+    # because the version available for upgrading is the same as the currently
+    # installed version.
+    return if $upgrade_name_basename eq $download_path_basename;
+
+        # Transform both competing filenames into a string of version numbers.
+
+    # Use lookup_by_versionstring() to determine which version of the same
+    # program is "newer."
+    my $sorted_file_names = lookup_by_versionstring(
+        [
+            [$upgrade_name_basename, 'placeholder'],
+            [$download_path_basename, 'placeholder'],
+        ]
+    );
+
+    if ($sorted_file_names->[0][0] eq $download_path_basename
+        # Make sure cmd_upgrade() does not upgrade when the latest version is
+        # the same as the currently installed version ($upgrade_name_basename).
+        and $sorted_file_names->[0][0] ne $upgrade_name_basename) {
+        # The latest version we can download ($download_path_basename) is newer
+        # than the currently installed version ($upgrade_name_basename), so we
+        # should upgrade.
+        return 1;
+    } else {
+        # Currenlty installed version ($upgrade_name_basename) is equal to the
+        # latest version available for download ($download_path_basename), so
+        # return false indicating that we sould not upgrade.
+        return;
+    }
 }
 
 
