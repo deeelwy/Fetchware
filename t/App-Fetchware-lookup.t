@@ -366,6 +366,44 @@ subtest 'test lookup_by_versionstring()' => sub {
 
     is_deeply($sorted_file_listing, $expected_more_digits_than_higher_one,
         'checked lookup_by_versionstring() unequal length bug fix.');
+
+    # Also, test for duplicate version numbers--when two files have the same
+    # version string. Note: real-world mirrors are not going to have duplicate
+    # versions of the same program, but they might have multiple versions of the
+    # same version of the same program. For example apache has a unix source
+    # download, but also one for Windows, and one for dependencies.
+    # NOTE: The "timestamp" info for each pair of duplicate version numbers
+    # (for example, '111111111111111') must be the same, because some versions
+    # of perl use a quicksort sort algorithm that does not preserve the original
+    # order of equivelent entries. So, the order could change, which will break
+    # the  simple is_deeply() test.
+    my $same_version_number = [
+        ['v4.0.0', '444444444444444'],
+        ['v2.0.0', '222222222222222'],
+        ['v1.0.0', '111111111111111'],
+        ['v3.0.0', '333333333333333'],
+        ['v2.0.0', '222222222222222'],
+        ['v1.0.0', '111111111111111'],
+        ['v3.0.0', '333333333333333'],
+        ['v4.0.0', '444444444444444'],
+    ];
+
+    my $expected_same_version_number = [
+        ['v4.0.0', '444444444444444'],
+        ['v4.0.0', '444444444444444'],
+        ['v3.0.0', '333333333333333'],
+        ['v3.0.0', '333333333333333'],
+        ['v2.0.0', '222222222222222'],
+        ['v2.0.0', '222222222222222'],
+        ['v1.0.0', '111111111111111'],
+        ['v1.0.0', '111111111111111'],
+    ];
+
+    my $sorted_file_listing2 =
+        lookup_by_versionstring($same_version_number);
+
+    is_deeply($sorted_file_listing2, $expected_same_version_number,
+        'checked lookup_by_versionstring() same version number bugfix.');
 }; 
 
 

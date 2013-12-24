@@ -1129,9 +1129,9 @@ sub  lookup_by_versionstring {
         @iversionstring = grep {$_ ne ''} @iversionstring;
 
         if (@iversionstring == 0) {
-            vmsg <<EOM;
             # Let the usr know we're skipping this filename, but only if they
             # really want to know (They turned on verbose output.).
+            vmsg <<EOM;
 File [$file_listing->[$i][0]] has no version number in it. Ignoring.
 EOM
             # And also skip adding this @iversionstring to @versionstrings,
@@ -1181,12 +1181,24 @@ EOD
         # ...and be sure to start at index 1, because index 0 is the index of
         # $file_listing that this entry in @versionstrings belongs to...
         for my $x (1..$last_index) {
+            # If one of $b or $a has more numbers in it ($#{$a_or_b} is smaller than
+            # $x), then if it's $b we should return -1, because $b is smaller
+            # than $a, and if it's $a, we should return 1, because $b is bigger
+            # than $a.
+            return -1 if $x > $#{$b};
+            return 1 if $x > $#{$a};
+
             my $spaceship_result = $b->[$x] <=> $a->[$x];
 
             # ...and as soon as they no longer equal each other return whatever
             # result (-1 or 1) <=> gives.
             return $spaceship_result if $spaceship_result != 0;
         }
+
+        # Return 0 for equal, because if the two versions were not equal, then
+        # the for loop above would have caught it, and returned the appropriate
+        # -1 or 1.
+        return 0;
     } @versionstrings;
 
     # Now, "sort" $file_listing into the order @versionstrings was sorted into
