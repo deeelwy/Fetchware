@@ -2286,13 +2286,6 @@ Created a new fetchware package for the newly installed upgraded fetchware
 package [$updated_fetchware_package_path].
 EOM
 
-        # Note: I must uninstall the current package before I copy over the new
-        # one, because uninstall_fetchware_package_from_database() requires a
-        # simple name that it looks up in the fetchware database. It does not
-        # accept a full path to something to delete for a full fetchware package
-        # name that would support multiple versions being in the fetchware
-        # package database at the same time.
-        ###BUGALERT### The above Note is a ridiculous bug. Fix it!
         uninstall_fetchware_package_from_database($fetchware_package_path);
         vmsg 'Uninstalled the old fetchware package from the fetchware database.';
 
