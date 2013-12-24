@@ -2250,12 +2250,6 @@ EOD
         # Tell the parent, root, process the values of the variables the
         # child calculated in this coderef, and write them across this pipe
         # back to the parent
-        #
-        # Note: how @file_listing is the last one pipe_{write,read}_newline() do
-        # *not* support arrays, but I'm faking it by using Perl's list
-        # semantics--you know how perl will read from an array until its end
-        # when you call a subroutine, and it will write a list to a array when
-        # you assign from a subroutine in list context.
         write_dropprivs_pipe($write_pipe,
             $P_download_url_basename,
             $P_upgrade_name_basename,
