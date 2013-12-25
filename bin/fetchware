@@ -2850,6 +2850,7 @@ EOD
         build => 1,
         install => 1,
         uninstall => 1,
+        upgrade => 1,
         end => 1,
     );
 
