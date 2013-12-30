@@ -90,7 +90,6 @@ our %EXPORT_TAGS = (
     # No OVERRIDE_START OVERRIDE_END because start() does *not* use any helper
     # subs that could be beneficial to override()rs.
     OVERRIDE_LOOKUP => [qw(
-        check_lookup_config
         get_directory_listing
         parse_directory_listing
         determine_download_path
@@ -658,89 +657,6 @@ App::Fetchware is B<not> object-oriented; therefore, you B<can not> subclass
 App::Fetchware to extend it! 
 
 =cut
-
-=head3 check_lookup_config()
-
-    check_lookup_config();
-
-Verifies the configurations parameters lookup() uses are correct. These are
-C<lookup_url> and C<lookup_method>. If they are wrong die() is called. If they
-are right it does nothing, but return.
-
-check_lookup_config() also currently checks if a program config option is given,
-and throws an exception if it is not.
-
-It also ensures that you specify at least one mirror, and how to verify your
-program. If this is not done properly, an exception is thrown. For verification
-to work properly, you must specify C<gpg_keys_url>, C<md5_url>, or C<sha1_url>.
-B<Only> if there is no verification availabe from your program's author should
-you use the C<verification_failure 'On';> option.
-
-=cut
-
-sub check_lookup_config {
-    if (not defined config('lookup_url')) {
-        die <<EOD;
-App-Fetchware: run-time syntax error: your Fetchwarefile did not specify a
-lookup_url. lookup_url is a required configuration option, and must be
-specified, because fetchware uses it to located new versions of your program to
-download. See perldoc App::Fetchware
-EOD
-    }
-
-    # Only test lookup_method if it has been defined.
-    if (defined config('lookup_method')) {
-        if (config('lookup_method') eq 'timestamp') {
-            # Do nothing
-        } elsif (config('lookup_method') eq 'versionstring') {
-            # Do nothing
-        } else {
-            die <<EOD;
-App-Fetchware: run-time syntax error: your Fetchwarefile specified a incorrect
-option to lookup_method. lookup_method only supports the options 'timestamp' and
-'versionstring'. All others are wrong. See man App::Fetchware.
-EOD
-        }
-    }
-
-    ###BUGALERT### Should I add a syntax_check() API sub to App::Fetchware, so
-    #other extensions can do this easier. Perhaps even create a helper function
-    #where you can specify which config options must be specified???
-    die <<EOD unless config('program');
-App-Fetchware: You failed to specify a [program] configuration option. This
-option is mandatory, and gives the program your Fetchwarefile manages a name.
-Please add a [program 'your program's name here';] configuration option to your
-Fetchwarefile.
-EOD
-
-    die <<EOD unless config('mirror');
-App-Fetchware: You failed to specify a [mirror] configuration option. This
-option is mandatory, and is used by fetchware to download a new version of your
-program to install that is looked up using the [lookup_url]. Please add a
-[mirror 'scheme://some.url';] configuration option to your Fetchwarefile.
-EOD
-
-    unless (config('gpg_keys_url')
-            or config('gpg_sig_url')
-            or config('md5_url')
-            or config('sha1_url')
-    ) {
-        msg <<EOD unless config('verify_failure_ok');
-App-Fetchware: You failed to specify a method of verifying downloaded archives
-of your program. This is mandatory to ensure that the software that you download
-is the same as the software the author actually uploaded. Please specify a
-[gpg_keys_url] that points to the KEYS file that lists the author's gpg keys. If
-the author does not maintain such a file, then specify a [sha1_url] that
-specifies a directory where SHA-1 digests can be downloaded from. And if SHA-1
-digests are not availabe, then fall back on MD5 digests using [md5_url]. If not
-even MD5 digest verification is available from your software's author, you may
-specify the [verification_failure 'On';] configuration option to force fetchware
-to build and install your software even though it can not be verified. This
-option should not be enabled lightly, because mirrors do sometimes get hacked,
-and some times malware is injected.
-EOD
-    }
-}
 
 
 =head3 get_directory_listing()
@@ -2462,21 +2378,6 @@ and install will then chdir to $build_path.
 
 sub build {
     my $build_path = shift;
-
-    # The other build options are ignored if build_commands is specified. This
-    # should be an error.
-    ###BUGALERT### When you implement check_syntax() move this there.
-    if ( (config('build_commands') and config('configure_options') )
-        or ( config('build_commands') and config('make_options') )
-        or ( config('build_commands') and config('prefix') ) ) {
-        die <<EOD;
-App-Fetchware: You cannot specify any other build options when you specify
-build_commands, because build_commands overrides all of those other options.
-Please fix your Fetchwarefile by adding the other options in with your
-build_commands or remove the build_commands, and just use the other options if
-possible.
-EOD
-    }
 
     msg "Building your package in [$build_path]";
 

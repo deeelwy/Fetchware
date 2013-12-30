@@ -246,40 +246,6 @@ EOD
 };
 
 
-subtest 'test build() build_commands and other options exception' => sub {
-    skip_all_unless_release_testing();
-
-    my %other_build_opts = (
-        make_options => '-j 4',
-        configure_options => '--enable-etags',
-        prefix => '/usr/local',
-    );
-
-    # Set build_commands *and* any of the other build() options.
-    for my $other_build_opt (keys %other_build_opts) {
-        # Clean up after previous build() run.
-        __clear_CONFIG();
-
-        # Set build_commands.
-        build_commands './configure, make';
-
-        # Now set the current $other_build_opt;
-        # Just use config() to avoid using crazy symbolic references.
-        config($other_build_opt => $other_build_opts{$other_build_opt});
-
-        eval_ok(sub {build($build_path)},
-            <<EOE, "checked build() build_command($other_build_opt) exception.");
-App-Fetchware: You cannot specify any other build options when you specify
-build_commands, because build_commands overrides all of those other options.
-Please fix your Fetchwarefile by adding the other options in with your
-build_commands or remove the build_commands, and just use the other options if
-possible.
-EOE
-    }
-};
-
-
-
 # Do *not* clean up after previous build() run, because make was not actually
 # run.
 
