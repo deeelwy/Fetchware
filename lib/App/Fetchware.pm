@@ -79,6 +79,7 @@ our @EXPORT = qw(
     end
     uninstall
     upgrade
+    check_syntax
 
     hook
 );
@@ -127,6 +128,7 @@ our %EXPORT_TAGS = (
     )],
     OVERRIDE_UNINSTALL => [qw()],
     OVERRIDE_UPGRADE => [qw()],
+    OVERRIDE_CHECK_SYNTAX => [qw(check_config_options)],
 );
 # OVERRIDE_ALL is simply all other tags combined.
 @{$EXPORT_TAGS{OVERRIDE_ALL}} = map {@{$_}} values %EXPORT_TAGS;
@@ -2994,6 +2996,277 @@ EOM
         # return false indicating that we sould not upgrade.
         return;
     }
+}
+
+
+
+=head2 check_syntax()
+
+    'Syntax Ok' = check_syntax($fetchwarefile)
+
+=over
+
+=item Configuration subroutines used:
+
+=over
+
+=item none
+
+=back
+
+=back
+
+Calls check_config_options() to check for the follow syntax errors in
+Fetchwarefiles. 
+
+=over
+
+=item * Mandatory configuration options
+
+=over
+
+=item * program, lookup_url, and mirror are required for all Fetchwarefiles.
+
+=back
+
+=item * Conflicting configuration options
+
+=over
+
+=item * build_commands conflicts with any of prefix, configure_options, and
+make_options.
+
+=back
+
+=item * Ensures some options have only allowable options specified.
+
+=over
+
+=item * lookup_method can only have 'timestamp' or 'versionstring'. as options.
+
+=item * And verify_method can only have 'gpg', 'sha1', or 'md5' specified.
+
+=back
+
+=back
+
+Note: check_syntax() does I<not> actually parse the provided $fetchwarefile.
+Intead, the $fetchwarefile argument is just there in case its needed later or if
+its needed by a fetchware extension.
+
+=over
+
+=item drop_privs() NOTES
+
+This section notes whatever problems you might come accross implementing and
+debugging your Fetchware extension due to fetchware's drop_privs mechanism.
+
+See L<Util's drop_privs() subroutine for more info|App::Fetchware::Util/drop_privs()>.
+
+=over
+
+=item *
+
+check_syntax() is run in the parent process before even start() has run, so no
+temporary directory is available for use.
+
+=back
+
+=back
+
+=cut
+
+sub check_syntax {
+    my $fetchwarefile = shift;
+
+    # Use check_config_options() to run config() a bunch of times to check the
+    # already parsed Fetchwarefile.
+    return check_config_options(
+        BothAreDefined => [ [qw(build_commands)],
+            [qw(prefix configure_options make_options)] ],
+        Mandatory => [ 'program', <<EOM ],
+App-Fetchware: Your Fetchwarefile must specify a program configuration
+option. Please add one, and try again.
+EOM
+        Mandatory => [ 'mirror', <<EOM ],
+App-Fetchware: Your Fetchwarefile must specify a mirror configuration
+option. Please add one, and try again.
+EOM
+        Mandatory => [ 'lookup_url', <<EOM ],
+App-Fetchware: Your Fetchwarefile must specify a lookup_url configuration
+option. Please add one, and try again.
+EOM
+        ConfigOptionEnum => ['lookup_method', [qw(timestamp versionstring)] ],
+        ConfigOptionEnum => ['verify_method', [qw(gpg sha1 md5)] ],
+    );
+}
+
+
+=head2 check_syntax() API REFERENCE
+
+check_syntax() uses check_config_options() to do the heavy lifting of Set Theory
+to check that you do not use some configuration options that are not compatible
+with other ones that you have used.
+
+=cut
+
+
+=head3 check_config_options()
+
+    check_config_options(
+        BothAreDefined => [ [qw(build_commands)],
+            [qw(prefix configure_options make_options)] ],
+        Mandatory => [ 'program', <<EOM ],
+    App-Fetchware: Your Fetchwarefile must specify a program configuration
+    option. Please add one, and try again.
+    EOM
+        Mandatory => [ 'mirror', <<EOM ],
+    App-Fetchware: Your Fetchwarefile must specify a mirror configuration
+    option. Please add one, and try again.
+    EOM
+        Mandatory => [ 'lookup_url', <<EOM ],
+    App-Fetchware: Your Fetchwarefile must specify a lookup_url configuration
+    option. Please add one, and try again.
+    EOM
+        ConfigOptionEnum => ['lookup_method', [qw(timestamp versionstring)] ],
+        ConfigOptionEnum => ['verify_method', [qw(gpg sha1 md5)] ],
+    );
+
+Uses config() to test that no configuration options that clash with each other
+are used.
+
+It's parameters are specified in a list with an even number of parameters. Each
+group of 2 parameters specifies a type of test that check_config_options() will
+test for. There are three types of tests.
+
+=over
+
+=item BothAreDefined
+
+Is used to test if one or more elements from both provided arrayrefs are defined
+at the same time. This is needed, because if you specify C<build_commands> any
+value you specify for C<prefix>, C<configure_options>, C<make_options> will be
+ignored, which may not be what you expect or want, so BothAreDefined is used to
+check for this.
+
+=item Mandatory
+
+Is used to check for mandatory options, which just means that these options
+absolutely must be specified in user's Fetchwarefiles, and if they are not, then
+the provided error message is thrown as an exception.
+
+=item ConfigOptionEnum
+
+Tests that enumerations are valid. For example, C<lookup_method> can only take
+two values C<timestamp> or C<versionstring>, and ConfigOptionEnum is used to
+test for this.
+
+=back
+
+=cut
+
+sub check_config_options {
+    my @args = @_;
+
+    my @both_are_defined;
+    my @mandatory;
+    my @config_option_enum;
+
+    # Process arguments, and check that they were specified correctly.
+    # Loop over @args 2 at a time hence the $i += 2 instead of $i++.
+    for( my $i = 0; $i < @args; $i += 2 ) {
+        my( $type, $AnB ) = @args[ $i, $i+1 ];
+        die <<EOD unless ref $AnB eq 'ARRAY';
+App-Fetchware: check_config_options()'s even arguments must be an array
+reference. Please correct your arguments, and try again.
+EOD
+        die <<EOD unless @$AnB == 2;
+App-Fetchware: check_config_options()'s even arguments must be an array
+reference with exactly two elements in it. Please correct and try again.
+EOD
+
+        if ($type eq 'BothAreDefined') {
+            push @both_are_defined, $AnB;
+        } elsif ($type eq 'Mandatory') {
+            push @mandatory, $AnB;
+        } elsif ($type eq 'ConfigOptionEnum') {
+            push @config_option_enum, $AnB;
+        } else {
+            die <<EOD;
+App-Fetchware: check_config_options() only supports types 'BothAreDefined',
+'Mandatory', and 'ConfigOptionEnum.' Please specify one of these, and try again.
+EOD
+        }
+    }
+
+    # Process @both_are_defined by checking if both of the elements in the
+    # provided arrayrefs are "both defined", and if they are "both defined"
+    # throw an exception.
+    for my $AnB (@both_are_defined) {
+        my ($A, $B) = @$AnB;
+
+        my @A_defined;
+        my @B_defined;
+
+        # Check which ones are defined in both $A and $B
+        {
+            # the config() call will call the specified strings of which many
+            # are expected to be uninitialized. Because we expect them to be
+            # uninitialized, we use that behavior to determine if they have been
+            # specified in the users Fetchwarefile, and if an option was not
+            # specified, then undef is returned by config(). Since, we expect
+            # lots of undef warnings, we'll disable them.
+            no warnings 'uninitialized';
+            @A_defined = grep {config($_)} @$A;
+            @B_defined = grep {config($_)} @$B;
+        }
+
+        if (@A_defined > 0 and @B_defined > 0) {
+            die <<EOD;
+App-Fetchware: Your Fetchwarefile has incompatible configuration options.
+You specified configuration options [@$A] and [@$B], but these options are not
+compatible with each other. Please specifiy either [@$A] or [@$B] not both.
+EOD
+        }
+    }
+
+
+    # Process @mandatory options by checking if they're defined, and if not
+    # throwing the specified exception.
+    for my $AnB (@mandatory) {
+        my ($option, $error_message) = @$AnB;
+
+        die $error_message if not defined config($option);
+    }
+
+
+    # Process @config_option_enum.
+    for my $AnB (@config_option_enum) {
+        my ($option, $enumerations) = @$AnB;
+
+        # Ditch uninitialized warnings, because I'm using undef to mean
+        # unspecified, so undef is not something unexpected to bother warning
+        # about, but something that will happen all the time.
+        {
+            no warnings 'uninitialized';
+        
+            # Only test the @enumerations if $option was specified in the
+            # Fetchwarefile.
+            if (config($option)) {
+
+                # Only one @enumerations should equal $option not more than one, hence
+                # the == 1 part.
+                die <<EOD unless (grep {config($option) eq $_} @$enumerations) == 1;
+App-Fetchware: You specified the option [$option], but failed to specify only
+one of its acceptable values [@$enumerations]. Please change the value you
+specified [@{[config($option)]}] to one of the acceptable ones listed above, and try again.
+EOD
+            }
+
+        }
+    }
+    
+    return 'Syntax Ok';
 }
 
 

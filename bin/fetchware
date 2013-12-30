@@ -2803,6 +2803,13 @@ Eval's the \$fetchwarefile to effectively "parse" it.
 The only checking for the $fetchwarefile it does is that it is a scalar ref, and
 that it has at least one line beginning with C<use App::Fetchware>.
 
+It also checks to see that the eval of the provided $fetchwarefile actually
+winds up importing all of fetchware's API subroutines into fetchware's namespace.
+
+Then it runs check_syntax() to check the $fetchwarefile's syntax. Typically this
+only involves running config() a bunch of times to check that configuration
+options that don't belong together arn't used together.
+
 Returns true on success and dies with an error message if it fails.
 
 =cut
@@ -2851,6 +2858,7 @@ EOD
         install => 1,
         uninstall => 1,
         upgrade => 1,
+        check_syntax => 1,
         end => 1,
     );
 
@@ -2881,6 +2889,9 @@ uninstall(), and end().
 The missing subroutines are [@missing_api_subs].
 EOD
     }
+
+    # Call App::Fetchware's check_syntax() (or a App::Fetchware extension).
+    check_syntax($fetchwarefile);
 
     return 'Evaled config file successfully';
 }
