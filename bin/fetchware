@@ -574,7 +574,23 @@ EOF
         #fetchwarefiles from CPAN, and then install them, and/or perhaps upload
         #them pausing to ask for the user's PAUSE credentials!!!!!!!!!
 
-        opening_message();
+
+        my $opening_message = <<EOM;
+Fetchware's new command is reasonably sophisticated, and is smart enough to
+determine based on the lookup_url you provide if it can autogenerate a
+Fetchwarefile for you. If Fetchware cannot, then it will ask you more
+questions regarding the information it requires to be able to build a
+installable fetchware package for you. After that, fetchware will ask you if
+you would like to edit the Fetchwarefile, fetchware has created for you in an
+editor. If you say yes, fetchware will open a editor for you, but if you say
+no, fetchware will skip the custom editing. Next, fetchware will create a test
+Fetchwarefile for you, and ask you if you would like to test it by trying to
+install it now. If you say yes, fetchware will install it, and if you say no,
+then fetchware will print the location of the Fetchwarefile it created for
+you to later use to install your application.
+EOM
+
+        opening_message($opening_message);
 
         # Ask user for name of program unless the user provided one at command
         # line such as fetchware new <programname>.
@@ -692,30 +708,17 @@ EOM
 
 =head3 opening_message();
 
-    opending_message();
+    opending_message($opening_message);
 
-Prints new()'s opening message. It takes no parameters including the message to
-be printed; instead, it simply prints the message only it can access to
-C<STDOUT>.
+opening_message() takes the specified $opening_message and just prints it to
+C<STDOUT>. This subroutine may seem useless, you could just use print, but using
+it instead of print helps document that what you're doing is printing the
+opening message to the user.
 
 =cut
 
 sub opening_message {
-
-    my $opening_message = <<EOM;
-Fetchware's new command is reasonably sophisticated, and is smart enough to
-determine based on the lookup_url you provide if it can autogenerate a
-Fetchwarefile for you. If Fetchware cannot, then it will ask you more
-questions regarding the information it requires to be able to build a
-installable fetchware package for you. After that, fetchware will ask you if
-you would like to edit the Fetchwarefile, fetchware has created for you in an
-editor. If you say yes, fetchware will open a editor for you, but if you say
-no, fetchware will skip the custom editing. Next, fetchware will create a test
-Fetchwarefile for you, and ask you if you would like to test it by trying to
-install it now. If you say yes, fetchware will install it, and if you say no,
-then fetchware will print the location of the Fetchwarefile it created for
-you to later use to install your application.
-EOM
+    my $opening_message = shift;
 
     # Just print the opening message.
     print $opening_message;
