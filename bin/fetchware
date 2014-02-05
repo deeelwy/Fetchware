@@ -618,8 +618,17 @@ EOM
         vmsg "Downloaded lookup_url's directory listing";
         vmsg Dumper($filename_listing);
 
-        analyze_lookup_listing($term, $filename_listing, $lookup_url,
+        DELLME!!!!!!!!analyze_lookup_listing($term, $filename_listing, $lookup_url,
             \$P_fetchwarefile);
+
+        DELLME!!!!!!!!!!!!!!!!!!!determine_mandatory_options($term, $filename_listing, $lookup_url,
+            $fetchwarefile);
+        # program and lookup_url were defined earlier, so the only other mandatory
+        # options are at least one mirror (but more are allowed, and some way to
+        # verify downloads.
+        add_mirrors($term, $filename_listing, $fetchwarefile);
+        add_verification($term, $filename_listing, $lookup_url, $fetchwarefile);
+        determine_filter_option($term, $filename_listing, $fetchwarefile);
 
         ###BUGALERT### Ask to parrallelize make with make_options???
         ###BUGALERT### Verify prefix is writable by current user, who will
@@ -923,9 +932,6 @@ sub analyze_lookup_listing {
     my $lookup_url = shift;
     my $fetchwarefile = shift;
     
-    determine_mandatory_options($term, $filename_listing, $lookup_url,
-        $fetchwarefile);
-    determine_filter_option($term, $filename_listing, $fetchwarefile);
 }
 
 
@@ -955,11 +961,6 @@ sub determine_mandatory_options {
     my $lookup_url = shift;
     my $fetchwarefile = shift;
 
-    # program and lookup_url were defined earlier, so the only other mandatory
-    # options are at least one mirror (but more are allowed, and some way to
-    # verify downloads.
-    add_mirrors($term, $filename_listing, $fetchwarefile);
-    add_verification($term, $filename_listing, $lookup_url, $fetchwarefile);
 }
 
 

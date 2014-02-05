@@ -431,50 +431,6 @@ subtest 'test opening_message() success' => sub {
 ##TEST##};
 ##TEST##
 ##TEST##
-##TEST##subtest 'test determine_mandatory_options() success' => sub {
-##TEST##    skip_all_unless_release_testing();
-##TEST##
-##TEST##    plan(skip_all => 'Optional Test::Expect testing module not installed.')
-##TEST##        unless eval {require Test::Expect; Test::Expect->import(); 1;};
-##TEST##
-##TEST##    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
-##TEST##    # something crazy like Test::Expect, this will have to be tested "manually."
-##TEST##    local $Term::UI::AUTOREPLY = 0;
-##TEST##    # Fix the "out of orderness" thanks to Test::Builder messing with
-##TEST##    # STD{OUT,ERR}.
-##TEST##    local $| = 1;
-##TEST##
-##TEST##    # Have Expect tell me what it's doing for easier debugging.
-##TEST##    #$Expect::Exp_Internal = 1;
-##TEST##
-##TEST##    expect_run(
-##TEST##        command => 't/bin-fetchware-new-mandatory_options',
-##TEST##        prompt => [-re => qr/: |\? /],
-##TEST##        quit => "\cC" # CTRL-C
-##TEST##    );
-##TEST##
-##TEST##    expect_like(qr/Fetchware requires you to please provide a mirror. This mirror/,
-##TEST##        'checked add_verification() received correct mirror prompt');
-##TEST##
-##TEST##    expect_send('http://somefakemirror.who/cares',
-##TEST##        'check determine_mandatory_options() provided mirror.');
-##TEST##
-##TEST##    expect_like(qr!\[y/N\]|In addition to the one required mirror that you must!,
-##TEST##        'check determine_mandatory_options() received addional mirrors prompt.');
-##TEST##
-##TEST##    expect_send('N',
-##TEST##        'checked add_verification() sent no verify Y.');
-##TEST##
-##TEST##    expect_like(qr!\[y/N\]|Would you like to import the author's key yourself !,
-##TEST##        'checked determine_mandatory_options() received manual import of KEYS.');
-##TEST##
-##TEST##    expect_send('Y',
-##TEST##        'checked determine_mandatory_options() sent Yes to user_keyring option');
-##TEST##
-##TEST##    expect_quit();
-##TEST##};
-##TEST##
-##TEST##
 ##TEST##subtest 'test determine_filter_option() success' => sub {
 ##TEST##    skip_all_unless_release_testing();
 ##TEST##
@@ -502,50 +458,6 @@ subtest 'test opening_message() success' => sub {
 ##TEST##
 ##TEST##    expect_send('httpd-2.2',
 ##TEST##        'check determine_filter_option() provided filter.');
-##TEST##
-##TEST##    expect_quit();
-##TEST##};
-##TEST##
-##TEST##
-##TEST##subtest 'test analyze_lookup_listing() success' => sub {
-##TEST##    skip_all_unless_release_testing();
-##TEST##
-##TEST##    plan(skip_all => 'Optional Test::Expect testing module not installed.')
-##TEST##        unless eval {require Test::Expect; Test::Expect->import(); 1;};
-##TEST##
-##TEST##    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
-##TEST##    # something crazy like Test::Expect, this will have to be tested "manually."
-##TEST##    local $Term::UI::AUTOREPLY = 0;
-##TEST##    # Fix the "out of orderness" thanks to Test::Builder messing with
-##TEST##    # STD{OUT,ERR}.
-##TEST##    local $| = 0;
-##TEST##
-##TEST##    # Have Expect tell me what it's doing for easier debugging.
-##TEST##    #$Expect::Exp_Internal = 1;
-##TEST##
-##TEST##    expect_run(
-##TEST##        command => 't/bin-fetchware-new-analyze_lookup_listing',
-##TEST##        prompt => [-re => qr/: |\? /],
-##TEST##        quit => "\cC" # CTRL-C
-##TEST##    );
-##TEST##
-##TEST##    expect_like(qr/Fetchware requires you to please provide a mirror. This mirror/,
-##TEST##        'checked analyze_lookup_listing() received correct filter prompt');
-##TEST##
-##TEST##    expect_send('http://kdjfkldjfkdj',
-##TEST##        'check analyze_lookup_listing() provided mirror.');
-##TEST##
-##TEST##    expect_like(qr/In addition to the one required mirror that you must define/,
-##TEST##        'checked analyze_lookup_listing() received more mirrors prompt.');
-##TEST##
-##TEST##    expect_send('N',
-##TEST##        'checked analyze_lookup_listing() sent No for more mirrors.');
-##TEST##
-##TEST##    expect_like(qr!\[y/N\]|gpg digital signatures found. Using gpg verification.!,
-##TEST##        'checked analyze_lookup_listing() received KEYS question.');
-##TEST##
-##TEST##    expect_send('Y',
-##TEST##        'checked analyze_lookup_listing() sent Y to user_keyring');
 ##TEST##
 ##TEST##    expect_quit();
 ##TEST##};
