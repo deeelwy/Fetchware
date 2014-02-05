@@ -37,30 +37,30 @@ BEGIN {
 }
 
 
-subtest 'test extension_name success' => sub {
-    my $test_value = 'Some name';
-
-    # Test extension_name()'s ability to set and return the one value it is
-    # called with.
-    is(extension_name($test_value), $test_value,
-        'checked extension_name() set success.');
-
-    # Test extension_name()'s exception when called more than just once.
-    eval_ok(sub {extension_name($test_value)},
-        <<EOE, 'checked extension_name() exception.');
-App-Fetchware: extension_name() was called more than once. It is a singleton,
-and therefore can only be called once. Please only call it once to set its
-value, and then call it repeatedly wherever you need that value. see perldoc
-App::Fetchware for more details.
-EOE
-
-    # Test extension_name()'s ability to return its singleton value when called
-    # with nothing.
-    is(extension_name(), $test_value,
-        'checked extension_name() return success.');
-    is(extension_name(), $test_value,
-        'checked extension_name() return success.');
-};
+##TEST##subtest 'test extension_name success' => sub {
+##TEST##    my $test_value = 'Some name';
+##TEST##
+##TEST##    # Test extension_name()'s ability to set and return the one value it is
+##TEST##    # called with.
+##TEST##    is(extension_name($test_value), $test_value,
+##TEST##        'checked extension_name() set success.');
+##TEST##
+##TEST##    # Test extension_name()'s exception when called more than just once.
+##TEST##    eval_ok(sub {extension_name($test_value)},
+##TEST##        <<EOE, 'checked extension_name() exception.');
+##TEST##App-Fetchware: extension_name() was called more than once. It is a singleton,
+##TEST##and therefore can only be called once. Please only call it once to set its
+##TEST##value, and then call it repeatedly wherever you need that value. see perldoc
+##TEST##App::Fetchware for more details.
+##TEST##EOE
+##TEST##
+##TEST##    # Test extension_name()'s ability to return its singleton value when called
+##TEST##    # with nothing.
+##TEST##    is(extension_name(), $test_value,
+##TEST##        'checked extension_name() return success.');
+##TEST##    is(extension_name(), $test_value,
+##TEST##        'checked extension_name() return success.');
+##TEST##};
 
 
 ##TEST##SKIP: {
@@ -304,163 +304,163 @@ subtest 'test opening_message() success' => sub {
 ##TEST##};
 ##TEST##
 ##TEST##
-##TEST##subtest 'test add_mirrors() success' => sub {
-##TEST##    skip_all_unless_release_testing();
-##TEST##
-##TEST##    plan(skip_all => 'Optional Test::Expect testing module not installed.')
-##TEST##        unless eval {require Test::Expect; Test::Expect->import(); 1;};
-##TEST##
-##TEST##    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
-##TEST##    # something crazy like Test::Expect, this will have to be tested "manually."
-##TEST##    local $Term::UI::AUTOREPLY = 0;
-##TEST##    # Fix the "out of orderness" thanks to Test::Builder messing with
-##TEST##    # STD{OUT,ERR}.
-##TEST##    local $| = 1;
-##TEST##
-##TEST##    # Have Expect tell me what it's doing for easier debugging.
-##TEST##    #$Expect::Exp_Internal = 1;
-##TEST##
-##TEST##    expect_run(
-##TEST##        command => 't/bin-fetchware-new-add_mirrors',
-##TEST##        prompt => [-re => qr/: |\? /],
-##TEST##        quit => "\cC"
-##TEST##    );
-##TEST##
-##TEST##    # First test that the command produced the correct outout.
-##TEST##    expect_like(qr/Fetchware requires you to please provide a mirror. This mirror is required,/,
-##TEST##        'checked add_mirror() received correct mirror prompt');
-##TEST##
-##TEST##    # Have Expect print an example URL.
-##TEST##    expect_send('http://who.cares/whatever/',
-##TEST##        'check add_mirror() sent mirror URL.');
-##TEST##
-##TEST##    # Check if upon receiving the URL the command prints out the next correct
-##TEST##    # prompt.
-##TEST##    expect_like(qr/Would you like to add any additional mirrors?/,
-##TEST##        'checked add_mirrors() received more mirrors prompt.');
-##TEST##
-##TEST##    expect_send('N', 'checked add_mirrors() say No to more mirrors.');
-##TEST##
-##TEST##    expect_quit();
-##TEST##
-##TEST##    # Test answering Yes for more mirrors.
-##TEST##
-##TEST##    expect_run(
-##TEST##        command => 't/bin-fetchware-new-add_mirrors',
-##TEST##        prompt => [-re => qr/: |\? /],
-##TEST##        quit => "\cC"
-##TEST##    );
-##TEST##
-##TEST##    # First test that the command produced the correct outout.
-##TEST##    expect_like(qr/Fetchware requires you to please provide a mirror. This mirror is required,/,
-##TEST##        'checked add_mirror() received correct mirror prompt');
-##TEST##
-##TEST##    # Have Expect print an example URL.
-##TEST##    expect_send('http://who.cares/whatever/',
-##TEST##        'check add_mirror() sent mirror URL.');
-##TEST##
-##TEST##    # Check if upon receiving the URL the command prints out the next correct
-##TEST##    # prompt.
-##TEST##    expect_like(qr/Would you like to add any additional mirrors?/,
-##TEST##        'checked add_mirrors() received more mirrors prompt.');
-##TEST##
-##TEST##    expect_send('Y', 'checked add_mirrors() say No to more mirrors.');
-##TEST##
-##TEST##    expect_like(qr!\[y/N\]|Type in URL of mirror or done to continue!,
-##TEST##        'checked add_mirrors() received prompt to enter a mirror.');
-##TEST##
-##TEST##    expect_send('ftp://afakemirror.blah/huh?',
-##TEST##        'checked add_mirrors() sent another mirror URL.');
-##TEST##
-##TEST##    expect_like(qr/Type in URL of mirror or done to continue/,
-##TEST##        'checked add_mirrors() received prompt to enter a mirror.');
-##TEST##
-##TEST##    expect_send('ftp://anotherfake.mirror/kasdjlfkjd',
-##TEST##        'checked add_mirrors() sent another mirror URL.');
-##TEST##
-##TEST##    expect_like(qr/Type in URL of mirror or done to continue/,
-##TEST##        'checked add_mirrors() received prompt to enter a mirror.');
-##TEST##
-##TEST##    expect_send('done',
-##TEST##        'checked add_mirrors() sent done.');
-##TEST##
-##TEST##    expect_quit();
-##TEST##};
-##TEST##
-##TEST##
-##TEST##subtest 'test add_verification() success' => sub {
-##TEST##    skip_all_unless_release_testing();
-##TEST##
-##TEST##    plan(skip_all => 'Optional Test::Expect testing module not installed.')
-##TEST##        unless eval {require Test::Expect; Test::Expect->import(); 1;};
-##TEST##
-##TEST##    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
-##TEST##    # something crazy like Test::Expect, this will have to be tested "manually."
-##TEST##    local $Term::UI::AUTOREPLY = 0;
-##TEST##    # Fix the "out of orderness" thanks to Test::Builder messing with
-##TEST##    # STD{OUT,ERR}.
-##TEST##    local $| = 1;
-##TEST##
-##TEST##    # Have Expect tell me what it's doing for easier debugging.
-##TEST##    #$Expect::Exp_Internal = 1;
-##TEST##
-##TEST##    expect_run(
-##TEST##        command => 't/bin-fetchware-new-add_verification',
-##TEST##        prompt => [-re => qr/: |\? /],
-##TEST##        quit => "\cC"
-##TEST##    );
-##TEST##
-##TEST##    # First test that the command produced the correct outout.
-##TEST##    expect_like(qr/Automatic KEYS file discovery failed. Fetchware needs the/,
-##TEST##        'checked add_verification() received correct mirror prompt');
-##TEST##
-##TEST##    # Have Expect print an example URL.
-##TEST##    expect_send('Y',
-##TEST##        'check add_verification() sent manual KEYS file Y.');
-##TEST##
-##TEST##    expect_like(qr<\[y/N\]|Automatic verification of your fetchware package has failed!>,
-##TEST##        'check add_verification() received no verify prompt.');
-##TEST##
-##TEST##    expect_send('Y',
-##TEST##        'checked add_verification() sent no verify Y.');
+subtest 'test get_mirrors() success' => sub {
+    skip_all_unless_release_testing();
+
+    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+        unless eval {require Test::Expect; Test::Expect->import(); 1;};
+
+    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
+    # something crazy like Test::Expect, this will have to be tested "manually."
+    local $Term::UI::AUTOREPLY = 0;
+    # Fix the "out of orderness" thanks to Test::Builder messing with
+    # STD{OUT,ERR}.
+    local $| = 1;
+
+    # Have Expect tell me what it's doing for easier debugging.
+    #$Expect::Exp_Internal = 1;
+
+    expect_run(
+        command => 't/bin-fetchware-new-get_mirrors',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC"
+    );
+
+    # First test that the command produced the correct outout.
+    expect_like(qr/Fetchware requires you to please provide a mirror. This mirror is required,/,
+        'checked add_mirror() received correct mirror prompt');
+
+    # Have Expect print an example URL.
+    expect_send('http://who.cares/whatever/',
+        'check add_mirror() sent mirror URL.');
+
+    # Check if upon receiving the URL the command prints out the next correct
+    # prompt.
+    expect_like(qr/Would you like to add any additional mirrors?/,
+        'checked get_mirrors() received more mirrors prompt.');
+
+    expect_send('N', 'checked get_mirrors() say No to more mirrors.');
+
+    expect_quit();
+
+    # Test answering Yes for more mirrors.
+
+    expect_run(
+        command => 't/bin-fetchware-new-get_mirrors',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC"
+    );
+
+    # First test that the command produced the correct outout.
+    expect_like(qr/Fetchware requires you to please provide a mirror. This mirror is required,/,
+        'checked add_mirror() received correct mirror prompt');
+
+    # Have Expect print an example URL.
+    expect_send('http://who.cares/whatever/',
+        'check add_mirror() sent mirror URL.');
+
+    # Check if upon receiving the URL the command prints out the next correct
+    # prompt.
+    expect_like(qr/Would you like to add any additional mirrors?/,
+        'checked get_mirrors() received more mirrors prompt.');
+
+    expect_send('Y', 'checked get_mirrors() say No to more mirrors.');
+
+    expect_like(qr!\[y/N\]|Type in URL of mirror or done to continue!,
+        'checked get_mirrors() received prompt to enter a mirror.');
+
+    expect_send('ftp://afakemirror.blah/huh?',
+        'checked get_mirrors() sent another mirror URL.');
+
+    expect_like(qr/Type in URL of mirror or done to continue/,
+        'checked get_mirrors() received prompt to enter a mirror.');
+
+    expect_send('ftp://anotherfake.mirror/kasdjlfkjd',
+        'checked get_mirrors() sent another mirror URL.');
+
+    expect_like(qr/Type in URL of mirror or done to continue/,
+        'checked get_mirrors() received prompt to enter a mirror.');
+
+    expect_send('done',
+        'checked get_mirrors() sent done.');
+
+    expect_quit();
+};
 ##TEST##
 ##TEST##
-##TEST##    expect_quit();
-##TEST##
-##TEST##    ###BUGALERT### Add tests for add_verification()'s other branches.
-##TEST##};
-##TEST##
-##TEST##
-##TEST##subtest 'test determine_filter_option() success' => sub {
-##TEST##    skip_all_unless_release_testing();
-##TEST##
-##TEST##    plan(skip_all => 'Optional Test::Expect testing module not installed.')
-##TEST##        unless eval {require Test::Expect; Test::Expect->import(); 1;};
-##TEST##
-##TEST##    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
-##TEST##    # something crazy like Test::Expect, this will have to be tested "manually."
-##TEST##    local $Term::UI::AUTOREPLY = 0;
-##TEST##    # Fix the "out of orderness" thanks to Test::Builder messing with
-##TEST##    # STD{OUT,ERR}.
-##TEST##    local $| = 1;
-##TEST##
-##TEST##    # Have Expect tell me what it's doing for easier debugging.
-##TEST##    #$Expect::Exp_Internal = 1;
-##TEST##
-##TEST##    expect_run(
-##TEST##        command => 't/bin-fetchware-new-filter_option',
-##TEST##        prompt => [-re => qr/: |\? /],
-##TEST##        quit => "\cC" # CTRL-C
-##TEST##    );
-##TEST##
-##TEST##    expect_like(qr/Analyzing the lookup_url you provided to determine if fetchware/,
-##TEST##        'checked determine_filter_option() received correct filter prompt');
-##TEST##
-##TEST##    expect_send('httpd-2.2',
-##TEST##        'check determine_filter_option() provided filter.');
-##TEST##
-##TEST##    expect_quit();
-##TEST##};
+subtest 'test get_verification() success' => sub {
+    skip_all_unless_release_testing();
+
+    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+        unless eval {require Test::Expect; Test::Expect->import(); 1;};
+
+    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
+    # something crazy like Test::Expect, this will have to be tested "manually."
+    local $Term::UI::AUTOREPLY = 0;
+    # Fix the "out of orderness" thanks to Test::Builder messing with
+    # STD{OUT,ERR}.
+    local $| = 1;
+
+    # Have Expect tell me what it's doing for easier debugging.
+    #$Expect::Exp_Internal = 1;
+
+    expect_run(
+        command => 't/bin-fetchware-new-get_verification',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC"
+    );
+
+    # First test that the command produced the correct outout.
+    expect_like(qr/Automatic KEYS file discovery failed. Fetchware needs the/,
+        'checked get_verification() received correct mirror prompt');
+
+    # Have Expect print an example URL.
+    expect_send('Y',
+        'check get_verification() sent manual KEYS file Y.');
+
+    expect_like(qr<\[y/N\]|Automatic verification of your fetchware package has failed!>,
+        'check get_verification() received no verify prompt.');
+
+    expect_send('Y',
+        'checked get_verification() sent no verify Y.');
+
+
+    expect_quit();
+
+    ###BUGALERT### Add tests for get_verification()'s other branches.
+};
+
+
+subtest 'test get_filter_option() success' => sub {
+    skip_all_unless_release_testing();
+
+    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+        unless eval {require Test::Expect; Test::Expect->import(); 1;};
+
+    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
+    # something crazy like Test::Expect, this will have to be tested "manually."
+    local $Term::UI::AUTOREPLY = 0;
+    # Fix the "out of orderness" thanks to Test::Builder messing with
+    # STD{OUT,ERR}.
+    local $| = 1;
+
+    # Have Expect tell me what it's doing for easier debugging.
+    #$Expect::Exp_Internal = 1;
+
+    expect_run(
+        command => 't/bin-fetchware-new-get_filter_option',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC" # CTRL-C
+    );
+
+    expect_like(qr/Analyzing the lookup_url you provided to determine if fetchware/,
+        'checked get_filter_option() received correct filter prompt');
+
+    expect_send('httpd-2.2',
+        'check get_filter_option() provided filter.');
+
+    expect_quit();
+};
 ##TEST##
 ##TEST##
 ##TEST##subtest 'test edit_manually() success' => sub {

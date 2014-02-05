@@ -2,10 +2,10 @@
 use warnings;
 use strict;
 
-# Tests cmd_new()'s add_mirrors() subroutine that uses Term::UI to ask the user
+# Tests cmd_new()'s get_mirrors() subroutine that uses Term::UI to ask the user
 # questions. This "test script" is called by t/bin-fetchware-new.t's using
 # Test::Expect, if its optionally installed. And Test::Expect answer's the
-# questsions that this script asks thereby testing add_mirrors() Q&A interface.
+# questsions that this script asks thereby testing get_mirrors() Q&A interface.
 
 # Needed so perl can find App::Fetchware.
 use lib 'lib';
@@ -33,14 +33,14 @@ my $term = Term::ReadLine->new('testing fetchware new');
 
 my $fetchwarefile = "# Test Fetchwarefile\n";
 
-add_mirrors($term, $current_file_list, \$fetchwarefile);
+get_mirrors($term, $current_file_list, \$fetchwarefile);
 
 # Ensure all keys are 'mirror'.
-like($fetchwarefile, qr/mirror/ms, 'checked add_mirrors() key success.');
+like($fetchwarefile, qr/mirror/ms, 'checked get_mirrors() key success.');
 
 # And all values are URLs.
 like($fetchwarefile, qr!(ftp|http|file)://!ms,
-    'checked add_mirrors() success.');
+    'checked get_mirrors() success.');
 
 # Spit out # of tests run.
 done_testing();
@@ -57,7 +57,7 @@ my $test = Test::Builder->new();
 unless ($test->is_passing()) {
     diag explain \[$test->details()];
     die <<EOD;
-add_mirrors test file for testing add_mirrors() using Test::Expect has failed!
+get_mirrors test file for testing get_mirrors() using Test::Expect has failed!
 The details() method of this process's Test::Builder object should have been
 printed above to help you figure out what went wrong.
 EOD
