@@ -63,6 +63,7 @@ our %EXPORT_TAGS  = (
         cmd_upgrade_all
         cmd_new
         cmd_clean
+        extension_name
         name_program
         opening_message
         get_lookup_url
@@ -575,6 +576,9 @@ EOF
         #them pausing to ask for the user's PAUSE credentials!!!!!!!!!
 
 
+        extension_name('App::Fetchware');
+
+
         my $opening_message = <<EOM;
 Fetchware's new command is reasonably sophisticated, and is smart enough to
 determine based on the lookup_url you provide if it can autogenerate a
@@ -672,6 +676,62 @@ Below are the API routines that cmd_new() uses to create the question and answer
 interface for helping to build new Fetchwarefiles and fetchware packages.
 
 =cut
+
+
+
+=head3 extension_name();
+
+    my $extension_name = extension_name('App::FetchwareX::ExtensionName');
+
+    # Or just...
+    
+    extension_name(__PACKAGE__);
+
+    # Inside your extension whose package is 'App::FetchwareX::ExtensioNName'.
+
+This subroutine sets the name of the extension that this implementation of new()
+wants to be called by. It should be C<App::FetchwareX::ExtensionName> the full
+name of your extension to make looking it up in documentaiton easier.
+
+All of new()'s API subroutines (everything in App::Fetchware's OVERRIDE_NEW
+export tag) use extension_name() to deterime what the this extension should be
+called. This is really only used in error messages and occasionally in some of
+the questions that new's API subroutines will ask the user. But this subroutine
+is important, because it allows extension authors to change all of the
+C<App::Fetchware> references in the error messages to their own fetchware
+extensions name.
+
+extension_name() is a singleton, and can only be set once. After being set only
+once any attempts to set it again will result in an exception being thrown.
+Furthermore, any calls to it without arguments will result in it returning the
+one scalar argument that was set the first time it was called.
+
+=cut
+
+sub extension_name {
+    # Use a state variable to keep $extension_name's value between calls.
+    state $extension_name;
+
+    # If $extension_name has never been touch and is still undef, then allow it
+    # to be set.
+    if (not defined $extension_name) {
+        $extension_name = shift;
+    # If $extension_name *is* set, and extension_name() was called with an
+    # argument, which is what defined shift does (shift shifts the first value
+    # off of @_ (the subroutine argument array), while defined checks to see if
+    # one was actually defined and provided by the caller.)
+    } elsif (defined $extension_name and defined shift) {
+        die <<EOD;
+App-Fetchware: extension_name() was called more than once. It is a singleton,
+and therefore can only be called once. Please only call it once to set its
+value, and then call it repeatedly wherever you need that value. see perldoc
+App::Fetchware for more details.
+EOD
+    }
+
+    # Return the singleton $extension_name.
+    return $extension_name;
+}
 
 
 

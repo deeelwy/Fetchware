@@ -37,6 +37,32 @@ BEGIN {
 }
 
 
+subtest 'test extension_name success' => sub {
+    my $test_value = 'Some name';
+
+    # Test extension_name()'s ability to set and return the one value it is
+    # called with.
+    is(extension_name($test_value), $test_value,
+        'checked extension_name() set success.');
+
+    # Test extension_name()'s exception when called more than just once.
+    eval_ok(sub {extension_name($test_value)},
+        <<EOE, 'checked extension_name() exception.');
+App-Fetchware: extension_name() was called more than once. It is a singleton,
+and therefore can only be called once. Please only call it once to set its
+value, and then call it repeatedly wherever you need that value. see perldoc
+App::Fetchware for more details.
+EOE
+
+    # Test extension_name()'s ability to return its singleton value when called
+    # with nothing.
+    is(extension_name(), $test_value,
+        'checked extension_name() return success.');
+    is(extension_name(), $test_value,
+        'checked extension_name() return success.');
+};
+
+
 ##TEST##SKIP: {
 ##TEST##    # Must be 1 less than the number of tests in the Test::More use line above.
 ##TEST##    my $how_many = 16;
