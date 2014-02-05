@@ -576,7 +576,7 @@ EOF
         #them pausing to ask for the user's PAUSE credentials!!!!!!!!!
 
 
-        extension_name('App::Fetchware');
+        extension_name(__PACKAGE__);
 
 
         my $opening_message = <<EOM;
@@ -866,7 +866,7 @@ fetchware: the lookup_url you provided failed because of :
 [$@]
 Please try again. Try the steps outlined above to determine what your program's
 lookup_url should be. If you cannot figure out what it should be please see
-perldoc App::Fetchware for additional hints on how to choose a lookup_url.
+perldoc @{[extension_name()]} for additional hints on how to choose a lookup_url.
 EOF
         $lookup_url = get_lookup_url($term, $lookup_url_failed_try_again);
 
@@ -891,7 +891,7 @@ EOF
 fetchware: run-time error. The lookup_url you provided [$lookup_url] is not a
 usable lookup_url because of the error below:
 [$@]
-Please see perldoc App::Fetchware for troubleshooting tips and rerun
+Please see perldoc @{[extension_name()]} for troubleshooting tips and rerun
 fetchware new.
 EOD
         };
