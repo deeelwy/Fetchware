@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '22'; #Update if this changes.
+use Test::More 0.98 tests => '23'; #Update if this changes.
 use Test::Deep;
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir rootdir);
@@ -55,6 +55,7 @@ subtest 'UTIL export what they should' => sub {
         download_http_url
         download_file_url
         do_nothing
+        singleton
         safe_open
         drop_privs
         write_dropprivs_pipe
@@ -72,8 +73,35 @@ subtest 'UTIL export what they should' => sub {
 };
 
 
-###BUGALERT###Need to add tests for :TESTING exports & specifc subtests for eval_ok(),
-# skip_all_unless_release_testing(), and clear_CONFIG().
+subtest 'test singleton() success' => sub {
+    my $test_value = 'Some name';
+
+    is(singleton('test_singleton'), 'Singleton test_singleton() created',
+        'checked singleton() creation');
+
+    ok(ref main->can('test_singleton') eq 'CODE',
+        'checked singleton() creation existence');
+
+    # Test test_singleton()'s ability to set and return the one value it is
+    # called with.
+    is(test_singleton($test_value), $test_value,
+        'checked test_singleton() set success.');
+
+    # Test test_singleton()'s exception when called more than just once.
+    eval_ok(sub {test_singleton($test_value)},
+        <<EOE, 'checked test_singleton() exception.');
+App-Fetchware: test_singleton() was called more than once. It is a singleton,
+and therefore can only be called once. Please only call it once to set its
+value, and then call it repeatedly wherever you need that value.
+EOE
+
+    # Test test_singleton()'s ability to return its singleton value when called
+    # with nothing.
+    is(test_singleton(), $test_value,
+        'checked test_singleton() return success.');
+    is(test_singleton(), $test_value,
+        'checked test_singleton() return success.');
+};
 
 
 subtest 'test ftp_download_dirlist()' => sub {
