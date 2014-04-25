@@ -49,7 +49,6 @@ our %EXPORT_TAGS = (
         download_http_url
         download_file_url
         do_nothing
-        singleton
         safe_open
         drop_privs
         write_dropprivs_pipe
@@ -1844,57 +1843,6 @@ API subroutines to make those API subroutines do nothing.
 
 sub do_nothing {
     return;
-}
-
-
-=head2 singleton()
-
-    singleton('singleton_name');
-
-Defines a "singleton" given the specified name in the current package. This
-"singleton" always works the same way. It works similar to a "Java style
-singleton", as it takes one and only one scalar value the first tine it is
-called with an argument. Moreover, whenever it is called again an exception is
-thrown. And when called after the first time without any arguments it returns
-the argument is was called with the first time.
-
-=cut
-
-sub singleton {
-    my $singleton_name = shift;
-
-    my $singleton_code = sub {
-        # Use a state variable to keep $singleton_value's value between calls.
-        state $singleton_value;
-
-        # If $singleton_value has never been touched and is still undef, then
-        # allow it to be set.
-        if (not defined $singleton_value) {
-            $singleton_value = shift;
-        # If $singleton_value *is* set, and singleton_value() was called with an
-        # argument, which is what defined shift does (shift shifts the first
-        # value off of @_ (the subroutine argument array), while defined checks
-        # to see if one was actually defined and provided by the caller.)
-        } elsif (defined $singleton_value and defined shift) {
-            die <<EOD;
-App-Fetchware: $singleton_name() was called more than once. It is a singleton,
-and therefore can only be called once. Please only call it once to set its
-value, and then call it repeatedly wherever you need that value.
-EOD
-        }
-
-        # Return the singleton $singleton_value.
-        return $singleton_value;
-    };
-
-    # Create the $singleton_name named subroutine in the caller()'s package.
-    {
-        no strict 'refs';
-        my $caller = caller();
-        *{"${caller}::${singleton_name}"} = $singleton_code;
-    }
-
-    return "Singleton $singleton_name() created";
 }
 
 
