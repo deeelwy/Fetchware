@@ -10,7 +10,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '12'; #Update if this changes.
+use Test::More 0.98 tests => '11'; #Update if this changes.
 use File::Copy 'cp';
 use Path::Class;
 use File::Spec::Functions qw(rel2abs catfile);
@@ -48,26 +48,30 @@ subtest 'OVERRIDE_BUILD exports what it should' => sub {
 
 
 subtest 'test run_star_commands() success' => sub {
-    # Just user the 'perl' command itself as the command to run that way we
-    # don't need to use different commands for different platforms.
+    # Just use the 'perl' command itself as the command to run that way we
+    # don't need to use different commands for different platforms. But actually
+    # we do, because of stupid file extensions. On Windows perl is not called
+    # perl, because it is called perl.exe instead. So, just use $^X, which is
+    # the path to the perl that is currently running this file, so this command
+    # is pretty much guaranteed to exist.
 
     # Test just one simple command.
     # NOTE: run_star_commands() returns 0 on success, and nonzero on failure
     # just like commands on the command line do and perl's system() does too.
-    ok(run_star_commands('perl -e "1+1;"') == 0,
+    ok(run_star_commands(qq{$^X -e "1+1;"}) == 0,
         'check run_star_commands() simple success.');
 
     # Now test if it can handle comma (,\s*) seperated commands.
-    ok((run_star_commands(q{perl -e "1+1;", perl -e "1+1;"}) == 0),
+    ok((run_star_commands(qq{$^X -e "1+1;", $^X -e "1+1;"}) == 0),
         'check run_star_commands() double success.');
 
     # Now test if it can handle a list of single commands..
-    ok((run_star_commands('perl -e "1+1;"', 'perl -e "1+1;"') == 0),
+    ok((run_star_commands(qq{$^X -e "1+1;"}, qq{$^X -e "1+1;"}) == 0),
         'check run_star_commands() list success.');
 
     # Now test if it can handle a list of comma separated commands..
-    ok((run_star_commands(q{perl -e "1+1;", perl -e "1+1;"},
-        q{perl -e "1+1;", perl -e "1+1;"}) == 0),
+    ok((run_star_commands(qq{$^X -e "1+1;", $^X -e "1+1;"},
+        qq{$^X -e "1+1;", $^X -e "1+1;"}) == 0),
         'check run_star_commands() double list success.');
 };
 
