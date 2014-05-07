@@ -24,6 +24,7 @@ use App::Fetchware qw(parse_directory_listing);
 use App::Fetchware::Config qw(config __clear_CONFIG config_replace);
 use App::Fetchware::Util qw(:UTIL);
 use Test::Fetchware 'create_test_fetchwarefile';
+use App::Fetchware::Fetchwarefile;
 use Archive::Tar;
 use File::Copy qw(mv cp);
 use File::Spec::Functions qw(curdir catdir catfile catpath tmpdir splitpath
@@ -44,6 +45,7 @@ use Fcntl ':flock';
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
 use Sub::Mage;
 use URI::Split qw(uri_split uri_join);
+use Scalar::Util 'blessed';
 
 # Setup exports, which are only meant to ease testing.
 use Exporter 'import';
@@ -548,10 +550,12 @@ sub cmd_new {
 
         my $term = Term::ReadLine->new('Fetchware new');
 
+        # Instantiate a new Fetchwarefile object for managing and generating a
+        # Fetchwarefile, which we'll write to a file for the user or use to
+        # build a associated Fetchware package.
         my $now = localtime;
-        ###BUGALERT### Only App::Fetchware based Fetchwarefile's are supported now
-        #will have to add some ifs and code to support others.
-        $P_fetchwarefile = <<EOF;
+        $P_fetchwarefile = App::Fetchware::Fetchwarefile->new(
+            header => <<EOF,
 use App::Fetchware;
 # Auto generated $now by fetchware's new command.
 # However, feel free to edit this file if fetchware's new command's
@@ -563,6 +567,116 @@ use App::Fetchware;
 # fetchware's behavior. For extra flexible customization see perldoc
 # App::Fetchware.
 EOF
+            descriptions =>
+
+                program => <<EOA,
+program simply names the program the Fetchwarefile is responsible for
+downloading, building, and installing.
+EOA
+                filter => <<EOA,
+filter specifies a program name and/or version number that tells fetchware
+which program and or which version of a program you want fetchware to install.
+This is *only* needed in cases where there are multiple programs and or
+multiple versions of the same program in the directory lookup_url specifies.
+EOA
+                temp_dir => <<EOA,
+temp_dir specifies what temporary directory fetchware will use to download and
+build this program.
+EOA
+                user => <<EOA,
+user specifes a user that fetchware will drop priviledges to when fetchware
+downloads and builds your software. It will then switch back to root privs, if
+run as root, and install your software system wide. This does not work on
+Windows.
+EOA
+                fetchware_database_path => <<EOA,
+fetchware_database_path specifies an alternate path for fetchware to use to
+store the fetchware package that 'fetchware install' creates, and that
+'fetchware upgrade' uses to upgrade this fetchware package.
+EOA
+                prefix => <<EOA,
+prefix specifies what base path your software will be installed under. This
+only works for software that uses GNU AutoTools to configure itself, it uses
+./configure.
+EOA
+                configure_options => <<EOA,
+configure_options specifes what options fetchware should pass to ./configure
+when it configures your software. This option only works for software that
+uses GNU AutoTools.
+EOA
+                make_options => <<EOA,
+make_options specifes what options fetchware should pass to make when make is
+run to build and install your software.
+EOA
+                build_commands => <<EOA,
+build_commands specifies what commands fetchware should execute to build your
+software.
+EOA
+                install_commands => <<EOA,
+install_commands specifies what commands fetchware should execute to install
+your software.
+EOA
+                uninstall_commands => <<EOA,
+uninstall_commands specifies what commands fetchware should execute to uninstall
+your software.
+EOA
+                lookup_url => <<EOA,
+lookup_url specifes the url that fetchware uses to determine what what
+versions of your program are available. It should point to a directory listing
+instead of a specific file.
+EOA
+                lookup_method => <<EOA,
+lookup_method specifies how fetchware determines what version of your program
+to install. The default is the 'timestamp' algorithm, and then to try the
+'versionstring' algorithm if 'timestamp' fails. lookup_method specifies which
+one you would like to use. Only the strings 'timestamp' and 'versionstring'
+are allowed options.
+EOA
+                gpg_keys_url => <<EOA,
+gpg_keys_url specifies the url that fetchware will use to download the author's
+KEYS file that it uses for gpg verification.
+EOA
+                gpg_sig_url => <<EOA,
+gpg_sig_url specifies the url that fetchware uses to download digital
+signatures of this program. They're files that usually end .asc.
+EOA
+                sha1_url => <<EOA,
+sha1_url specfies the url that fetchware uses to download sha1sum files of
+this program. This url should be the program's main download site instead of a
+mirror, because a hacked mirror could alter the sha1sum on that mirror.
+EOA
+                md5_url => <<EOA,
+md5_url specfies the url that fetchware uses to download md5sum files of
+this program. This url should be the program's main download site instead of a
+mirror, because a hacked mirror could alter the md5sum on that mirror.
+EOA
+                verify_method => <<EOA,
+verify_method specifes a specific method that fetchware should use to verify
+your program. This method can be 'gpg', 'sha1', or 'md5'.
+EOA
+                no_install => <<EOA,
+no_install specifies that this software should not be installed. Instead, the
+install step is skipped, and fetchware prints to STDOUT where it downloaded,
+verified, and built your program. no_install must be a true or false value.
+EOA
+                verify_failure_ok => <<EOA,
+verify_failure_ok specifies that fetchware should not stop installing your
+software and terminate with an error message if fetchware fails to verify your
+software. You should never set this to true. Doing so could cause fetchware to
+install software that may have been compromised, or had malware inserted into
+it. Never use this option unless the author or maintainer of this program does
+not gpg sign or checksum his software.
+EOA
+                user_keyring => <<EOA,
+users_keyring if enabled causes fetchware to use the user's own gpg keyring
+instead of fetchware's own keyring.
+EOA
+                mirror => <<EOA
+The mirror configuration option provides fetchware with alternate servers to
+try to download this program from. This option is used when the server
+specified in the url options in this file is unavailable or times out.
+EOA
+        );
         ###INSANEFEATUREENHANCEMENT### Prompt for name of program, and do a fuzzy 
         #search on CPAN for that program under
         #App::Fetchware::FetchwarefileX::UpCasedProgName. Consider using the meta
@@ -599,16 +713,13 @@ EOM
         $P_program_name //= name_program($term);
         vmsg "Determined name of your program to be [$P_program_name]";
 
-        append_options_to_fetchwarefile({program => $P_program_name},
-            \$P_fetchwarefile);
+        $P_fetchwarefile->config_options(program => $P_program_name);
         vmsg "Appended program [$P_program_name] configuration option to Fetchwarefile";
 
         my $lookup_url = get_lookup_url($term);
         vmsg "Asked user for lookup_url [$lookup_url] from user.";
 
-        # Add $lookup_url to $P_fetchwarefile.
-        append_options_to_fetchwarefile({lookup_url => $lookup_url},
-            \$P_fetchwarefile);
+        $P_fetchwarefile->config_options(lookup_url => $lookup_url);
         vmsg "Appended lookup_url [$lookup_url] configuration option to Fetchwarefile";
 
         vmsg "Downloaded lookup_url [$lookup_url]";
@@ -616,12 +727,22 @@ EOM
         vmsg "Downloaded lookup_url's directory listing";
         vmsg Dumper($filename_listing);
 
-        ###BUGALERT### add vmsg() support for the $*_hashref's below.
         my $mirrors_hashref = get_mirrors($term, $filename_listing);
+        vmsg "Added mirrors to your Fetchwarefile.";
+        vmsg Dumper($mirrors_hashref);
 
         my $verify_hashref = get_verification($term, $filename_listing, $lookup_url);
+        vmsg "Added verification settings to Fetchwarefile.";
+        vmsg Dumper($verify_hashref);
 
         my $filter_hashref = get_filter_option($term, $filename_listing);
+        vmsg "Added [$filter_hashref->{filter}] filter setting to Fetchwarefile.";
+
+        $P_fetchwarefile->config_options(
+            %$mirrors_hashref,
+            %$verify_hashref,
+            %$filter_hashref
+        );
 
         ###BUGALERT### Ask to parrallelize make with make_options???
         ###BUGALERT### Verify prefix is writable by current user, who will
@@ -632,14 +753,27 @@ EOM
         vmsg 'User entered the following options.';
         vmsg Dumper(\%options);
 
-        # Append all other options to P_fetchwarefile.
-        append_options_to_fetchwarefile(\%options, \$P_fetchwarefile);
+        # Append all other options to the Fetchwarefile.
+        $P_fetchwarefile->config_options(%options);
         vmsg 'Appended all other options listed above to Fetchwarefile.';
 
-        edit_manually($term, \$P_fetchwarefile);
+        my $edited_fetchwarefile = edit_manually($term, $P_fetchwarefile);
         vmsg <<EOM;
 Asked user if they would like to edit their generated Fetchwarefile manually.
 EOM
+        # Generate Fetchwarefile.
+        if (blessed($edited_fetchwarefile)
+            and
+        $edited_fetchwarefile->isa('App::Fetchware::Fetchwarefile')) {
+            # If edit_manually() did not modify the Fetchwarefile, then generate
+            # it.
+            $P_fetchwarefile = $P_fetchwarefile->generate(); 
+        } else {
+            # If edit_manually() modified the Fetchwarefile, then do not
+            # generate it, and replace the Fetchwarefile object with the new
+            # string that represents the user's edited Fetchwarefile.
+            $P_fetchwarefile = $edited_fetchwarefile;
+        }
 
         # Tell the parent, root, process the values of the variables the
         # child calculated in this coderef, and write them across this pipe
@@ -1302,78 +1436,6 @@ EOP
 }
 
 
-=head3 append_to_fetchwarefile()
-
-    append_to_fetchwarefile(\$fetchwarefile, $config_file_option, $config_file_value, $description)
-
-Turns $description into a comment as described below, and then appends it to the
-$fetchwarefile. Then $config_file_option and $config_file_value are also
-appended inside proper Fetchwarefile syntax.
-
-$description is split into strings 78 characters long, and printed with C<# >
-prepended to make it a proper comment so fetchware skips parsing it.
-
-$description is optional. If you do not include it when you call
-append_to_fetchwarefile(), then append_to_fetchwarefile() will not add the
-provided description.
-
-=over
-
-=item NOTE
-Notice the backslash infront of the $fetchwarefile argument above. It is there,
-because the argument $fetchwarefile must be a reference to a scalar.
-
-=back
-
-=cut
-
-sub append_to_fetchwarefile {
-    my ($fetchwarefile,
-        $config_file_option,
-        $config_file_value,
-        $description) = @_;
-
-    die <<EOD if ref($fetchwarefile) ne 'SCALAR';
-fetchware: run-time error. You called append_to_fetchwarefile() with a
-fetchwarefile argument that is not a scalar reference. Please add the need
-backslash reference operator to your call to append_to_fetchwarefile() and try
-again.
-EOD
-
-
-    # Only add a $description if we were called 
-    if (defined $description) {
-        # Append a double newline for easier reading, but only when we print a
-        # new $description, which implies we're switching to a new configuration
-        # option.
-        $$fetchwarefile .= "\n\n";
-
-        # Append a newline to $description if it doesn't have one already.
-        $description .= "\n" unless $description =~ /\n$/;
-        # Change wrap() to wrap at 80 columns instead of 76.
-        local $Text::Wrap::columns = 81;
-        # Use Text::Wrap's wrap() to split $description up
-        $$fetchwarefile .= wrap('# ', '# ', $description);
-    }
-
-    # This simple chunk of regexes provide trivial and buggy support for
-    # ONEARRREFs. This support simly causes fetchware to avoid adding any
-    # characters that are needed for proper Perl syntax if the user has provided
-    # those characters for us.
-    if ($config_file_value =~ /('|")/) {
-        $$fetchwarefile .= "$config_file_option $config_file_value";
-
-        if ($config_file_value =~ /[^;]$/) {
-            $$fetchwarefile .= ";"; 
-        } elsif ($config_file_value =~ /[^\n]$/) {
-            $$fetchwarefile .= "\n";
-        }
-    } else { 
-        $$fetchwarefile .= "$config_file_option '$config_file_value';\n";
-    }
-}
-
-
 =head3 prompt_for_other_options()
 
     prompt_for_other_options($term);
@@ -1666,179 +1728,6 @@ EOP
 }
 
 
-=head3 append_options_to_fetchwarefile()
-
-    append_options_to_fetchwarefile(\%options, \$fetchwarefile);
-
-Takes a hash ref of name value fetchwarefile configuration options and a
-scalar ref representing your Fetchwarefile, and then it appends your
-fetchwarefile configuration options to the provided $fetchwarefile scalar ref.
-It also prepends a description of that specific fetchwarefile option.
-
-If you provide an configuration option for which
-append_options_to_fetchwarefile() does not have a preexisting description for in
-its internal hash, %config_file_description, append_options_to_fetchwarefile()
-will throw an exception.
-
-append_options_to_fetchwarefile() uses  append_to_fetchwarefile() to do the
-manipulation of your $fetchwarefile.
-
-=cut
-
-sub append_options_to_fetchwarefile {
-    my ($options, $fetchwarefile) = @_;
-
-    my %config_file_description = (
-        program => <<EOA,
-program simply names the program the Fetchwarefile is responsible for
-downloading, building, and installing.
-EOA
-        filter => <<EOA,
-filter specifies a program name and/or version number that tells fetchware
-which program and or which version of a program you want fetchware to install.
-This is *only* needed in cases where there are multiple programs and or
-multiple versions of the same program in the directory lookup_url specifies.
-EOA
-        temp_dir => <<EOA,
-temp_dir specifies what temporary directory fetchware will use to download and
-build this program.
-EOA
-        user => <<EOA,
-user specifes a user that fetchware will drop priviledges to when fetchware
-downloads and builds your software. It will then switch back to root privs, if
-run as root, and install your software system wide. This does not work on
-Windows.
-EOA
-        fetchware_database_path => <<EOA,
-fetchware_database_path specifies an alternate path for fetchware to use to
-store the fetchware package that 'fetchware install' creates, and that
-'fetchware upgrade' uses to upgrade this fetchware package.
-EOA
-        prefix => <<EOA,
-prefix specifies what base path your software will be installed under. This
-only works for software that uses GNU AutoTools to configure itself, it uses
-./configure.
-EOA
-        configure_options => <<EOA,
-configure_options specifes what options fetchware should pass to ./configure
-when it configures your software. This option only works for software that
-uses GNU AutoTools.
-EOA
-        make_options => <<EOA,
-make_options specifes what options fetchware should pass to make when make is
-run to build and install your software.
-EOA
-        build_commands => <<EOA,
-build_commands specifies what commands fetchware should execute to build your
-software.
-EOA
-        install_commands => <<EOA,
-install_commands specifies what commands fetchware should execute to install
-your software.
-EOA
-        uninstall_commands => <<EOA,
-uninstall_commands specifies what commands fetchware should execute to uninstall
-your software.
-EOA
-        lookup_url => <<EOA,
-lookup_url specifes the url that fetchware uses to determine what what
-versions of your program are available. It should point to a directory listing
-instead of a specific file.
-EOA
-        lookup_method => <<EOA,
-lookup_method specifies how fetchware determines what version of your program
-to install. The default is the 'timestamp' algorithm, and then to try the
-'versionstring' algorithm if 'timestamp' fails. lookup_method specifies which
-one you would like to use. Only the strings 'timestamp' and 'versionstring'
-are allowed options.
-EOA
-        gpg_keys_url => <<EOA,
-gpg_keys_url specifies the url that fetchware will use to download the author's
-KEYS file that it uses for gpg verification.
-EOA
-        gpg_sig_url => <<EOA,
-gpg_sig_url specifies the url that fetchware uses to download digital
-signatures of this program. They're files that usually end .asc.
-EOA
-        sha1_url => <<EOA,
-sha1_url specfies the url that fetchware uses to download sha1sum files of
-this program. This url should be the program's main download site instead of a
-mirror, because a hacked mirror could alter the sha1sum on that mirror.
-EOA
-        md5_url => <<EOA,
-md5_url specfies the url that fetchware uses to download md5sum files of
-this program. This url should be the program's main download site instead of a
-mirror, because a hacked mirror could alter the md5sum on that mirror.
-EOA
-        verify_method => <<EOA,
-verify_method specifes a specific method that fetchware should use to verify
-your program. This method can be 'gpg', 'sha1', or 'md5'.
-EOA
-        no_install => <<EOA,
-no_install specifies that this software should not be installed. Instead, the
-install step is skipped, and fetchware prints to STDOUT where it downloaded,
-verified, and built your program. no_install must be a true or false value.
-EOA
-        verify_failure_ok => <<EOA,
-verify_failure_ok specifies that fetchware should not stop installing your
-software and terminate with an error message if fetchware fails to verify your
-software. You should never set this to true. Doing so could cause fetchware to
-install software that may have been compromised, or had malware inserted into
-it. Never use this option unless the author or maintainer of this program does
-not gpg sign or checksum his software.
-EOA
-        user_keyring => <<EOA,
-users_keyring if enabled causes fetchware to use the user's own gpg keyring
-instead of fetchware's own keyring.
-EOA
-        mirror => <<EOA
-The mirror configuration option provides fetchware with alternate servers to
-try to download this program from. This option is used when the server
-specified in the url options in this file is unavailable or times out.
-EOA
-    );
-
-    # Ensure %description_seen keeps track across calls. NOTE: that this will
-    # cause bugs if more than one Fetchwarefile is created with cmd_new. But as
-    # long as only one Fetchwarefile is created per fetchware run, this
-    # limitation is ok.
-    state %description_seen;
-    for my $opt (keys %$options) {
-        if (defined $config_file_description{$opt}) {
-            # If the description has not been written to the $fetchwarefile yet,
-            # then include it.
-            unless (exists $description_seen{$opt}
-                and defined $description_seen{$opt}
-                and $description_seen{$opt} > 0 
-            ) {
-                append_to_fetchwarefile($fetchwarefile, $opt, $options->{$opt},
-                    $config_file_description{$opt});
-            # Otherwise avoid duplicating the description.
-            } else {
-                append_to_fetchwarefile($fetchwarefile, $opt, $options->{$opt});
-            }
-            vmsg <<EOM;
-Appended [$opt] configuration option [$options->{$opt}] to Fetchwarefile.
-EOM
-        } else {
-            die <<EOD;
-fetchware: append_options_to_fetchwarefile() was called with \$options that it
-does not support having a description for. Please call
-append_options_to_fetchwarefile() with the correct \$options, or add the new,
-missing option to append_options_to_fetchwarefile()'s internal
-%config_file_description hash. \$options was:
-@{[Dumper(\%$options)]}
-EOD
-        }
-        # Increment this for each time each $opt is written to the
-        # $fetchwarefile to ensure that only on the very first time the $opt
-        # is written to the $fetchwarefile that its description is also
-        # written.
-        $description_seen{$opt}++;
-    }
-}
-
-
 =head3 edit_manually()
 
     $fetchwarefile = edit_manually($term, \$fetchwarefile);
@@ -1878,7 +1767,7 @@ EOP
     ) {
         my ($fh, $fetchwarefile_filename) =
             tempfile('Fetchwarefile-XXXXXXXXX', TMPDIR => 1);
-        print $fh $$fetchwarefile;
+        print $fh $fetchwarefile->generate();
 
         close $fh;
 
@@ -1907,7 +1796,12 @@ fetchware: run-time error. fetchware can't open the fetchwarefile you edited
 with your editor after you edited it. This just shouldn't happen. Possible race
 condition or weird bug. See perldoc fetchware.
 EOD
-            $$fetchwarefile = do { local $/; <$fh> }; # slurp fetchwarefile
+            # Since the generated Fetchwarefile has been edited, because its
+            # size is nonzero, then replace the App::Fetchware::Fetchwarefile
+            # object with whatever text can be slurped from the file the user
+            # edited. Since it is now a scalar instead of an object, that is how
+            # Fetchware will tell if the user changed it or not.
+            $fetchwarefile = do { local $/; <$fh> }; # slurp fetchwarefile
         } else {
             msg <<EOM;
 You canceled any custom editing of your fetchwarefile by writing an empty file

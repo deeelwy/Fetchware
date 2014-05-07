@@ -616,10 +616,6 @@ values will result in fetchware throwing an exception.
 sub lookup {
     msg "Looking up download url using lookup_url [@{[config('lookup_url')]}]";
 
-    # die if lookup_url wasn't specified.
-    # die if lookup_method was specified wrong.
-    vmsg 'Checking that lookup has been configured properly.';
-    check_lookup_config();
     # obtain directory listing for file, ftp, or http. (a sub for each.)
     vmsg 'Downloading a directory listing using your lookup_url';
     my $directory_listing = get_directory_listing();
