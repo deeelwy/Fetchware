@@ -48,6 +48,8 @@ use App::Fetchware;
 program 'who cares';
 
 lookup_url 'http://doesnt.exist/anywhere';
+
+mirror 'http://doesnt.exist/anywhere/either';
 EOF
 
     # Use a scalar ref instead of a real file to avoid having to write and read
@@ -63,6 +65,8 @@ EOF
 program 'who cares';
 
 lookup_url 'http://doesnt.exist/anywhere';
+
+mirror 'http://doesnt.exist/anywhere/either';
 EOS
     eval_ok(sub {parse_fetchwarefile(\$no_use_fetchware)},
         <<EOE, 'checked parse_fetchwarefile() no use fetchware');
@@ -72,6 +76,8 @@ fetchware uses Perl for its configuration file. Your fetchware file was.
 [program 'who cares';
 
 lookup_url 'http://doesnt.exist/anywhere';
+
+mirror 'http://doesnt.exist/anywhere/either';
 ]
 EOE
 
@@ -94,6 +100,8 @@ use App::Fetchware;
 
 program 'who cares';
 lookup_url 'none://';
+
+mirror 'http://doesnt.exist/anywhere/either';
 
 # Use extra perl code to "delete" some of the API subs to test that they weren't
 # exported.

@@ -135,9 +135,8 @@ EOM
 
 
 subtest 'test check_syntax()' => sub {
-    my $fetchwarefile = \"Fake Fetchwarefile";
 
-    is(check_syntax($fetchwarefile), 'Syntax Ok',
+    is(check_syntax(), 'Syntax Ok',
         'checked check_syntax() success.');
 };
 

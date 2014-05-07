@@ -2862,7 +2862,7 @@ EOD
     # is one gigantic security hole; however, it is also how fetchware works :)
     #
     # safe_open() is used to ensure that the file the user provides is "safe" to
-    # use, and is the limit of fetchware's safty features.
+    # use, and is the limit of fetchware's safety features.
     eval $$fetchwarefile;
 
     die <<EOD if $@;
@@ -2896,8 +2896,12 @@ EOD
         $union{$element}++ && $intersection{$element}++;
     }
 
-    unless ( (grep {exists $api_subs{$_} and exists $intersection{$_}
-                and $api_subs{$_} eq $intersection{$_}} keys %api_subs) == 9) {
+    # Compares the number of %intersection's to the number of %api_subs, and if
+    # they're *not* equal throw an exception, so the user knows which API subs
+    # are not set up right.
+    if ( (grep {exists $api_subs{$_} and exists $intersection{$_}
+                and $api_subs{$_} eq $intersection{$_}}
+                keys %api_subs) != scalar keys %api_subs) {
         my @missing_api_subs;
         for my $api_sub (keys %api_subs) {
             if (not exists $intersection{$api_sub}
@@ -2916,8 +2920,8 @@ The missing subroutines are [@missing_api_subs].
 EOD
     }
 
-    # Call App::Fetchware's check_syntax() (or a App::Fetchware extension).
-    check_syntax($fetchwarefile);
+    # Call App::Fetchware's check_syntax() (or a App::Fetchware extension's).
+    check_syntax();
 
     return 'Evaled config file successfully';
 }

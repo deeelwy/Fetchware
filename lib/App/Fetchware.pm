@@ -2903,7 +2903,7 @@ EOM
 
 =head2 check_syntax()
 
-    'Syntax Ok' = check_syntax($fetchwarefile)
+    'Syntax Ok' = check_syntax()
 
 =over
 
@@ -2917,8 +2917,30 @@ EOM
 
 =back
 
-Calls check_config_options() to check for the follow syntax errors in
-Fetchwarefiles. 
+Calls check_config_options() to check for the following syntax errors in
+Fetchwarefiles. Note by the time check_syntax() has been called
+parse_fetchwarefile() has already parsed the Fetchwarefile, and any syntax
+errors in the user's Fetchwarefile will have already been reported by Perl.
+
+This may seem like a bug, but it's not. Do you really want to try to use regexes
+or something to try to parse the Fetchwarefile reliably, and then report errors
+to users? Or add PPI of all insane Perl modules as a dependency just to write
+syntax checking code that most of the time says the syntax is Ok anyway, and
+therefore a complete waste of time and effort? I don't want to deal with any of
+that insanity.
+
+Instead, check_syntax() uses config() to examine the already parsed
+Fetchwarefile for "higher level" syntax errors. Syntax errors that are
+B<Fetchware> syntax errors instead of just Perl syntax errors.
+
+For yours and my own convienience I created check_config_options() helper
+subroutine. Its data driven, and will check Fetchwarefile's for three different
+types of common syntax errors that occur in App::Fetchware's Fetchwarefile
+syntax. These errors are more at the level of I<logic errors> than actual syntax
+errors. See its POD below for additional details.
+
+Below briefly lists what App::Fetchware's implementation of check_syntax()
+checks.
 
 =over
 
@@ -2950,10 +2972,6 @@ make_options.
 =back
 
 =back
-
-Note: check_syntax() does I<not> actually parse the provided $fetchwarefile.
-Intead, the $fetchwarefile argument is just there in case its needed later or if
-its needed by a fetchware extension.
 
 =over
 
@@ -3038,7 +3056,9 @@ are used.
 
 It's parameters are specified in a list with an even number of parameters. Each
 group of 2 parameters specifies a type of test that check_config_options() will
-test for. There are three types of tests.
+test for. There are three types of tests. Also, note that the parameters are
+specified as a list not as a hash, because multiple "keys" are allowed, and hash
+keys must be unique; therefore, the parameters are a list instead of a hash.
 
 =over
 
@@ -3049,6 +3069,10 @@ at the same time. This is needed, because if you specify C<build_commands> any
 value you specify for C<prefix>, C<configure_options>, C<make_options> will be
 ignored, which may not be what you expect or want, so BothAreDefined is used to
 check for this.
+
+Also, unlike C<Mandatory> and C<ConfigOptionEnum> this syntax checker does not
+take a string argument that specifies an error message, because it takes the two
+other values that you specifiy, and uses them to fill in its own error message.
 
 =item Mandatory
 
