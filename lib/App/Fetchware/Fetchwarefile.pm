@@ -111,6 +111,11 @@ generated Fetchwarefile when those options are added to your Fetchwarefile.
 EOC
     }
 
+
+    # Initialize order as instance data. This variable is used by generate() to
+    # track the order as config options are added to the $fetchwarefile object.
+    $options{order} = 1;
+
     return bless \%options, $class;
 }
 
@@ -136,19 +141,82 @@ sub config_options {
 
     # If only one option is provided, then config_options() is a getter, and
     # should return that one value back to the caller.
+
     if (@_ == 1) {
-        # Note: It derefs the array that stores it (to support 'MANY' and
-        # 'ARRREF' types), so the caller doesn not have to bother with that, but
-        # they should be aware that it may return more than one value, and
-        # ignores context.
-        return @{$self->{config_options}->{$_[0]}};
+        # If the requested key is a arrayref deref it, and return it...
+        if (ref $self->{config_options_value}->{$_[0]} eq 'ARRAY') {
+            return @{$self->{config_options_value}->{$_[0]}};
+        #...otherwise just return the one scalar.
+        } else {
+            return $self->{config_options_value}->{$_[0]};
+        }
     # Otherwise config_options() is a setter, and should set the rest of its
     # objects (@_) as the
     } else {
-        # store the %options inside $self's under $self's config_options hash key,
+        # Store the %options inside $self's under $self's config_options_value hash key,
         # and be sure to use an array to support 'MANY' and 'ARRREF' types.
         my %options = @_;
-        push @{$self->{config_options}->{$_}}, $options{$_} for keys %options;
+
+        for my $config_key (keys %options) {
+
+            if (ref $self->{config_options_value}->{$config_key} eq 'ARRAY') {
+                if (ref $options{$config_key} eq 'ARRAY') {
+                    push @{$self->{config_options_value}->{$config_key}},
+                        @{$options{$config_key}};
+                } else {
+                    push @{$self->{config_options_value}->{$config_key}},
+                        $options{$config_key};
+                }
+            } else { 
+                if (exists $self->{config_options_value}->{$config_key}
+                        and
+                    defined $self->{config_options_value}->{$config_key}
+                        and
+                    # ref returning '' means it's not a reference.
+                    ref $self->{config_options_value}->{$config_key} eq ''
+                ) {
+                    if (ref $options{$config_key} eq 'ARRAY') {
+                        push @{$self->{config_options_value}->{$config_key}},
+                            # Prepend existing arrayref...
+                            @{$self->{config_options_value}->{$config_key}},
+                            # ...and the new array ref, but remember to deref it.
+                            @{$options{$config_key}};
+                    } else {
+                        # Set the hash directly to the value, because if it has
+                        # a scalar value, then it is not undef, and push will
+                        # only autovivify the array ref if its undef; therefore,
+                        # I must set the hash value to an array ref directly
+                        # instead.
+                        $self->{config_options_value}->{$config_key} =
+                            [
+                                # Prepend existing scalar...
+                                $self->{config_options_value}->{$config_key},
+                                # ...and the new scalar too.
+                                $options{$config_key}
+                            ];
+                    }
+                } else {
+                    if (ref $options{$config_key} eq 'ARRAY') {
+                        $self->{config_options_value}->{$config_key} = [
+                            @{$options{$config_key}}
+                        ];
+                    } else {
+                        $self->{config_options_value}->{$config_key} = $options{$config_key};
+                    }
+                }
+            } 
+        }
+
+        # Store the order that this $config_key was stored in
+        # config_options_value in it's parallel hash config_options_order...
+        # Copied and pasted from code by brian d foy from Stack Overflow:
+        # http://stackoverflow.com/questions/569772
+        for (my $i = 0; $i < @_; $i += 2) {
+            my ($option_name, $option_value) = @_[ $i, $i+1 ];
+
+            $self->{config_options_order}->{$option_name} = $self->{order}++
+                unless exists $self->{config_options_order}->{$option_name};
+        }
     }
 }
 
@@ -183,10 +251,38 @@ sub generate {
         $fetchwarefile .= "\n" if defined($2) and $2 eq "\n";
     }
 
+    # Ensure that $self->{config_options_values} and
+    # $self->{config_options_order} parallel hashes have the same number of
+    # keys.
+
+    unless (
+        keys %{$self->{config_options_value}}
+            ==
+        keys %{$self->{config_options_order}}
+    ) {
+        die <<EOD;
+App-Fetchware-Fetchwarefile: your call to generate() failed, because the data
+that generate() uses internally is somehow screwed up. This is probably a bug,
+because App::Fetchware::Fetchwarefile's internals are not supposed to be messed
+with except by itself of course.
+EOD
+    }
+
     # Tracks how many times each Fetchwarefile configuration option is used, so
     # that each options description is only put in the Fetchwarefile only once.
     my %description_seen;
-    for my $option_key (keys %{$self->{config_options}}) {
+
+    # Loop over all the keys that were added with config_options(), which are
+    # stored in config_options_value, but use config_options_order to sort them,
+    # which stores the order in which the first value was added for each like
+    # key in config_options_value.
+    for my $option_key (sort {
+            $self->{config_options_order}->{$a}
+            <=>
+            $self->{config_options_order}->{$b}
+        }
+        keys %{$self->{config_options_value}}
+    ) {
         # Due to Fetchwarefile storing each option as an array, and
         # config_option() returning that array, which may consist of only one
         # value, I need to loop through them just in case a 'MANY' or

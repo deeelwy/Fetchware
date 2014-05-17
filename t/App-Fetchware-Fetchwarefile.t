@@ -115,39 +115,89 @@ EOD
 temp_dir specifies what temporary directory fetchware will use to download and
 build this program.
 EOD
+            mirror => <<EOD,
+The mirror configuration option provides fetchware with alternate servers to
+try to download this program from. This option is used when the server
+specified in the url options in this file is unavailable or times out.
+EOD
         }
     );
 
     my %test_config_options = (
-        program => ['Test Program'],
-        temp_dir => ['/var/tmp'],
+        program => 'Test Program',
+        temp_dir => '/var/tmp',
+        mirror => [qw(http://fake.mirror/1 ftp://fake.mirror/2)],
+    );
+
+    my %test_config_order = (
+        program => 1,
+        temp_dir => 2,
+        mirror => 3,
     );
  
     # Add the test config options to the $fetchwarefile object.
-    $fetchwarefile->config_options($_, @{$test_config_options{$_}})
-        for keys %test_config_options;
+    $fetchwarefile->config_options($_, $test_config_options{$_})
+        for sort { $test_config_order{$a} <=> $test_config_order{$b} }
+        keys %test_config_order;
 
-    is_deeply($fetchwarefile->{config_options}, \%test_config_options,
+    is_deeply($fetchwarefile->{config_options_value}, \%test_config_options,
         'checked config_options() adding new options');
 
-    # Test config_options() as an accessor.
-    for my $test_config_option (keys %test_config_options) {
-        is_deeply([$fetchwarefile->config_options($test_config_option)],
-            $test_config_options{$test_config_option},
-            "checked config_options() getter [$test_config_option]");
+    # Be sure to test that they were stored in the proper order.
+    for my $test_key (keys %test_config_order) {
+        is($fetchwarefile->{config_options_order}->{$test_key},
+            $test_config_order{$test_key},
+            "checked config_options() [$test_key] order");
     }
 
+    # Test config_options() as an accessor.
+    for my $test_config_option (qw(program temp_dir)) {
+        is_deeply([$fetchwarefile->config_options($test_config_option)],
+            [$test_config_options{$test_config_option}],
+            "checked config_options() getter [$test_config_option]");
+    }
+    is_deeply([$fetchwarefile->config_options('mirror')],
+        $test_config_options{mirror},
+        "checked config_options() getter [mirror]");
+
+    # Make a new $fetchwarefile.
+    $fetchwarefile = App::Fetchware::Fetchwarefile->new(
+        header => 'header',
+        descriptions => { mirror => 'mirrors' }
+    );
     # Fetchwarefile supports 'MANY' and 'ONEARRREF' types, so test config
     # options that have more than one value.
-    $fetchwarefile->config_options(mirror => $_) for 1 .. 5;
+    my @mirrors = 1 .. 5;
+    $fetchwarefile->config_options(mirror => \@mirrors);
 
-    is_deeply([@{$fetchwarefile->{config_options}->{mirror}}],
-        [1 .. 5],
+    is_deeply([@{$fetchwarefile->{config_options_value}->{mirror}}],
+        [@mirrors],
         'checked config_options multiple options');
 
     is_deeply([$fetchwarefile->config_options('mirror')],
-        [1 .. 5],
+        [@mirrors],
         'checked config_options getter multiple options');
+
+    # Do the same thing as before except call config_options only once with an
+    # arraryref of arguments.
+    # Make a new $fetchwarefile.
+    $fetchwarefile = App::Fetchware::Fetchwarefile->new(
+        header => 'header',
+        descriptions => { mirror => 'mirrors' }
+    );
+    $fetchwarefile->config_options(mirror => $_) for @mirrors;
+    is_deeply([@{$fetchwarefile->{config_options_value}->{mirror}}],
+        [@mirrors],
+        'checked config_options multiple options at once');
+
+    is_deeply([$fetchwarefile->config_options('mirror')],
+        [@mirrors],
+        'checked config_options getter multiple options at once');
+
+    # Check that mirror's order is still 1 despite being called with the
+    # mirror key 5 times.
+    is($fetchwarefile->{config_options_order}->{mirror}, 1,
+        'checked config_options() mirror order.');
 };
 
 
@@ -216,6 +266,11 @@ EOD
 temp_dir specifies what temporary directory fetchware will use to download and
 build this program.
 EOD
+            mirror => <<EOD,
+The mirror configuration option provides fetchware with alternate servers to
+try to download this program from. This option is used when the server
+specified in the url options in this file is unavailable or times out.
+EOD
         }
     );
 
@@ -223,6 +278,7 @@ EOD
     $fetchwarefile->config_options(
         program => 'Test Program',
         temp_dir => '/var/tmp',
+        mirror => [qw(http://fake.mirror/1 ftp://fake.mirror/2)],
     );
 
     my $expected_fetchwarefile = <<EOF;
@@ -238,14 +294,21 @@ use App::Fetchware;
 # App::Fetchware.
 
 
+# program simply names the program the Fetchwarefile is responsible for
+# downloading, building, and installing.
+program 'Test Program';
+
+
 # temp_dir specifies what temporary directory fetchware will use to download and
 # build this program.
 temp_dir '/var/tmp';
 
 
-# program simply names the program the Fetchwarefile is responsible for
-# downloading, building, and installing.
-program 'Test Program';
+# The mirror configuration option provides fetchware with alternate servers to
+# try to download this program from. This option is used when the server
+# specified in the url options in this file is unavailable or times out.
+mirror 'http://fake.mirror/1';
+mirror 'ftp://fake.mirror/2';
 EOF
 
     is($fetchwarefile->generate(),
