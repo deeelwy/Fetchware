@@ -172,7 +172,6 @@ sub config_options {
                         and
                     defined $self->{config_options_value}->{$config_key}
                         and
-                    # ref returning '' means it's not a reference.
                     ref $self->{config_options_value}->{$config_key} eq ''
                 ) {
                     if (ref $options{$config_key} eq 'ARRAY') {
