@@ -10,7 +10,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '13'; #Update if this changes.
+use Test::More 0.98 tests => '12'; #Update if this changes.
 use File::Spec::Functions qw(rel2abs);
 use Test::Deep;
 
@@ -34,7 +34,6 @@ note("App::Fetchware's default imports [@App::Fetchware::EXPORT]");
 
 subtest 'OVERRIDE_LOOKUP exports what it should' => sub {
     my @expected_overide_lookup_exports = qw(
-        check_lookup_config
         get_directory_listing
         parse_directory_listing
         determine_download_path
@@ -72,9 +71,6 @@ subtest 'test get_directory_listing()' => sub {
         program 'testin';
         mirror "$lookup_url";
         verify_failure_ok 'On';
-
-        # Do needed operations before I can test get_directory_listing().
-        check_lookup_config();
 
         # Test get_directory_listing().
         $lookup_url =~ m!^(ftp|http)(:?://.*)?!;
@@ -163,7 +159,6 @@ subtest 'test parse_directory_listing()' => sub {
     verify_failure_ok 'On';
 
     # Do the stuff parse_directory_listing() depends on.
-    check_lookup_config();
     my $directory_listing = get_directory_listing();
 
     cmp_deeply(parse_directory_listing($directory_listing),
@@ -350,7 +345,6 @@ subtest 'test determine_download_path()' => sub {
     mirror "$test_lookup_url";
     verify_failure_ok 'On';
 
-    check_lookup_config();
     my $directory_listing = get_directory_listing();
     my $filename_listing = parse_directory_listing($directory_listing);
     
@@ -374,7 +368,6 @@ subtest 'test determine_download_path()' => sub {
 
     lookup_method 'versionstring';
 
-    check_lookup_config();
     $directory_listing = get_directory_listing();
     $filename_listing = parse_directory_listing($directory_listing);
     
