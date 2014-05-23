@@ -51,7 +51,6 @@ use App::Fetchware;
 program 'Apache';
 lookup_url 'http://www.apache.org/dist/httpd/';
 filter 'httpd-2.2';
-mirror 'http://apache.mirrors.pair.com/httpd/';
 mirror 'http://mirrors.ibiblio.org/apache/httpd/';
 mirror 'ftp://apache.cs.utah.edu/apache.org/httpd/';
 
