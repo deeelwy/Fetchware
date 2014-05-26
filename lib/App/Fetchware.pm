@@ -24,6 +24,8 @@ use Sub::Mage;
 use URI::Split qw(uri_split uri_join);
 use Text::ParseWords 'quotewords';
 use File::Temp 'tempfile';
+use Term::ReadLine;
+use Term::UI;
 
 use App::Fetchware::Util ':UTIL';
 use App::Fetchware::Config ':CONFIG';
@@ -730,12 +732,237 @@ EOM
     #presumably be the user who will install the package now and later.
     ###BUGALERT### Ask user for a prefix if their running nonroot???
     vmsg 'Prompting for other options that may be needed.';
-    my %options = prompt_for_other_options($term);
+    my $other_options_hashref = prompt_for_other_options($term,
+        temp_dir => {
+            prompt => <<EOP,
+What temp_dir configuration option would you like? 
+EOP
+            print_me => <<EOP
+temp_dir is the directory where fetchware creates a temporary directory that
+stores all of the temporary files it creates while it is building your software.
+The default directory is /tmp on Unix systems and C:\\temp on Windows systems.
+EOP
+        },
+        user => {
+            prompt => <<EOP,
+What user configuration option would you like? 
+EOP
+            print_me => <<EOP
+user specifies what user fetchware will drop priveleges to on Unix systems
+capable of doing so. This allows fetchware to download files from the internet
+with user priveleges, and not do anything as the administrative root user until
+after the downloaded software package has been verified as exactly the same as
+the author of the package intended it to be. If you use this option, the only
+thing that is run as root is 'make install' or whatever this package's
+install_commands configuratio option is.
+EOP
+        },
+        prefix => {
+            prompt => <<EOP,
+What prefix configuration option would you like? 
+EOP
+            print_me => <<EOP
+prefix specifies the base path that will be used to install this software. The
+default is /usr/local, which is acceptable for most unix users. Please note that
+this difective only works for software packages that use GNU AutoTools, software
+that uses ./configure --prefix=<your prefix will go here> to change the prefix.
+EOP
+        },
+        configure_options => {
+            prompt => <<EOP,
+What configure_options configuration option would you like? 
+EOP
+            print_me => <<EOP
+configure_options specifies what options fetchware should add when it configures
+this software package for you. A list of possible options can be obtained by
+running unarchiving the software package that corresponds to this Fetchwarefile,
+and running the command './configure --help'. These options vary from software
+package to software package. Please note that this option only works for GNU
+AutoTools based software distributions, ones that use ./configure to configure
+the software.
+EOP
+        },
+        make_options => {
+            prompt => <<EOP,
+What make_options configuration option would you like? 
+EOP
+            print_me => <<EOP
+make_options specifies what options fetchware will pass to make when make is run
+to compile, perhaps test, and install your software package. They are simpley
+added after make is called. An example is '-j 4', which will cause make to
+execute 4 jobs simultaneously. A reasonable rule of thumb is to set make's -j
+argument to two times as many cpu cores your computer has as compiling programs
+is sometimes IO bound instead of CPU bound, so you can get away with running
+more jobs then you have cores.
+EOP
+        },
+###BUGALERT### Create a config sub called build_system that takes args like
+#AutoTools, cmake, MakeMaker, Module::Build, and so on that will use the default
+#build commands of whatever system this option specifies.
+        build_commands => {
+            prompt => <<EOP,
+What build_commands configuration option would you like? 
+EOP
+            print_me => <<EOP
+build_commands specifies what commands fetchware will run to compile your
+software package. Fetchware's default is simply 'make', which is good for most
+programs. If you're software package uses something other than fetchware's
+default of GNU AutoTools, then you may need to change this configuration option
+to specify what you would like instead. Specify multiple build commands in
+single quotes with a comma between them:
+'./configure', 'make'
+EOP
+        },
+        install_commands => {
+            prompt => <<EOP,
+What install_commands configuration option would you like? 
+EOP
+            print_me => <<EOP
+install_commands specifies what commands fetchware will run to install your
+software package. Fetchware's default is simply 'make install', which is good
+for most programs. If you're software package uses something other than
+fetchware's default of GNU AutoTools, then you may need to change this
+configuration option to specify what you would like instead. Specify multiple
+build commands in single quotes with a comma between them:
+'make test', 'make install'
+EOP
+        },
+        uninstall_commands => {
+            prompt => <<EOP,
+What uninstall_commands configuration option would you like?
+EOP
+            print_me => <<EOP,
+uninstall_commands specifes what commands fetchware will run to uninstall your
+software pacakge. The default is 'make uninstall,' which works for some GNU
+AutoTools packages, but not all. If your software package does not have a 'make
+uninstall' make target, but it has some other command that can uninstall it,
+then please specify it using uninstall_commands so fetchware can uninstall it. 
+EOP
+
+        },
+        lookup_method => {
+            prompt => <<EOP,
+What lookup_method configuration option would you like? 
+EOP
+            print_me => <<EOP
+lookup_method specifies what how fetchware determines if a new version of your
+software package is available. The available algorithms are 'timstamp' and
+'versionstring'. 'timestamp' uses the timestamp listed in the FTP or HTTP
+listing, and uses the software package that is the newest by filesystem
+timestamp. The 'versionstring' algorithm uses the filename of the files in the
+FTP or HTTP listing. It parses out the version information, sorts it highest to
+lowest, and then picks the highest version of your software package. The default
+is try 'timestamp' and if that doesn't work, then try 'versionstring'.
+EOP
+        },
+        gpg_keys_url => {
+            prompt => <<EOP,
+What gpg_keys_url configuration option would you like? 
+EOP
+            print_me => <<EOP
+gpg_keys_url specifies a url similar to lookup_url in that it should specify a
+directory instead a specific file. It is used to download KEYS files, which
+contain your program author's gpg keys to import into gpg.
+EOP
+        },
+        gpg_sig_url => {
+            prompt => <<EOP,
+What gpg_sig_url configuration option would you like? 
+EOP
+            print_me => <<EOP
+gpg_sig_url specifies a url similar to lookup_url in that it should specify a
+directory instead a specific file. It is used to download gpg signatures to
+verify your software package.
+EOP
+        },
+        sha1_url => {
+            prompt => <<EOP,
+What sha1_url configuration option would you like? 
+EOP
+            print_me => <<EOP
+sha1_url specifies a url similar to lookup_url in that it should specify a
+directory instead of a specific file. It is separate from lookup_url, because
+you should download software from mirrors, but checksums from the original
+vendor's server, because checksums are easily replaced on a mirror by a hacker
+if the mirror gets hacked.
+EOP
+        },
+        md5_url => {
+            prompt => <<EOP,
+What md5_url configuration option would you like? 
+EOP
+            print_me => <<EOP,
+md5_url specifies a url similar to lookup_url in that it should specify a
+directory instead of a specific file. It is separate from lookup_url, because
+you should download software from mirrors, but checksums from the original
+vendor's server, because checksums are easily replaced on a mirror by a hacker
+if  the mirror gets hacked.
+EOP
+        },
+        verify_method => {
+            prompt => <<EOP,
+What verify_method configuration option would you like? 
+EOP
+            print_me => <<EOP,
+verify_method specifies what method of verification fetchware should use to
+ensure the software you have downloaded has not been tampered with. The default
+is to try gpg verification, then sha1, and then finally md5, and if they all
+fail an error message is printed and fetchware exits, because if your software
+package cannot be verified, then it should not be installed. This configuration
+option allows you to remove the warnings by specifying a specific way of
+verifying your software has not been tampered with. To disable verification set
+the 'verify_failure_ok' configuration option to true.
+EOP
+        },
+###BUGALERT### replace no_install config su with a command line option that
+#would be the opposite of --force???
+# Nah! Leave it! Just create a command line option for it too!
+        no_install => {
+            prompt => <<EOP,
+Would you like to enable the no_install configuration option? 
+EOP
+            ###BUGALERT### no_install is not currently implemented properly!!!
+            print_me => <<EOP
+no_install is a true or false option, whoose acceptable values include 1
+or 0, true or falue, On or Off. It's default value is false, but if you enable
+it, then fetchware will not install your software package, and instead it will
+simply download, verify, and build it. And then it will print out the full path
+of the directory it built your software package in.
+EOP
+            ###BUGALERT### Add support for a check regex, so that I can ensure
+            #that what the user enters will be either true or false!!!
+        },
+        verify_failure_ok => {
+            prompt => <<EOP,
+Would you like to enable the verify_failure_ok configuration option? 
+EOP
+            print_me => <<EOP
+verify_failure_ok is a true or false option, whoose acceptable values include 1
+or 0, true or falue, On or Off. It's default value is false, but if you enable
+it, then fetchware will not print an error message and exit if verification
+fails for your software package. Please note that you should never use this
+option, because it makes it possible for fetchware to install source code that
+may have been tampered with.
+EOP
+        },
+        users_keyring => {
+            prompt => <<EOP,
+Would you like to enable users_keyring configuration option? 
+EOP
+            print_me => <<EOP
+users_keyring when enabled causes fetchware to use the user who calls
+fetchware's gpg keyring instead of fetchware's own gpg keyring. Useful for
+source code distributions that do not provide an easily accessible KEYS file.
+Just remember to import the author's keys into your gpg keyring with gpg
+--import.
+EOP
+        },
+    );
     vmsg 'User entered the following options.';
-    vmsg Dumper(\%options);
+    vmsg Dumper($other_options_hashref);
 
     # Append all other options to the Fetchwarefile.
-    $fetchwarefile->config_options(%options);
+    $fetchwarefile->config_options(%$other_options_hashref);
     vmsg 'Appended all other options listed above to Fetchwarefile.';
 
     my $edited_fetchwarefile = edit_manually($term, $fetchwarefile);
@@ -1394,250 +1621,34 @@ EOP
 
 =head3 prompt_for_other_options()
 
-    prompt_for_other_options($term);
+    prompt_for_other_options($term,
+        temp_dir => {
+            prompt => <<EOP,
+    What temp_dir configuration option would you like? 
+    EOP
+            print_me => <<EOP
+    temp_dir is the directory where fetchware creates a temporary directory that
+    stores all of the temporary files it creates while it is building your software.
+    The default directory is /tmp on Unix systems and C:\\temp on Windows systems.
+    EOP
+        },
+            ...
+    );
 
-Asks user if they would like to add any other options to their Fetchwarefile. If
-they answer no, then everything else this subroutine does is skipped. If they
-answerer yes, then information helping them decide what to do is printed as
-needed. They are asked to input space separated list of configuration options
-they would like to customize. Then for each option they specify, a helpful
-message is printed that will help them determine what they should provide for
-that option, and then they input what they would like to answer for that option.
+Accepts a Term::Readline/Term::UI object as an argument to use to ask the user
+questions, and a gigantic hash of hashes in list form. The hash of hashes,
+%option_description, argument incluedes the C<prompt> and C<print_me> options
+that are then passed through to Term::UI to ask the user what argument they want
+for each specified option in the %option_description hash.
 
-The user's answers are tallied up in a hash that is returned as a list instead of
-as a hash reference.
-
+The user's answers are tallied up an returned as a hash reference.
 =cut
 
 sub prompt_for_other_options {
     my $term = shift;
 
-    my %option_description = (
-        temp_dir => {
-            prompt => <<EOP,
-What temp_dir configuration option would you like? 
-EOP
-            print_me => <<EOP
-temp_dir is the directory where fetchware creates a temporary directory that
-stores all of the temporary files it creates while it is building your software.
-The default directory is /tmp on Unix systems and C:\\temp on Windows systems.
-EOP
-        },
-        user => {
-            prompt => <<EOP,
-What user configuration option would you like? 
-EOP
-            print_me => <<EOP
-user specifies what user fetchware will drop priveleges to on Unix systems
-capable of doing so. This allows fetchware to download files from the internet
-with user priveleges, and not do anything as the administrative root user until
-after the downloaded software package has been verified as exactly the same as
-the author of the package intended it to be. If you use this option, the only
-thing that is run as root is 'make install' or whatever this package's
-install_commands configuratio option is.
-EOP
-        },
-        prefix => {
-            prompt => <<EOP,
-What prefix configuration option would you like? 
-EOP
-            print_me => <<EOP
-prefix specifies the base path that will be used to install this software. The
-default is /usr/local, which is acceptable for most unix users. Please note that
-this difective only works for software packages that use GNU AutoTools, software
-that uses ./configure --prefix=<your prefix will go here> to change the prefix.
-EOP
-        },
-        configure_options => {
-            prompt => <<EOP,
-What configure_options configuration option would you like? 
-EOP
-            print_me => <<EOP
-configure_options specifies what options fetchware should add when it configures
-this software package for you. A list of possible options can be obtained by
-running unarchiving the software package that corresponds to this Fetchwarefile,
-and running the command './configure --help'. These options vary from software
-package to software package. Please note that this option only works for GNU
-AutoTools based software distributions, ones that use ./configure to configure
-the software.
-EOP
-        },
-        make_options => {
-            prompt => <<EOP,
-What make_options configuration option would you like? 
-EOP
-            print_me => <<EOP
-make_options specifies what options fetchware will pass to make when make is run
-to compile, perhaps test, and install your software package. They are simpley
-added after make is called. An example is '-j 4', which will cause make to
-execute 4 jobs simultaneously. A reasonable rule of thumb is to set make's -j
-argument to two times as many cpu cores your computer has as compiling programs
-is sometimes IO bound instead of CPU bound, so you can get away with running
-more jobs then you have cores.
-EOP
-        },
-###BUGALERT### Create a config sub called build_system that takes args like
-#AutoTools, cmake, MakeMaker, Module::Build, and so on that will use the default
-#build commands of whatever system this option specifies.
-        build_commands => {
-            prompt => <<EOP,
-What build_commands configuration option would you like? 
-EOP
-            print_me => <<EOP
-build_commands specifies what commands fetchware will run to compile your
-software package. Fetchware's default is simply 'make', which is good for most
-programs. If you're software package uses something other than fetchware's
-default of GNU AutoTools, then you may need to change this configuration option
-to specify what you would like instead. Specify multiple build commands in
-single quotes with a comma between them:
-'./configure', 'make'
-EOP
-        },
-        install_commands => {
-            prompt => <<EOP,
-What install_commands configuration option would you like? 
-EOP
-            print_me => <<EOP
-install_commands specifies what commands fetchware will run to install your
-software package. Fetchware's default is simply 'make install', which is good
-for most programs. If you're software package uses something other than
-fetchware's default of GNU AutoTools, then you may need to change this
-configuration option to specify what you would like instead. Specify multiple
-build commands in single quotes with a comma between them:
-'make test', 'make install'
-EOP
-        },
-        uninstall_commands => {
-            prompt => <<EOP,
-What uninstall_commands configuration option would you like?
-EOP
-            print_me => <<EOP,
-uninstall_commands specifes what commands fetchware will run to uninstall your
-software pacakge. The default is 'make uninstall,' which works for some GNU
-AutoTools packages, but not all. If your software package does not have a 'make
-uninstall' make target, but it has some other command that can uninstall it,
-then please specify it using uninstall_commands so fetchware can uninstall it. 
-EOP
+    my %option_description = @_;
 
-        },
-        lookup_method => {
-            prompt => <<EOP,
-What lookup_method configuration option would you like? 
-EOP
-            print_me => <<EOP
-lookup_method specifies what how fetchware determines if a new version of your
-software package is available. The available algorithms are 'timstamp' and
-'versionstring'. 'timestamp' uses the timestamp listed in the FTP or HTTP
-listing, and uses the software package that is the newest by filesystem
-timestamp. The 'versionstring' algorithm uses the filename of the files in the
-FTP or HTTP listing. It parses out the version information, sorts it highest to
-lowest, and then picks the highest version of your software package. The default
-is try 'timestamp' and if that doesn't work, then try 'versionstring'.
-EOP
-        },
-        gpg_keys_url => {
-            prompt => <<EOP,
-What gpg_keys_url configuration option would you like? 
-EOP
-            print_me => <<EOP
-gpg_keys_url specifies a url similar to lookup_url in that it should specify a
-directory instead a specific file. It is used to download KEYS files, which
-contain your program author's gpg keys to import into gpg.
-EOP
-        },
-        gpg_sig_url => {
-            prompt => <<EOP,
-What gpg_sig_url configuration option would you like? 
-EOP
-            print_me => <<EOP
-gpg_sig_url specifies a url similar to lookup_url in that it should specify a
-directory instead a specific file. It is used to download gpg signatures to
-verify your software package.
-EOP
-        },
-        sha1_url => {
-            prompt => <<EOP,
-What sha1_url configuration option would you like? 
-EOP
-            print_me => <<EOP
-sha1_url specifies a url similar to lookup_url in that it should specify a
-directory instead of a specific file. It is separate from lookup_url, because
-you should download software from mirrors, but checksums from the original
-vendor's server, because checksums are easily replaced on a mirror by a hacker
-if the mirror gets hacked.
-EOP
-        },
-        md5_url => {
-            prompt => <<EOP,
-What md5_url configuration option would you like? 
-EOP
-            print_me => <<EOP,
-md5_url specifies a url similar to lookup_url in that it should specify a
-directory instead of a specific file. It is separate from lookup_url, because
-you should download software from mirrors, but checksums from the original
-vendor's server, because checksums are easily replaced on a mirror by a hacker
-if  the mirror gets hacked.
-EOP
-        },
-        verify_method => {
-            prompt => <<EOP,
-What verify_method configuration option would you like? 
-EOP
-            print_me => <<EOP,
-verify_method specifies what method of verification fetchware should use to
-ensure the software you have downloaded has not been tampered with. The default
-is to try gpg verification, then sha1, and then finally md5, and if they all
-fail an error message is printed and fetchware exits, because if your software
-package cannot be verified, then it should not be installed. This configuration
-option allows you to remove the warnings by specifying a specific way of
-verifying your software has not been tampered with. To disable verification set
-the 'verify_failure_ok' configuration option to true.
-EOP
-        },
-###BUGALERT### replace no_install config su with a command line option that
-#would be the opposite of --force???
-# Nah! Leave it! Just create a command line option for it too!
-        no_install => {
-            prompt => <<EOP,
-Would you like to enable the no_install configuration option? 
-EOP
-            ###BUGALERT### no_install is not currently implemented properly!!!
-            print_me => <<EOP
-no_install is a true or false option, whoose acceptable values include 1
-or 0, true or falue, On or Off. It's default value is false, but if you enable
-it, then fetchware will not install your software package, and instead it will
-simply download, verify, and build it. And then it will print out the full path
-of the directory it built your software package in.
-EOP
-            ###BUGALERT### Add support for a check regex, so that I can ensure
-            #that what the user enters will be either true or false!!!
-        },
-        verify_failure_ok => {
-            prompt => <<EOP,
-Would you like to enable the verify_failure_ok configuration option? 
-EOP
-            print_me => <<EOP
-verify_failure_ok is a true or false option, whoose acceptable values include 1
-or 0, true or falue, On or Off. It's default value is false, but if you enable
-it, then fetchware will not print an error message and exit if verification
-fails for your software package. Please note that you should never use this
-option, because it makes it possible for fetchware to install source code that
-may have been tampered with.
-EOP
-        },
-        users_keyring => {
-            prompt => <<EOP,
-Would you like to enable users_keyring configuration option? 
-EOP
-            print_me => <<EOP
-users_keyring when enabled causes fetchware to use the user who calls
-fetchware's gpg keyring instead of fetchware's own gpg keyring. Useful for
-source code distributions that do not provide an easily accessible KEYS file.
-Just remember to import the author's keys into your gpg keyring with gpg
---import.
-EOP
-        },
-    );
     my %answered_option;
 
     if (
@@ -1680,13 +1691,13 @@ EOP
             );
         }
     }
-    return %answered_option;
+    return \%answered_option;
 }
 
 
 =head3 edit_manually()
 
-    $fetchwarefile = edit_manually($term, \$fetchwarefile);
+    $fetchwarefile = edit_manually($term, $fetchwarefile);
 
 edit_manually() asks the user if they would like to edit the specified
 $fetchwarefile manually. If the user answers no, then nothing is done. But if
@@ -1814,7 +1825,8 @@ with root permissions so that you can call the
 ask_to_install_now_to_test_fetchwarefile() helper subroutine. I suppose you
 could do something else in your extension if it makes sense, but that's what
 this API sub is intended for. The ask_to_install_now_to_test_fetchwarefile()
-helper subroutine needs root permissions, because it will call fetchware's
+helper subroutine needs root permissions (Unless the Fetchwarefile has been
+setup so that the user running it has access.), because it will call fetchware's
 cmd_install() to directly cause fetchware to go ahead and install the previoulsy
 generated Fetchwarefile.
 
@@ -1824,7 +1836,7 @@ generated Fetchwarefile.
 
 =cut
 
-sub new_install() {
+sub new_install {
     my ($term, $program_name, $fetchwarefile) = @_;
 
     my $fetchware_package_path =
@@ -1952,6 +1964,11 @@ EOM
 
     ###BUGALERT### Replace >, create or delete whole file and replace it with
     #what I write now, with >> for append to file if it already exists????
+    ###BUGALERT### Should safe_open() be moved into the loop above, and instead
+    #of checking for existence, open the file using safeopen as needed, but
+    #don't write to it just yet, and then test the open file handle if it's
+    #empty, and therefore presumable a new file, or an old file that no one
+    #cares about anymore, because it's empty?
         my $fh = safe_open($fetchwarefile_filename, <<EOD, MODE => '>');
 fetchware: failed to open your new fetchwarefile because of os error
 [$!]. This really shouldn't happen in this case. Probably a bug, or a weird race
