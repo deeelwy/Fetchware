@@ -764,9 +764,9 @@ EOM
 
 
 
-=head2 cmd_new() API REFERENCE
+=head2 new() API REFERENCE
 
-Below are the API routines that cmd_new() uses to create the question and answer
+Below are the API routines that new() uses to create the question and answer
 interface for helping to build new Fetchwarefiles and fetchware packages.
 
 =cut
