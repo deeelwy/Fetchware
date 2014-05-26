@@ -2943,7 +2943,7 @@ sub verify {
     msg "Verifying the downloaded package [$package_path]";
 
     my $retval;
-    if (config('verify_method') eq undef) {
+    unless (defined(config('verify_method'))) {
         # if gpg fails try
         # sha and if it fails try
         # md5 and if it fails die
