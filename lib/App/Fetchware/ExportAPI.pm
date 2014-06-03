@@ -53,19 +53,31 @@ subroutines.
         );
     }
 
-Adds fetchware's API subroutines (start(), lookup(), download(), verify(),
-unarchive(), build(), install(), and uninstall()) to the caller()'s  @EXPORT.
-It also imports L<Exporter>'s import() subroutine to the caller's package, so
-that the caller has a proper import() subroutine that Perl will use when someone
-uses your fetchware extension in their fetchware extension. Used by fetchware
-extensions to easily add fetchware's API subroutines to your extension's package
-exports.
+Adds fetchware's API subroutines (check_syntax(), start(), lookup(), download(),
+verify(), unarchive(), build(), install(), end(), uninstall(), and upgrade()) to
+the caller()'s  @EXPORT.  It also imports L<Exporter>'s import() subroutine to
+the caller's package, so that the caller has a proper import() subroutine that
+Perl will use when someone uses your fetchware extension in their fetchware
+extension. Used by fetchware extensions to easily add fetchware's API
+subroutines to your extension's package exports.
 
 This is how fetchware extensions I<inherit> whatever API subroutines that they
 want to reuse from App::Fetchware.
 
 Normally, you don't actually call import(); instead, you call it implicity by
 simply use()ing it.
+
+=over
+
+=item NOTE
+
+All API subroutines that exist in App::Fetchware's API must be mentioned in the
+call to import (or implicitly via use). You do not have to OVERRIDE them all,
+but those that you do not OVERRRIDE must be mentioned in KEEP. The KEEP tag does
+not cause import() to actually do anything with them, but they nevertheless must
+be mentioned. 
+
+=back
 
 =over
 
@@ -101,52 +113,8 @@ sub import {
 }
 
 
-# Make _export_api() "invisible." users should only ever actually use import(),
-# and technically they should never even use import; instead, they should just
-# use ExportAPI, and Perl will call import() for them.
-#=head2 _export_api()
-#
-#    # Keep App::Fetchware's start() and end() API subroutines, but override the
-#    # other ones.
-#    _export_api(KEEP => [qw(start end)],
-#        OVERRIDE =>
-#        [qw(lookup download verify unarchive build install uninstall)]
-#    );
-#
-#    # YOu can specify NOIMPORT => 1 to avoid the creation of any "KEEP"
-#    # App::Fetchware configuration options.
-#    _export_api(KEEP => [qw(start end)],
-#        0VERRIDE =
-#            [qw(lookup download verify unarchive build install uninstall)]
-#        NOIMPORT => 1;
-#    );
-#
-#
-#Adds fetchware's API subroutines (start(), lookup(), download(), verify(),
-#unarchive(), build(), install(), and uninstall()) to the caller()'s  @EXPORT.
-#Used by fetchware extensions to easily add fetchware's API subroutines to your
-#extension's package exports.
-#
-#=over
-#
-#=item WARNING
-#
-#_export_api() also imports Exporter's import() method into its
-#$callers_package_name. This is absolutely required, because when a user's
-#Fetchwarefile is parsed it is the C<use App::Fetchware::[extensionname];> line
-#that imports fetchware's API subrotines into fetchware's namespace so its
-#internals can call the correct fetchware extension. This mechanism simply uses
-#Exporter's import() method for the heavy lifting, so _export_api() B<must> also
-#ensure that its caller gets a proper import() method.
-#
-#If no import() method is in your fetchware extension, then fetchware will fail
-#to parse any Fetchwarefile's that use your fetchware extension, but this error
-#is caught with an appropriate error message.
-#
-#=back
-#
-#=cut
-
+# _export_api() has pretty much the same documentation as import() above, and
+# why copy and paste any changes I make, when this not here makes more sense?
 sub _export_api {
     my ($callers_package_name, %opts) = @_;
 
@@ -157,26 +125,58 @@ sub _export_api {
     clone(import => (from => 'Exporter', to => $callers_package_name));
 
     my %api_subs = (
-        check_syntax => 0
-        start => 0
-        lookup => 0
-        download => 0
-        verify => 0
-        unarchive => 0
-        build => 0
-        install => 0
-        end => 0
-        uninstall => 0
-        upgrade => 0
+        check_syntax => 0,
+        start => 0,
+        lookup => 0,
+        download => 0,
+        verify => 0,
+        unarchive => 0,
+        build => 0,
+        install => 0,
+        end => 0,
+        uninstall => 0,
+        upgrade => 0,
     );
 
     # Check %opts for correctness.
     for my $sub_type (@opts{qw(KEEP OVERRIDE)}) {
         # Skip KEEP or OVERRIDE if it does not exist.
+        # Needed, because the obove hash slice access will create it if it does
+        # not already exist.
         next unless defined $sub_type;
         for my $sub (@{$sub_type}) {
             if (exists $api_subs{$sub}) {
                 $api_subs{$sub}++;
+            } 
+            
+            for my $restricted_api_sub (qw(new new_install)) {
+                # the current $sub is a $restricted_api_sub and it is a KEEP
+                # option as $restricted_api_sub can not be KEEP options.
+                if ($sub eq $restricted_api_sub and (
+                        # Add an exists check to avoid undefined variable warnings.
+                        exists $opts{KEEP}
+                        and
+                        # And a defined check to avoid undefined variable warnings.
+                        defined $opts{KEEP}
+                        and
+                        grep { $_ =~ /new/ } @{$opts{KEEP}}
+                    )
+                ) {
+                    die <<EOD;
+App-Fetchware-ExportAPI: Your call to _export_api() (or ExportAPI's import())
+was called with [$sub] API subroutine specified as KEEP API a
+subroutine. This is not allowed, because each fetchware extension must create
+its own new() or new_install() subroutines, because App::Fetchware's own new()
+and new_install() API subroutines are much too specific to App::Fetchware's
+requirements that no amount of configuration options or subroutine arguments
+would allow them to be usable by anyother App::Fetchware extension.
+
+If you do not want to implement new() and new_install() for your App::Fetchware
+extension, then please just implement them to throw an exception that your
+extension does not support Fetchware's new command, and inform them that they'll
+have to manually create a Fetchwarefile for your App::Fetchware extension.
+EOD
+                }
             }
         }
     }
