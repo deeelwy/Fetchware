@@ -157,15 +157,17 @@ sub _export_api {
     clone(import => (from => 'Exporter', to => $callers_package_name));
 
     my %api_subs = (
-        start => 0,
-        lookup => 0,
-        download => 0,
-        verify => 0,
-        unarchive => 0,
-        build => 0,
-        install => 0,
-        uninstall => 0,
+        check_syntax => 0
+        start => 0
+        lookup => 0
+        download => 0
+        verify => 0
+        unarchive => 0
+        build => 0
+        install => 0
         end => 0
+        uninstall => 0
+        upgrade => 0
     );
 
     # Check %opts for correctness.
@@ -179,7 +181,13 @@ sub _export_api {
         }
     }
 
-    die <<EOD if (grep {$api_subs{$_} == 1} keys %api_subs) != 9;
+    # Use (scalar keys %api_subs) to dynamically determine how many API subs
+    # there are. I've implemented all of the ones that I've planned, but another
+    # upgrade() or check_syntax() could come out of now where, so calculate how
+    # many there are dynamically, and then I only have to remember to update
+    # %api_subs; instead, of that and also incrementing a constant integer
+    # that's now properly a constant.
+    die <<EOD if (grep {$api_subs{$_} == 1} keys %api_subs) != (scalar keys %api_subs);
 App-Fetchware-Util: export_api() must be called with either or both of the KEEP
 and OVERRIDE options, and you must supply the names of all of fetchware's API
 subroutines to either one of these 2 options.
