@@ -1,15 +1,5 @@
 #!perl
 # App-FetchwareX-HTMLPageSync.t tests App::FetchwareX::HTMLPageSync.
-# Pretend to be bin/fetchware, so that I can test App::Fetchware as though
-# bin/fetchware was calling it.
-# This is needed in HTMLPageSync, because HTMLPageSync uses start() and end()
-# from App::Fetchware, and these subs have different behavior depending on what
-# package they are called in. In package fetchware they behave as they will be
-# called by bin/fetchware when HTMLPageSync is used in a Fetchwarefile. In other
-# packages they have the behavior of configuration subroutines that allow you to
-# specify a coderef to override their behavior. Therefore, I need to pretend to
-# be bin/fetchware to get the behavior I want.
-package fetchware;
 use strict;
 use warnings;
 use diagnostics;
