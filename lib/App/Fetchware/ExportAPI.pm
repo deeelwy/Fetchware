@@ -126,6 +126,8 @@ sub _export_api {
 
     my %api_subs = (
         check_syntax => 0,
+        new => 0,
+        new_install => 0,
         start => 0,
         lookup => 0,
         download => 0,
@@ -148,36 +150,6 @@ sub _export_api {
             if (exists $api_subs{$sub}) {
                 $api_subs{$sub}++;
             } 
-            
-            for my $restricted_api_sub (qw(new new_install)) {
-                # the current $sub is a $restricted_api_sub and it is a KEEP
-                # option as $restricted_api_sub can not be KEEP options.
-                if ($sub eq $restricted_api_sub and (
-                        # Add an exists check to avoid undefined variable warnings.
-                        exists $opts{KEEP}
-                        and
-                        # And a defined check to avoid undefined variable warnings.
-                        defined $opts{KEEP}
-                        and
-                        grep { $_ =~ /new/ } @{$opts{KEEP}}
-                    )
-                ) {
-                    die <<EOD;
-App-Fetchware-ExportAPI: Your call to _export_api() (or ExportAPI's import())
-was called with [$sub] API subroutine specified as KEEP API a
-subroutine. This is not allowed, because each fetchware extension must create
-its own new() or new_install() subroutines, because App::Fetchware's own new()
-and new_install() API subroutines are much too specific to App::Fetchware's
-requirements that no amount of configuration options or subroutine arguments
-would allow them to be usable by anyother App::Fetchware extension.
-
-If you do not want to implement new() and new_install() for your App::Fetchware
-extension, then please just implement them to throw an exception that your
-extension does not support Fetchware's new command, and inform them that they'll
-have to manually create a Fetchwarefile for your App::Fetchware extension.
-EOD
-                }
-            }
         }
     }
 
@@ -188,9 +160,9 @@ EOD
     # %api_subs; instead, of that and also incrementing a constant integer
     # that's now properly a constant.
     die <<EOD if (grep {$api_subs{$_} == 1} keys %api_subs) != (scalar keys %api_subs);
-App-Fetchware-Util: export_api() must be called with either or both of the KEEP
-and OVERRIDE options, and you must supply the names of all of fetchware's API
-subroutines to either one of these 2 options.
+App-Fetchware-ExportAPI: _export_api() or import() must be called with either or
+both of the KEEP and OVERRIDE options, and you must supply the names of all of
+fetchware's API subroutines to either one of these 2 options.
 EOD
 
     # Import any KEEP subs from App::Fetchware.
