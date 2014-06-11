@@ -1902,12 +1902,12 @@ EOM
     if (
         $term->ask_yn(
         print_me => <<EOP,
-It is recommended that fetchware go ahead and install the program based on the
+It is recommended that fetchware go ahead and install the package based on the
 Fetchwarefile that fetchware has created for you. If you don't want to install
 it now, then enter 'no', but if you want to test your Fetchwarefile now, and
 install it, then please enter 'yes' or just press <Enter>.
 EOP
-        prompt => q{Would you like to install the program you just created a Fetchwarefile for? },
+        prompt => q{Would you like to install the package you just created a Fetchwarefile for? },
         default => 'y',
         )
     ) {
