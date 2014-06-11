@@ -1122,7 +1122,10 @@ sub get_lookup_url {
     my $lookup_url = $term->get_reply(
         print_me => <<EOP,
 Fetchware's heart and soul is its lookup_url. This is the configuration option
-that tells fetchware where to check if a new version of fetchware is released.
+that tells fetchware where to check what the latest version of your program is.
+This version number is then parsed out of the HTTP/FTP/local directory listing,
+and compared against the latest installed version to determine when a new
+version of your program has been released.
 
 How to determine your application's lookup_url:
     1. Go to your application's Web site.
