@@ -4544,7 +4544,6 @@ temporary directory is available for use.
 =cut
 
 sub check_syntax {
-    my $fetchwarefile = shift;
 
     # Use check_config_options() to run config() a bunch of times to check the
     # already parsed Fetchwarefile.
