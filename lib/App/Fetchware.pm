@@ -514,14 +514,8 @@ See L<Util's drop_privs() subroutine for more info|App::Fetchware::Util/drop_pri
 
 =item *
 
-This API subroutine is run as root, so be mindful of what you do with it.
-
-=item *
-
-When fetchware is run as a regular user, it is run as whoever has run the
-fetchware program that calls it. If run as root, it runs as the user
-drop_privs() drops privileges to, which is C<nobody> or whatever you have set
-the C<user> configuration option to.
+This subroutine is B<not> run as root; instead, it is run as a regular user
+unless the C<stay_root> configuration option has been set to true.
 
 =back
 
