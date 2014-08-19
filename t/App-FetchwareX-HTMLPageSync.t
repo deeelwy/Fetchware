@@ -6,7 +6,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '12'; #Update if this changes.
+use Test::More 0.98 tests => '18'; #Update if this changes.
 use App::Fetchware '!:DEFAULT';
 use Test::Fetchware ':TESTING';
 use App::Fetchware::Config ':CONFIG';
@@ -15,6 +15,8 @@ use Path::Class;
 use File::Spec::Functions 'updir';
 use File::Temp 'tempdir';
 use Cwd 'cwd';
+use Term::ReadLine;
+use Term::UI;
 
 # Turn on printing of vmsg()s.
 verbose_on();
@@ -29,6 +31,19 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 # and compile-time, and prototypes are properly honored."
 # There is no ':OVERRIDE_START' to bother importing.
 BEGIN { use_ok('App::FetchwareX::HTMLPageSync', ':DEFAULT'); }
+# fetchware must be loaded, because App::Fetchware's
+# ask_to_install_now_to_test_fetchwarefile() abuses encapsulation, and reuses
+# cmd_install() to directly cause App::Fetchware to install the associated
+# Fetchwarefile. Because of this fact fetchware must be loaded by something at
+# some point in time. Because of the encapsulation violation I'm not having
+# App::Fetchware directly loading fetchware instead, it will rely on the fact
+# that of loading it itself. Therefore, in this test suite, I have to load
+# fetchware, so ask_to_install_now_to_test_fetchwarefile() can call it.
+BEGIN {
+    use lib 'bin';
+    ok(require('fetchware'),
+        'checked loading fetchware itself for access to cmd_install');
+}
 
 # Print the subroutines that App::FetchwareX::HTMLPageSync imported by default
 # when I used it.
@@ -141,7 +156,7 @@ subtest 'test HTMLPageSync lookup()' => sub {
     );
 };
 
-# Created here so it can be shared with unarchive()'s subtest.
+# Created here so it can be shared with install()'s subtest.
 my $download_file_paths;
 subtest 'test HTMLPageSync download()' => sub {
     skip_all_unless_release_testing();
@@ -173,17 +188,8 @@ subtest 'test HTMLPageSync verify()' => sub {
 
 
 subtest 'test HTMLPageSync unarchive()' => sub {
-    skip_all_unless_release_testing();
-
-    ok(unarchive($download_file_paths),
-        'checked unarchive() success');
-
-    # unarchive() needs an array reference.
-    eval_ok(sub { unarchive([ "file-that-doesn-t-exist-$$" ])},
-        qr/App-FetchwareX-HTMLPageSync: run-time error. Fetchware failed to copy the file \[/,
-        'checked unarchive exception');
+    is(unarchive(), undef, 'checked unarchive() success.');
 };
-
 
 subtest 'test HTMLPageSync build()' => sub {
     is(verify('dummy arg'), undef, 'checked build() success.');
@@ -191,7 +197,15 @@ subtest 'test HTMLPageSync build()' => sub {
 
 
 subtest 'test HTMLPageSync install()' => sub {
-    is(install(), undef, 'checked install() success.');
+    skip_all_unless_release_testing();
+
+    ok(install($download_file_paths),
+        'checked install() success');
+
+    # install() needs an array reference.
+    eval_ok(sub { install([ "file-that-doesn-t-exist-$$" ])},
+        qr/App-FetchwareX-HTMLPageSync: run-time error. Fetchware failed to copy the file \[/,
+        'checked install exception');
 };
 
 
@@ -284,8 +298,8 @@ note explain $download_file_path_basenames;
         'checked download()s return value for acceptable values.'
     );
 
-    ok(unarchive($download_file_paths),
-        'checked unarchive() success');
+    ok(install($download_file_paths),
+        'checked install() success');
 
     # Test uninstall's keep_destination_directory option.
     keep_destination_directory 'True';
@@ -311,6 +325,258 @@ subtest 'test HTMLPageSync end()' => sub {
     # Use Test::Fetchware's end_ok() to test if end did it's job correctly.
     end_ok($temp_dir);
 };
+
+
+
+SKIP: {
+    my $how_many = 5;
+    # Skip testing if STDIN is not a terminal, or if AUTOMATED_TESTING is set,
+    # which most likely means we're running under a CPAN Tester's smoker, which
+    # may be chroot()ed or something else like LXC that might screw up having a
+    # functional terminal.
+    if (not exists $ENV{AUTOMATED_TESTING}
+            and $ENV{AUTOMATED_TESTING}
+            or not -t
+        ) {
+        skip 'Not on a terminal or AUTOMATED_TESTING is set', $how_many; 
+    }
+
+
+subtest 'test HTMLPageSync new() helper name_page_name' => sub {
+    skip_all_unless_release_testing();
+
+    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+        unless eval {require Test::Expect; Test::Expect->import(); 1;};
+
+    # Have Expect tell me what it's doing for easier debugging.
+    #$Expect::Exp_Internal = 1;
+
+    expect_run(
+        command => 't/App-FetchwareX-HTMLPageSync-new-name_page_name',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC"
+    );
+
+    # First test that the command produced the correct outout.
+    expect_like(qr/A page_name configuration directive simply names your HTMLPageSync Web page\./,
+        'checked name_page_name() received correct prompt');
+
+    # Have Expect print an example URL.
+    expect_send('Test HTMLPageSync Page',
+        'check name_page_name() sent answer.');
+
+    expect_quit();
+};
+
+
+subtest 'test HTMLPageSync new() helper get_html_page_url' => sub {
+    skip_all_unless_release_testing();
+
+    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+        unless eval {require Test::Expect; Test::Expect->import(); 1;};
+
+    # Have Expect tell me what it's doing for easier debugging.
+    #$Expect::Exp_Internal = 1;
+
+    expect_run(
+        command => 't/App-FetchwareX-HTMLPageSync-new-get_html_page_url',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC"
+    );
+
+    # First test that the command produced the correct outout.
+    expect_like(qr/Fetchware's heart and soul is its html_page_url. This is the configuration option/,
+        'checked get_html_page_url() received correct prompt');
+
+    # Have Expect print an example URL.
+    expect_send('http://fake.url/Test-HTMLPageSync.html',
+        'check get_html_page_url() sent answer.');
+
+    expect_quit();
+};
+
+
+subtest 'test HTMLPageSync new() helper get_destination_directory' => sub {
+    skip_all_unless_release_testing();
+
+    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+        unless eval {require Test::Expect; Test::Expect->import(); 1;};
+
+    # Have Expect tell me what it's doing for easier debugging.
+    #$Expect::Exp_Internal = 1;
+
+    expect_run(
+        command => 't/App-FetchwareX-HTMLPageSync-new-get_destination_directory',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC"
+    );
+
+    # First test that the command produced the correct outout.
+    expect_like(qr/destination_directory is the directory on your computer where you want the files/,
+        'checked get_destination_directory() received correct prompt');
+
+    # Have Expect print an example URL.
+    expect_send('/tmp/somedir/that/doesntexist/somewhereelse',
+        'check get_destination_directory() sent answer.');
+
+    expect_quit();
+};
+
+
+subtest 'test HTMLPageSync new() helper ask_about_keep_destination_directory' => sub {
+    skip_all_unless_release_testing();
+
+    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+        unless eval {require Test::Expect; Test::Expect->import(); 1;};
+
+    # Have Expect tell me what it's doing for easier debugging.
+    #$Expect::Exp_Internal = 1;
+
+    # Test saying n.
+    expect_run(
+        command => 't/App-FetchwareX-HTMLPageSync-new-ask_about_keep_destination_directory',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC"
+    );
+
+    # First test that the command produced the correct outout.
+    expect_like(qr/By default, HTMLPageSync deletes your destination_directory when you uninstall/,
+        'checked get_destination_directory() received correct prompt');
+
+    # Have Expect print an example URL.
+    expect_send('n',
+        'check get_destination_directory() sent answer.');
+
+    expect_quit();
+
+    # Test saying y.
+
+    expect_run(
+        command => 't/App-FetchwareX-HTMLPageSync-new-ask_about_keep_destination_directory',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC"
+    );
+
+    # First test that the command produced the correct outout.
+    expect_like(qr/By default, HTMLPageSync deletes your destination_directory when you uninstall/,
+        'checked get_destination_directory() received correct prompt');
+
+    # Have Expect print an example URL.
+    expect_send('y',
+        'check get_destination_directory() sent answer.');
+
+    expect_quit();
+};
+
+
+
+##BROKEN####TEST### t/App-FetchwareX-HTMLPageSync-new works great at testing new(), but for some
+##BROKEN####TEST### reason I can't figure out Expect screws up  this longer test of new() just as
+##BROKEN####TEST### it screws it my Expect test for App::Fetchware's new(). So, this test is being
+##BROKEN####TEST### commented out too. Consider reating a Test::IO::React, but IO::React has had
+##BROKEN####TEST### no new releases for like a decade, so its either unmaintainted and broken, or
+##BROKEN####TEST### perhaps unmaintainted, and still works. Don't know...
+##BROKEN####TEST##subtest 'test HTMLPageSync new() success' => sub {
+##BROKEN####TEST##    skip_all_unless_release_testing();
+##BROKEN####TEST##
+##BROKEN####TEST##    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+##BROKEN####TEST##        unless eval {require Test::Expect; Test::Expect->import(); 1;};
+##BROKEN####TEST##
+##BROKEN####TEST##    # Have Expect tell me what it's doing for easier debugging.
+##BROKEN####TEST##    $Expect::Exp_Internal = 1;
+##BROKEN####TEST##
+##BROKEN####TEST##    # Test saying n.
+##BROKEN####TEST##    expect_run(
+##BROKEN####TEST##        command => 't/App-FetchwareX-HTMLPageSync-new',
+##BROKEN####TEST##        prompt => [-re => qr/: |\? /],
+##BROKEN####TEST##        quit => "\cC"
+##BROKEN####TEST##    );
+##BROKEN####TEST##
+##BROKEN####TEST##    # First test that the command produced the correct outout.
+##BROKEN####TEST##    expect_like(qr/HTMLPageSync's new command is not as sophistocated as Fetchware's. Unless you/,
+##BROKEN####TEST##        'checked new() received correct prompt');
+##BROKEN####TEST##    # Have Expect print an example URL.
+##BROKEN####TEST##    expect_send('test',
+##BROKEN####TEST##        'check new() sent answer.');
+##BROKEN####TEST##
+##BROKEN####TEST##    # First test that the command produced the correct outout.
+##BROKEN####TEST##    expect_like(qr/Fetchware's heart and soul is its html_page_url. This is the configuration option/,
+##BROKEN####TEST##        'checked new() received correct prompt');
+##BROKEN####TEST##    # Have Expect print an example URL.
+##BROKEN####TEST##    expect_send('http://test.test/test',
+##BROKEN####TEST##        'check new() sent answer.');
+##BROKEN####TEST##
+##BROKEN####TEST##    # First test that the command produced the correct outout.
+##BROKEN####TEST##    expect_like(qr/destination_directory is the directory on your computer where you want the files/,
+##BROKEN####TEST##        'checked new() received correct prompt');
+##BROKEN####TEST##    # Have Expect print an example URL.
+##BROKEN####TEST##    expect_send('/tmp',
+##BROKEN####TEST##        'check new() sent answer.');
+##BROKEN####TEST##
+##BROKEN####TEST##    # First test that the command produced the correct outout.
+##BROKEN####TEST##    expect_like(qr/By default, HTMLPageSync deletes your destination_directory when you uninstall/,
+##BROKEN####TEST##        'checked new() received correct prompt');
+##BROKEN####TEST##    # Have Expect print an example URL.
+##BROKEN####TEST##    expect_send('Y',
+##BROKEN####TEST##        'check new() sent answer.');
+##BROKEN####TEST##
+##BROKEN####TEST##    # First test that the command produced the correct outout.
+##BROKEN####TEST##    expect_like(qr/Fetchware has many different configuration options that allow you to control its/,
+##BROKEN####TEST##        'checked new() received correct prompt');
+##BROKEN####TEST##    # Have Expect print an example URL.
+##BROKEN####TEST##    expect_send('N',
+##BROKEN####TEST##        'check new() sent answer.');
+##BROKEN####TEST##
+##BROKEN####TEST##    # First test that the command produced the correct outout.
+##BROKEN####TEST##    expect_like(qr/Fetchware has now asked you all of the needed questions to determine what it/,
+##BROKEN####TEST##        'checked new() received correct prompt');
+##BROKEN####TEST##    # Have Expect print an example URL.
+##BROKEN####TEST##    expect_send('N',
+##BROKEN####TEST##        'check new() sent answer.');
+##BROKEN####TEST##
+##BROKEN####TEST##    expect_quit();
+##BROKEN####TEST##};
+
+
+subtest 'test new_install() success' => sub {
+    skip_all_unless_release_testing();
+    unless ($< == 0 or $> == 0) {
+        plan skip_all => 'Test suite not being run as root.'
+    }
+
+    my $dest_dir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
+    ok(-e $dest_dir,
+        'checked lookup() temporary destination directory creation');
+
+    my $fetchwarefile = <<EOF;
+use App::FetchwareX::HTMLPageSync;
+page_name 'Test';
+# Test the page that is the only reason I wrote this!
+html_page_url '$ENV{FETCHWARE_HTTP_LOOKUP_URL}';
+
+destination_directory '$dest_dir';
+user_agent
+    'Mozilla/5.0 (X11; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1';
+EOF
+
+    my $term = Term::ReadLine->new('Test');
+
+
+    # Abuse Term::UI's AUTOREPLY to automatically choose the default instead of
+    # actually prmpting the user for answer. This avoids me having to use a
+    # separate program, and Test::Expect for just one question and answer.
+    local $Term::UI::AUTOREPLY = 1;
+
+    my $fetchware_package_path = new_install($term, 'Test', $fetchwarefile);
+    ok(-e $fetchware_package_path,
+        'checked new_install() created fetchware package.');
+};
+
+
+
+
+
+} # End of SKIP block.
 
 
 
