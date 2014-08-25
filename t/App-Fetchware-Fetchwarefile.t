@@ -14,6 +14,7 @@ use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir);
 use URI::Split 'uri_split';
 use Cwd 'cwd';
 use Test::Fetchware ':TESTING';
+use Sub::Mage 'clone';
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -26,10 +27,11 @@ delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
 # There is no ':OVERRIDE_START' to bother importing.
 BEGIN { use_ok('App::Fetchware::Fetchwarefile'); }
 
-# "Manually" import _append_to_fetchwarefile, because it's an internal
-# subroutine that only generate() should us.
-*main::_append_to_fetchwarefile =
-*App::Fetchware::Fetchwarefile::_append_to_fetchwarefile;
+# use Sub::Mage's clone() to manually import _append_to_fetchwarefile from
+# App::Fetchware into this tests file's main namespace.
+clone '_append_to_fetchwarefile' =>
+    (from => 'App::Fetchware::Fetchwarefile',
+    to =>  __PACKAGE__);
 
 
 
