@@ -20,7 +20,7 @@ my $term = Term::ReadLine->new('testing HTMLPageSync new');
 
 
 my $fetchwarefile = App::Fetchware::Fetchwarefile->new(
-    header => 'Test Header',
+    header => 'use App::FetchwareX::Test;',
     descriptions => {
         keep_destination_directory => <<EOD,
 destination_directory is the directory on your computer where you want the files

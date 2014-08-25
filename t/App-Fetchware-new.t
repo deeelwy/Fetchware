@@ -9,7 +9,7 @@ use 5.010001;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '12'; #Update if this changes.
+use Test::More 0.98 tests => '13'; #Update if this changes.
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
@@ -61,8 +61,8 @@ EOE
 
 
 SKIP: {
-    # Must be 1 less than the number of tests in the Test::More use line above.
-    my $how_many = 10;
+    # Must be 2 less than the number of tests in the Test::More use line above.
+    my $how_many = 11;
     # Skip testing if STDIN is not a terminal, or if AUTOMATED_TESTING is set,
     # which most likely means we're running under a CPAN Tester's smoker, which
     # may be chroot()ed or something else like LXC that might screw up having a
@@ -105,12 +105,47 @@ $Term::UI::AUTOREPLY = 1;
 #itself.
 
 
-subtest 'test name_program() success' => sub {
+subtest 'test fetchwarefile_name() success' => sub {
     # Create test Term::UI object.
     my $term = Term::ReadLine->new('fetchware');
 
-    is(name_program($term), undef,
-        'checked name_program() success');
+    my ($got_name, $got_value) = fetchwarefile_name($term, program => 'Test Fetchwarefile');
+    is($got_name, 'program',
+        'checked fetchwarefile_name() name success.');
+    is($got_value, 'Test Fetchwarefile',
+        'checked fetchwarefile_name() value success.');
+};
+
+
+subtest 'test fetchwarefile_name() prompt' => sub {
+    plan(skip_all => 'Optional Test::Expect testing module not installed.')
+        unless eval {require Test::Expect; Test::Expect->import(); 1;};
+
+    # Disable Term::UI's AUTOREPLY for this subtest, because unless I use
+    # something crazy like Test::Expect, this will have to be tested "manually."
+    local $Term::UI::AUTOREPLY = 0;
+    # Fix the "out of orderness" thanks to Test::Builder messing with
+    # STD{OUT,ERR}.
+    local $| = 1;
+
+    # Have Expect tell me what it's doing for easier debugging.
+    #$Expect::Exp_Internal = 1;
+
+    expect_run(
+        command => 't/App-Fetchware-new-fetchwarefile_name',
+        prompt => [-re => qr/: |\? /],
+        quit => "\cC"
+    );
+
+    # First test that the command produced the correct outout.
+    expect_like(qr/Fetchware uses the program configuration option to name this/,
+        'checked fetchwarefile_name() received correct config options prompt');
+
+    # Send correct input
+    expect_send('test',
+        'check fetchwarefile_name() sent program name.');
+
+    expect_quit();
 };
 
 

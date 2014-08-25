@@ -96,7 +96,7 @@ our %EXPORT_TAGS = (
     # subs that could be beneficial to override()rs.
     OVERRIDE_NEW => [qw(
         extension_name
-        name_program
+        fetchwarefile_name
         opening_message
         get_lookup_url
         download_lookup_url
@@ -687,7 +687,7 @@ EOM
 
     # Ask user for name of program unless the user provided one at command
     # line such as fetchware new <programname>.
-    $program_name //= name_program($term);
+    $program_name = fetchwarefile_name(program => $program_name);
     vmsg "Determined name of your program to be [$program_name]";
 
     $fetchwarefile->config_options(program => $program_name);
@@ -995,13 +995,7 @@ interface for helping to build new Fetchwarefiles and fetchware packages.
 
 =head3 extension_name();
 
-    my $extension_name = extension_name('App::FetchwareX::ExtensionName');
-
-    # Or just...
-    
     extension_name(__PACKAGE__);
-
-    # Inside your extension whose package is 'App::FetchwareX::ExtensioNName'.
 
 This subroutine sets the name of the extension that this implementation of new()
 wants to be called by. It should be C<App::FetchwareX::ExtensionName> the full
@@ -1048,34 +1042,53 @@ EOD
 }
 
 
-=head3 name_program();
+=head3 fetchwarefile_name();
 
-    my $program_name = name_program($term);
+    # $fetchwarefile_name comes from the first command line option to fetchware
+    # new: fetchware new $fetchwarefile_name, which is optional, hence the need
+    # for fetchwarefile_name().
+    sub new {
+        my $fetchwarefile_name = shift;
 
-Asks the user to provide a name for the program that will that corresponds to
-Fetchwarefile's C<program> configuration subroutine. This directive is currently
-not used for much, but might one day become a default C<filter> option, or might
-be used in msg() output to the user for logging.
+        my $program_name = fetchwarefile_name($term, program => $fetchwarefile_name)
+
+If when the user called C<fetchware new $fetchwarefile_name>, if they provided a
+$fetchwarefile_name name on the command line, then fetchwarefile_name() simply
+returns what the user provided, but if they did not, then $fetchwarefile_name in
+the call to fetchwarefile_name() is going to be undef. In that case,
+fetchwarefile_name() uses the provided Term::UI in the provided $term variable,
+to ask the user what the name of their fetchwarefile should be, which it returns
+back to the caller.
+
 
 =cut
 
-sub name_program {
-    my $term = shift;
-    my $what_a_program_is = <<EOM;
-A program configuration directive simply names your program.
-
-In the future it may access existing repositories to see if a Fetchwarefile
-has already been created for that program, and use that one instead of creating
-a new one, but for now it only names your program, so you can easily tell what
-program the Fetchwarefile is supposed to download and install.
+sub fetchwarefile_name {
+    my ($term, $fetchwarefile_name, $fetchwarefile_name_value) = @_;
+    my $what_a_fetchwarefile_name_is = <<EOM;
+Fetchware uses the $fetchwarefile_name configuration option to name this
+specific Fetchwarefile that Fetchware's new command is helping you create.
+Since, you did not provide a $fetchwarefile_name on the command line, please
+provide one below
 EOM
+    die <<EOD if not defined $fetchwarefile_name;
+App-Fetchware: in your call to fetchwarefile_name() you failed to call it with a
+defined \$fetchwarefile_name option. The \$fetchwarefile_name option you
+specified is [$fetchwarefile_name]. Please specify this option, and try again.
+EOD
 
-    my $program_name = $term->get_reply(
-        prompt => q{What name is your program called? },
-        print_me => $what_a_program_is,
-    );
+    if (not defined $fetchwarefile_name_value) {
+        $fetchwarefile_name_value = $term->get_reply(
+            prompt => q{What would you like to name this specific Fetchwarefile? },
+            print_me => $what_a_fetchwarefile_name_is,
+            # This option requires a name, so just pressing return, which would
+            # yield undef is not acceptable. We need an actual value, so check
+            # the value to ensure that it is defined.
+            allow => sub { defined shift @_ ? return 1 : return 0 }
+        );
+    }
 
-    return $program_name;
+    return $fetchwarefile_name, $fetchwarefile_name_value;
 }
 
 

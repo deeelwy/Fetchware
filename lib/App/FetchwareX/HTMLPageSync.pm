@@ -66,7 +66,6 @@ use App::Fetchware::CreateConfigOptions
 use Exporter 'import';
 our %EXPORT_TAGS = (
     TESTING => [qw(
-        name_page_name
         get_html_page_url
         get_destination_directory
         ask_about_keep_destination_directory
@@ -227,7 +226,7 @@ like to install your generated Fetchwarefile to test it out.
 EOM
 
     # Ask the user for the basic configuration options.
-    $page_name //= name_page_name($term);
+    $page_name = fetchwarefile_name(page_name => $page_name);
     vmsg "Determined your page_name option to be [$page_name]";
 
     $fetchwarefile->config_options(page_name => $page_name);
@@ -340,37 +339,6 @@ EOM
     # back to the parent, and then the parent reads the variables back, and
     # makes then available to new_install(), back in the parent, as arguments.
     return $page_name, $fetchwarefile;
-}
-
-
-=head3 name_page_name();
-
-    my $page_name = name_page_name($term);
-
-Asks the user to provide a name for the page that will correspond to
-HTMLPageSync's C<page_name> configuration subroutine. This directive is
-currently not used for much, but might one day be used in msg() output to the
-user for logging.
-
-=cut
-
-sub name_page_name {
-    my $term = shift;
-    my $what_a_page_name_is = <<EOM;
-A page_name configuration directive simply names your HTMLPageSync Web page.
-
-It's not currently used for much just like App::Fetchware's program
-configuration options is not really used for anything at all, but Fetchware
-requires a configuration option to name your Fetchwarefile, so I figure
-HTMLPageSync should too.
-EOM
-
-    my $page_name = $term->get_reply(
-        prompt => q{What name is your HTMLPageSync web page called? },
-        print_me => $what_a_page_name_is,
-    );
-
-    return $page_name;
 }
 
 

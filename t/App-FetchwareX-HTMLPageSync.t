@@ -6,7 +6,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '18'; #Update if this changes.
+use Test::More 0.98 tests => '17'; #Update if this changes.
 use App::Fetchware '!:DEFAULT';
 use Test::Fetchware ':TESTING';
 use App::Fetchware::Config ':CONFIG';
@@ -329,7 +329,7 @@ subtest 'test HTMLPageSync end()' => sub {
 
 
 SKIP: {
-    my $how_many = 5;
+    my $how_many = 4;
     # Skip testing if STDIN is not a terminal, or if AUTOMATED_TESTING is set,
     # which most likely means we're running under a CPAN Tester's smoker, which
     # may be chroot()ed or something else like LXC that might screw up having a
@@ -340,33 +340,6 @@ SKIP: {
         ) {
         skip 'Not on a terminal or AUTOMATED_TESTING is set', $how_many; 
     }
-
-
-subtest 'test HTMLPageSync new() helper name_page_name' => sub {
-    skip_all_unless_release_testing();
-
-    plan(skip_all => 'Optional Test::Expect testing module not installed.')
-        unless eval {require Test::Expect; Test::Expect->import(); 1;};
-
-    # Have Expect tell me what it's doing for easier debugging.
-    #$Expect::Exp_Internal = 1;
-
-    expect_run(
-        command => 't/App-FetchwareX-HTMLPageSync-new-name_page_name',
-        prompt => [-re => qr/: |\? /],
-        quit => "\cC"
-    );
-
-    # First test that the command produced the correct outout.
-    expect_like(qr/A page_name configuration directive simply names your HTMLPageSync Web page\./,
-        'checked name_page_name() received correct prompt');
-
-    # Have Expect print an example URL.
-    expect_send('Test HTMLPageSync Page',
-        'check name_page_name() sent answer.');
-
-    expect_quit();
-};
 
 
 subtest 'test HTMLPageSync new() helper get_html_page_url' => sub {
