@@ -94,6 +94,20 @@ Fetchwarefile: you failed to include a header option in your call to
 App::Fetchware::Fetchwarefile's new() constructor. Please add the required
 header and try again.
 EOC
+    # Above tests if $options{header} does not exist and is not defined, so this
+    # else means that it does indeed exist and is defined.
+    } else {
+        if ($options{header} !~ /^use\s+App::FetchwareX?/m) {
+            die <<EOD;
+Fetchwarefile: Your header does not have a App::Fetchware or App::FetchwareX::*
+extension declaration. This line is manadatory, and Fetchware requires it,
+because it needs it to load its or its extensions's configuration subroutines.
+The erroneous header you provided is:
+[
+$options{header}
+]
+EOD
+        }
     }
     if (not exists $options{descriptions}
         and not defined $options{descriptions}) {

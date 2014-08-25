@@ -38,14 +38,18 @@ subtest 'check new() exceptions' => sub {
         qr/Fetchwarefile: you failed to include a header option in your call to/,
         'checked new() header exception');
 
+    eval_ok(sub {App::Fetchware::Fetchwarefile->new(header => 'not undef')},
+        qr/Fetchwarefile: Your header does not have a App::Fetchware or App::FetchwareX::*/,
+        'checked new() header regex exception.');
+
     eval_ok(sub {App::Fetchware::Fetchwarefile->new(
-            header => 'Test Header')},
+            header => 'use App::FetchwareX::Test;')},
         qr/Fetchwarefile: you failed to include a descriptions hash option in your call to/,
         'checked new() descriptions exception');
 
 
     eval_ok(sub {App::Fetchware::Fetchwarefile->new(
-            header => 'Test Header',
+            header => 'use App::FetchwareX::Test;',
             descriptions => 'Not a hashref'
         )},
         qr/Fetchwarefile: the descriptions hash value must be a hash ref whoose keys are/,
@@ -162,7 +166,7 @@ EOD
 
     # Make a new $fetchwarefile.
     $fetchwarefile = App::Fetchware::Fetchwarefile->new(
-        header => 'header',
+        header => 'use App::FetchwareX::Test;',
         descriptions => { mirror => 'mirrors' }
     );
     # Fetchwarefile supports 'MANY' and 'ONEARRREF' types, so test config
@@ -182,7 +186,7 @@ EOD
     # arraryref of arguments.
     # Make a new $fetchwarefile.
     $fetchwarefile = App::Fetchware::Fetchwarefile->new(
-        header => 'header',
+        header => 'use App::FetchwareX::Test;',
         descriptions => { mirror => 'mirrors' }
     );
     $fetchwarefile->config_options(mirror => $_) for @mirrors;
