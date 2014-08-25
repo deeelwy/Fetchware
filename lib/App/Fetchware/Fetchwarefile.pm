@@ -66,8 +66,8 @@ setting. The values of these keys should be brief descriptions of each
 configuration option intended to be prepended above each configuration option in
 the generated Fetchwarefile.
 
-The values of the keys of C<descriptions> are turned into a Fetchware as shown
-below...
+The values of the keys of C<descriptions> are turned into a Fetchwarefile as
+shown below...
 
     ...
 
