@@ -53,16 +53,17 @@ subroutines.
         );
     }
 
-Adds fetchware's API subroutines (check_syntax(), start(), lookup(), download(),
-verify(), unarchive(), build(), install(), end(), uninstall(), and upgrade()) to
-the caller()'s  @EXPORT.  It also imports L<Exporter>'s import() subroutine to
-the caller's package, so that the caller has a proper import() subroutine that
-Perl will use when someone uses your fetchware extension in their fetchware
-extension. Used by fetchware extensions to easily add fetchware's API
-subroutines to your extension's package exports.
+Adds fetchware's API subroutines (new(), new_install(), check_syntax(), start(),
+lookup(), download(), verify(), unarchive(), build(), install(), end(),
+uninstall(), and upgrade()) to the caller()'s  @EXPORT.  It also imports
+L<Exporter>'s import() subroutine to the caller's package, so that the caller 
+as a proper import() subroutine that Perl will use when someone uses your
+fetchware extension in their fetchware extension. Used by fetchware extensions
+to easily add fetchware's API subroutines to your extension's package exports.
 
-This is how fetchware extensions I<inherit> whatever API subroutines that they
-want to reuse from App::Fetchware.
+The C<KEEP> type is how fetchware extensions I<inherit> whatever API subroutines that they
+want to reuse from App::Fetchware, while C<OVERRIDE> specifies which API
+subroutines this Fetchware extension will implement itself or "override".
 
 Normally, you don't actually call import(); instead, you call it implicity by
 simply use()ing it.

@@ -1042,6 +1042,25 @@ EOD
 }
 
 
+=head3 opening_message();
+
+    opending_message($opening_message);
+
+opening_message() takes the specified $opening_message and just prints it to
+C<STDOUT>. This subroutine may seem useless, you could just use print, but using
+it instead of print helps document that what you're doing is printing the
+opening message to the user.
+
+=cut
+
+sub opening_message {
+    my $opening_message = shift;
+
+    # Just print the opening message.
+    print $opening_message;
+}
+
+
 =head3 fetchwarefile_name();
 
     # $fetchwarefile_name comes from the first command line option to fetchware
@@ -1089,25 +1108,6 @@ EOD
     }
 
     return $fetchwarefile_name, $fetchwarefile_name_value;
-}
-
-
-=head3 opening_message();
-
-    opending_message($opening_message);
-
-opening_message() takes the specified $opening_message and just prints it to
-C<STDOUT>. This subroutine may seem useless, you could just use print, but using
-it instead of print helps document that what you're doing is printing the
-opening message to the user.
-
-=cut
-
-sub opening_message {
-    my $opening_message = shift;
-
-    # Just print the opening message.
-    print $opening_message;
 }
 
 
@@ -4770,7 +4770,8 @@ end() is called after all of the other main fetchware subroutines such as
 lookup() are called. It's job is to cleanup after everything else. It just calls
 cleanup_tempdir(), which mostly just closes the C<fetchware.sem> fetchware
 semaphore file used to lock each fetchware temporary directory so C<fetchware
-clean> does not delete it.
+clean> does not delete it out from under an concurrently running Fetchware
+process.
 
 It also calls the very internal only __clear_CONFIG() subroutine that clears
 App::Fetchware's internal %CONFIG variable used to hold your parsed
@@ -4875,7 +4876,7 @@ sub end {
     ### values.
     hook lookup => sub {
         # Callback that replaces lookup()'s behavior.
-        # Callback receives the same arguments as lookup(), and is must return
+        # Callback receives the same arguments as lookup(), and it must return
         # the same number and type of arguments that lookup() returns.
         return $download_path;
     };
@@ -4894,9 +4895,9 @@ App::Fetchware represents fetchware's API. For ducumentation on how to use
 App::Fetchware's fetchware command line interface see L<fetchware>.
 
 It is the heart and soul of fetchware where all of fetchware's main behaviors
-are kept. It is fetchware's API, which consists of the subroutines start(),
-lookup(), download(), verify(), unarchive(), build(), install(), uninstall(),
-and end().
+are kept. It is fetchware's API, which consists of the subroutines new(),
+new_install(), check_syntax(), start(), lookup(), download(), verify(),
+unarchive(), build(), install(), uninstall(), upgrade() and end().
 
 
 App::Fetchware stores both details about C<fetchware>'s configuration file
@@ -4915,6 +4916,11 @@ For details on App::Fetchware's configuration file syntax see the section L<CREA
 If the needs of your program overcome the capabilities of App::Fetchware's configuration options, then see the section
 L<FURTHER CUSTOMIZTING YOUR FETCHWAREFILE> for details on how to overcome those
 limitations.
+
+=item *
+
+Straightforward and more complicated Fetchware file examples are available in
+the L<EXAMPLE FETCHWAREFILES> section.
 
 =item * 
 
@@ -5081,10 +5087,10 @@ install the software that is downloaded, must execute the build and installation
 scripts on your computer sometimes even as the root administrator! Therefore,
 fetchware will refuse to build and install any software package that cannot be
 verified. This limitation can be bypassed by setting the C<verify_failure_ok>
-configuration option to true, but his is B<not> recommended.
+configuration option to true, but this is B<not> recommended.
 
 Instead, if standard verification fails, please set up one or more of the
-configuration options below that may allow verification to fail if the author
+configuration options below that may allow verification to succeed if the author
 has his download site set up differently then fetchware expects.
 
 =over
@@ -5883,7 +5889,7 @@ does not add any subroutines of its own..
 
 An example:
 
-    use App::Fetchware ':OVERRIDE_LOOKUP';
+    use App::Fetchware qw(:DEFAULT :OVERRIDE_LOOKUP);
 
     ...
 
@@ -6601,27 +6607,31 @@ has the md5sum on the download C<mirror> instead of the C<lookup_url>.
 
 =item WARNING
 
-Currently, fetchware's extension system is B<ALPHA>, and is subject to change at
-any time. This, however, is unlikely, but it could happen. Most likely, some new
-API subroutines will just be introducted such as check_syntax() to check syntax
-for extensions, and new(), which will allow fetchware extensions to customize
-the C<fetchware new> command.
+Currently, fetchware's extension system is B<BETA>, and unlikely to change, but
+changes may happen most likely just in the form of bug fixes. This, however, is
+unlikely, but it could happen. Most likely, just some minor bug fixes will occur
+to the API not any major changes or refactors or rewrites. I'm considering
+"genericizing" make_test_dist() so Fetchware extension authors can reuse it to
+test their extensions.
 
 =back
 
 Fetchware's main program C<fetchware> uses App::Fetchware's short and simple API
 to implement fetchware's default behavior; however, other styles of source code
 distributions exist on the internet that may not fit inside App::Fetchware's
-capabilities. In addition to its flexible configuration file sytax, that is why
-fetchware allows modules other than App::Fetchware to provide it with its
-behavior.
+capabilities. That is why, in addition to its flexible configuration file
+syntax, fetchware allows modules other than App::Fetchware to provide it with
+its behavior.
 
 =head2 How the API works
 
 When fetchware installs or upgrades something it executes the API subroutines
-start(), lookup(), download(), verify(), unarchive(), build(), install(), and
-end() in that order. And when fetchware uninstalls an installed package it
-executes the API subroutines start(), part of build(), uninstall(), and end().
+check_syntax(), start(), lookup(), download(), verify(), unarchive(), build(),
+install(), and end() in that order. And when fetchware uninstalls an installed
+package it executes the API subroutines check_syntax(), start(), unarchive(),
+uninstall(), and end(). Upgrade is basically the exact same thing as install(),
+but it compares version numbers using the upgrade() API subroutine. And
+C<fetchware new> obviously just calls new() and new_install().
 
 
 =head2 Extending App::Fetchware
@@ -6654,14 +6664,17 @@ features especially using @INC for subclassing, which App::Fetchware does not
 use.
 
 The same terminology as used in OOP is also used here in App::Fetchware, because
-the concepts are nearly the same they're simply implemented differently.
+the concepts are nearly the same--they're simply implemented differently.
 
 =head3 API subroutines
 
 These are the subroutines that App::Fetchware implements, and that fetchware
-uses to implement its desired behavior. They are start(), lookup(), download(),
-verify(), unarchive(), build(), install(), uninstall(), and end(). All must be
-implemented in a App::Fetchware L<subclass>.
+uses to implement its desired behavior. They are new(), new_install(),
+check_syntax(), start(), lookup(), download(), verify(), unarchive(), build(),
+install(), uninstall(), upgrade(), and end(). All must be
+implemented or "inherited" from App::Fetchware using L<App::Fetchware::ExportAPI> as
+discussed below in L<Implement your fetchware extension.> in a App::Fetchware
+L<subclass>.
 
 =head3 override
 
@@ -6690,13 +6703,13 @@ To create a fetchware extension you must understand how they work:
 =item 1. First a Fetchwarefile is created, and what module implements App:Fetchware's API is declared with a C<use App::Fetchware...;> line. This line is C<use App::Fetchware> for default Fetchwarefiles that use App::Fetchware to provide C<fetchware> with the API it needs to work properly.
 
 =item 2. To use a fetchware extension, you simply specify the fetchware
-extension you want to use with a C<use App::Fetchware...;> instead of specifying
+extension you want to use with a C<use App::FetchwareX::...;> instead of specifying
 C<use App::Fetchware> line in your Fetchwarefile. You B<must> replace the
 App::Fetchware import with the extension's. Both cannot be present. Fetchware
 will exit with an error if you use more than one App::Fetchware line without
 specifying specific subroutines in all but one of them.
 
-=item 3. Then when C<fetchware> parses this Fetchwarefile when you use it to install, upgrade, or uninstall something, This C<use App::Fetchware...;> line is what imports App::Fetchware's API subroutines into C<fetchware>'s namespace.
+=item 3. Then when C<fetchware> parses this Fetchwarefile when you use it to install, upgrade, or uninstall something, This C<use App::FetchwareX::...;> line is what imports App::Fetchware's API subroutines into C<fetchware>'s namespace.
 
 =back
 
@@ -6730,6 +6743,21 @@ consult their full documentation in L<FETCHWAREFILE API SUBROUTINES>.
 
 =over
 
+=item B<my ($program_name, $fetchwarefile) = new($term, $program_name)> -
+Along with new_install() implements Fetchware's new command for helping users
+create new Fetchwarefiles using a Q&Z wizard interface.
+
+=item B<my $fetchware_package_path = new_install($program_name, $fetchwarefile)>
+- new()'s sister subroutine for implementing the Q&A wizard interface for
+Fetchware's new command. Just used to keep root to make
+ask_to_install_now_to_test_fetchwarefile() work for system level installs while
+keeping drop privs enabled by default.
+
+=item B<'Syntax Ok' = check_syntax()> - Checks the user's Fetchwarefile, but only
+at Fetchware's level. Perl level syntax errors are not checked. PPI is not used
+to parse the file. Instead only high-level Fetchware specific syntax errors are
+checked.
+
 =item B<my $temp_dir = start(KeepTempDir => 0 | 1)> - Gives your extension a chance to do anything needed before the rest of the API subroutines get called.  App::Fetchware's C<start()> manages App::Fetchware's temporary directory creation. If you would like to also use a temporary directory, you can just use L<App::Fetchware::ExportAPI> to "inherit" App::Fetchware's start() instead of implementing it yourself.
 
 =item B<my $download_url = lookup()> - Determines and returns a download url that C<download()> receives and uses to download the archive for the program.o
@@ -6748,6 +6776,11 @@ consult their full documentation in L<FETCHWAREFILE API SUBROUTINES>.
 
 =item B<uninstall($build_path)> - Uninstalls an already installed program installed with the same App::Fetchware extension.
 
+=item B<$upgrade = upgrade($download_path, $fetchware_package_path)> - uses its
+two arguments to determine if a new version is available to upgrade to, or if
+the currently installed version is the latest version, and no additional
+upgrades are needed.
+
 =back
 
 Also, keep in mind the order in which these subroutines are called, what
@@ -6755,11 +6788,18 @@ arguments they receive, and what their expected return value is.
 
 =over
 
-=item B<install> - start(), lookup(), download(), verify(), unarchive(), build(), install(), and end().
+=item B<new> = Just new() and new_install().
 
-=item B<upgrade> - Exactly the same as install.
+=item B<install> - check_syntax(), start(), lookup(), download(), verify(), unarchive(), build(), install(), and end().
 
-=item B<uninstall> - You might think its just uninstall(), but its not.  uninstall() calls start(), download() (to copy the already installed fetchware package from the fetchware package database to the temporary directory), unarchive(), uninstall(), and end().
+=item B<upgrade> - check_syntax(), start(), lookup(), I<upgrade()>, download(),
+verify(), unarchive(), build(), install(), and end().
+
+=item B<upgrade-all> - Is the same as upgrade, because it just call upgrade for
+each fetchware package that is installed in the fetchware package database.
+
+=item B<uninstall> - You might think its just uninstall(), but it does not.
+check_syntax(), start(), unarchive(), uninstall(), and end().
 
 =back
 
@@ -6799,7 +6839,7 @@ Since you've designed your new fetchware extension, now it's time to code it up.
 The easiest way to do so, is to just take an existing extension, and just copy
 and paste it, and then delete its specifics to create a simple extension
 skeleton. Then just follow the steps below to fill in this skeleton with the
-specifics needed for you fetchware extension.
+specifics needed for your fetchware extension.
 
 =cut
 
@@ -6828,13 +6868,31 @@ App::Fetchware's API subroutines that you would like to keep. An example.
 
     # Use App::Fetchware::ExportAPI to set up proper exports this fetchware
     # extension.
-    use App::Fetchware::ExportAPI KEEP => [qw(start end)],
-        OVERRIDE => [qw(lookup download verify unarchive build install uninstall)]
+    use App::Fetchware::ExportAPI KEEP => [qw(new_install start end)],
+        OVERRIDE => [qw(new check_syntax lookup download verify
+        unarchive build install uninstall upgrade)]
     ;
 
+There two types of subroutines ExportAPI helps you with:
+
+=over
+
+=item *
+
+B<KEEP> - Specifies which API subroutines you will "keep" or perhaps "inherit"
+from App::Fetchware. Usually this is just start() and end() to manage the
+C<temp_dir> for you.
+
+=item *
+
+B<OVERRIDE> = Specifies which API subroutines you will "override," or implement
+yourself.
+
+=back
+
 Second, use L<App::Fetchware::CreateConfigOptions> to create all of the
-configuration options (such as temp_dir, no_install, and so on.) you want your
-fetchware extension to have.
+configuration options (such as C<temp_dir>, C<no_install>, and so on.) you want
+your fetchware extension to have.
 
 There are four types of configuration options.
 
@@ -6862,6 +6920,16 @@ to 0 to support more than just Perl's 0 or undef being false.
 I<Examples:> C<verify_failure_ok>, C<no_install>, and C<stay_root>.
 
 =back
+
+Additionally, there is another type of configuration option that only
+App::Fetchware::CreateConfigOptions uses:
+
+=over
+
+=item C<IMPORT> - Allows you to import already defined configuration options
+from App::Fetchware into your Fetchware extension. For exmaple, you might also
+want a C<temp_dir> or C<no_install> configuration option, and the C<IMPORT> type
+allows you to easily import one and document the fact that it is imported.
 
 An example.
 
@@ -6974,7 +7042,12 @@ there if you need it.
 =back
 
 
-=item * Temporary Directory subroutines - L<create_tempdir()|App::Fetchware::Util/create_tempdir()>, L<original_cwd()|App::Fetchware::Util/original_cwd()>, and L<cleanup_tempdir()|App::Fetchware::Util/cleanup_tempdir()>.
+=item * Temporary Directory subroutines -
+L<create_tempdir()|App::Fetchware::Util/create_tempdir()>,
+L<original_cwd()|App::Fetchware::Util/original_cwd()>, and
+L<cleanup_tempdir()|App::Fetchware::Util/cleanup_tempdir()>. Only needed if you
+don't reuse App::Fetchware's own start() and end() subroutines that make use of
+thse temporary directory subroutines for you.
 
 =over
 
@@ -7098,6 +7171,28 @@ subroutines when they override a App::Fetchware API subroutine.
 
 =over
 
+=item L<new()'s OVERRIDE_NEW export tag.|new() API REFERENCE>
+
+The export tag exports all of the helper subroutines new() uses to implement its
+functionality. Some like get_lookup_url(), get_verification(), and
+get_filter_option() are quite specific to App::Fetchware, but extension_name,
+fetchwarefile_name(), opening_message(), prompt_for_other_options(), and
+edit_manually() are nice and generic, and should be appropriate for any
+Fetchware extension.
+
+=item L<new_install()'s OVERRIDE_NEW_INSTALL export tag.|new_install() API REFERENCE>
+
+new_install() only exports ask_to_install_now_to_test_fetchwarefile(), and most
+Fetchware extensions should probably just "inherit" new_install(), because
+new_install()'s only real purpose was making
+ask_to_install_now_to_test_fetchwarefile() work when fetchware drops privs.
+
+=item L<check_syntax()'s OVERRIDE_CHECK_SYNTAX export tag|check_syntax() API REFERENCE>
+
+check_syntax() only has the check_config_options() helper subroutine that is
+meant for reuse by Fetchware extensions, so they can check their syntax just as
+Fetchware itself does.
+
 =item L<lookup()'s OVERRIDE_LOOKUP export tag.|lookup() API REFERENCE>
 
 This export tag is the largest, and perhaps the most important, because it
@@ -7159,6 +7254,10 @@ install() also uses build()'s run_star_commands().
 uninstall() actually has no exports of its own, but it does make use of
 build() and install()'s exports.
 
+=item upgrade()'s OVERRIDE_UNINSTALL export tag.
+
+upgrade() also has no exports of its own, and does not use anyone elses.
+
 
 =back
 
@@ -7183,7 +7282,7 @@ Be sure to document:
 
 =head2 Write tests for your fetchware extension
 
-Use perls veneralbe Test::More, and whatever other Perl TAP testing modules you
+Use perls venerable Test::More, and whatever other Perl TAP testing modules you
 need to be sure your fetchware extension works as expected.
 
 L<Test::Fetchware/> has a few testing subroutines that fetchware itself uses
@@ -7363,7 +7462,7 @@ wanted it to be easy to use. dzil is for Perl programmers, so it requiring some
 knowledge of Perl and Moose is ok. But fetchware is for end users or perhaps
 system administrators not Perl programmers, so something easier is needed.
 
-The extension mechanism was design for ease of use by people who use your
+The extension mechanism was designed for ease of use by people who use your
 fetchware extension. And it is. Just "use" whatever fetchware extension you want
 in your Fetchwarefile, and then supply whatever configuration options you
 need.
@@ -7509,12 +7608,5 @@ instead of the vague one liner that perl's own errors give.
 
 The official bug tracker for fetchware is its 
 L<github issues page.|https://github.com/deeelwy/Fetchware/issues>
-
-=cut
-
-
-=head1 RESTRICTIONS 
-
-
 
 =cut
