@@ -2547,3 +2547,13 @@ improve in the future.
 =back
 
 =cut
+
+=head1 SEE ALSO
+
+L<pkgsrc|http://www.pkgsrc.org/>, L<paco|http://paco.sourceforge.net/>,
+L<porg|http://porg.sourceforge.net/>, L<slackbuilds|http://slackbuilds.org/>,
+L<sbopkg|http://sbopkg.org/>, L<fpm|https://github.com/jordansissel/fpm>
+
+=cut
+
+
