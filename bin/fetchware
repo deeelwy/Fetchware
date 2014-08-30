@@ -1830,6 +1830,7 @@ __END__
 
     # Requires a "uninstall" make target, or customization of its Fetchwarefile
     # to specify what specific C<uninstall_commands> will uninstall this package.
+    fetchware uninstall <name of already installed program>
 
 =head2 L<List all installed fetchware packages.|/list>
 
@@ -1930,6 +1931,12 @@ assumptions that fetchware makes.
 
 =item *
 
+L<App::Fetchware/"EXAMPLE FETCHWAREFILES"> - Details how to customize a
+Fetchwarefile for popular programs such as Apache, Nginx, PHP, MariaDB, and
+Postgres.
+
+=item *
+
 L<App::Fetchware/"CREATING A FETCHWARE EXTENSION"> - Details how to replace the
 module that implements fetchware's behavior, App::Fetchware, with a completely
 different module implementing completely different behavior. These fetchware
@@ -1949,13 +1956,16 @@ without bothering with a text editor. And fetchware's way of upgrading all
 packages with C<upgrade-all>. Fetchware can also list its installed packages
 with C<list>. And C<look> is similar to Perl's original CPAN client's look
 command that downloads and unarchives the package, so you can "look" at it.
+The C<clean> command deletes any unused, leftover temporary files and
+directories Fetchware has unintentionally left in your system's temporary
+directory.
 
 =head2 new
 
     fetchware new <name of program>
 
 C<new> asks you a bunch of questions, and uses the answers you provide in
-addition to the contents of the directory listng fetchware downloads based on
+addition to the contents of the directory listing fetchware downloads based on
 the C<lookup_url> you give fetchware, to create a Fetchwarefile for you with all
 the mandatory options filled in. It also gives you the opportunity to add any
 additional options that you may want to use. C<new> also gives you a chance to
@@ -1997,10 +2007,24 @@ By default executes the commands:
 
 =back
 
-You can use the Fetchwarefile configuraton options C<build_commands> to specify
-alternate commands to build the program replacing C<./configure> and C<make>,
-and you can also specify the C<install_commands> to replace C<make install> with
-some other command or commands that install your program.
+You can use the Fetchwarefile configuration options C<make_options> and
+C<configure_options> to customize how your program is build and installed.
+C<make_options> specifies command line options that are added before C<make> is
+run each time by Fetchware. And C<configure_options> specifies options to the
+first AutoTools command, C<./configure> that customizes how your program is
+built and installed.
+
+    ...
+    prefix '/usr/local';
+    make_options '-j 4';
+    configure_options '--enable-mpm --enable-so';
+
+Or, you can use Fetchwarefile's more generic configuraton options. You cannot
+use both C<build_options> and any of C<prefix>, C<make_options>,
+C<configure_options> at the same time.  C<build_commands> specifies alternate
+commands to build the program replacing C<./configure> and C<make>, and you can
+also specify the C<install_commands> to replace C<make install> with some other
+command or commands that install your program.
 
     ...
     # build_commands and install_commands Fetchwarefile example.
@@ -2029,7 +2053,7 @@ through L<grep(1)>
     fetchware upgrade-all
 
 C<upgrade-all> takes no arguments. Instead, it loops over the list of installed
-programs C<fetchware list> and runs C<upgrade> on each one to upgrade all
+programs as shown in C<fetchware list> and runs C<upgrade> on each one to upgrade all
 currently installed programs.
 
 =head2 uninstall
@@ -2085,7 +2109,7 @@ and verify mechanisms. Includes its own package management functionality.
 
 =back
 
-As far a fetchware one day supporting some sort of hack like checkinstall or
+As far as fetchware one day supporting some sort of hack like checkinstall or
 paco use, I'm against it. I'd prefer everyone just adding a C<make uninstall> to
 their Makefiles. But it is on my todo list, and I may add similar functionality
 in the future, but I'll make no promises. Until then consider using the
@@ -2229,11 +2253,11 @@ package:
 =back
 
 This simple package format was chosen instead of using a native package format
-such as a MS C<.msi> package, slackware format, rpm format, C<.deb> format, and
-so on. Thanks to distros like Gentoo and Arch, there are even more formats now.
-Also, each version of BSD has its own package format, and each version of
-commerical UNIX has its own package format too. ...It was easier to create a new
-format, then deal with all of the existing ones.
+such as a Microsoft C<.msi> package, Slackware format, rpm format, C<.deb>
+format, and so on. Thanks to distros like Gentoo and Arch, there are even more
+formats now. Also, each version of BSD has its own package format, and each
+version of commerical UNIX has its own package format too. ...It was easier to
+create a new format, then deal with all of the existing ones.
 
 This custom package format is unique, bare bones, and retains all of the power
 that installing the software from source manaully gives you.
@@ -2306,8 +2330,8 @@ stuck with whatever your distro's package maintainer has chosen.
 
 =head1 HOW FETCHWARE WORKS
 
-Fetchware works by having fetchware, the C<bin/fetchware> file and fetchware
-Perl package, do all of the "package manager" stuff: 
+Fetchware works by having fetchware, the C<bin/fetchware> file and
+App::Fetchware Perl package, do all of the "package manager" stuff: 
 
 =over
 
@@ -2342,6 +2366,14 @@ App::Fetchware extension:
 
 =item *
 
+Implement Fetchware's new command's Q&A wizard interface (new() and new_install())
+
+=item *
+
+Checking Fetchwarefile's high-level syntax before execution (check_syntax())
+
+=item *
+
 Lookup to see if a new version is available (lookup())
 
 =item *
@@ -2363,6 +2395,10 @@ Building and installing it (build() and install())
 =item *
 
 Uninstalling any already installed fetchware package (uninstall())
+
+=item *
+
+Determining if a newer version is available (upgrade())
 
 =item *
 
@@ -2400,13 +2436,15 @@ a later API subroutine as an argument.
 
 =item upgrade
 
-Upgrade just cleverly calls the same subroutine that implementes install. And if
-the version install determines is the lastes is the same as the version that is
-already installed, then fetchware does not bother installing it again.
+Cleverly reusues the same API subroutines that install uses, but in the middle
+of all that uses the upgrade() API subroutine to determine if a newer version is
+available. The upgrade() API subroutine allows Fetchware extensions to modify
+how Fetcwhare determines if a new version is available to support using git or
+something else to determine this.
 
 =item uninstall
 
-Uninstall parses the Fetcwharefile of the installed pacakge you specified. Then
+Uninstall parses the Fetcwharefile of the installed pacakges you specified. Then
 it runs whatever C<uninstall_commands> you specified or the default,
 C<make uninstall> if you specified none. Then the installed package is deleted
 from the fetchware database.
@@ -2434,7 +2472,7 @@ C<Fetchwarefile-*>.
 
 =item help
 
-Just prints a simple, shirt, concise help message.
+Just prints a simple, short, concise help message.
 
 =back
 
@@ -2521,7 +2559,7 @@ do with them.
 
 =head1 ERRORS
 
-As with the rest of App::Fetchware, fetchware does not return any
+As with the rest of Fetchware, fetchware does not return any
 error codes; instead, all errors are die()'d if it's fetchware's
 error, or croak()'d if its the caller's fault.
 
@@ -2539,7 +2577,7 @@ Fetchware was written on Linux and tested by its author B<only> on Linux.
 However, it should work on popular Unixes without any changes. But it has B<not>
 been ported or tested on Windows yet, so it may work, or parts of it may work,
 but some might not. However, I have used File::Spec and Path::Class to support
-path and file manipulation accross all Perl-supported platorms,so that code
+path and file manipulation accross all Perl-supported platorms, so that code
 should work on Windows. I intend to add Windows support, and add tests for Windows
 in the future, but for now it is unsupported, but may work. This is likely to
 improve in the future.
@@ -2552,7 +2590,8 @@ improve in the future.
 
 L<pkgsrc|http://www.pkgsrc.org/>, L<paco|http://paco.sourceforge.net/>,
 L<porg|http://porg.sourceforge.net/>, L<slackbuilds|http://slackbuilds.org/>,
-L<sbopkg|http://sbopkg.org/>, L<fpm|https://github.com/jordansissel/fpm>
+L<sbopkg|http://sbopkg.org/>, L<fpm|https://github.com/jordansissel/fpm>,
+L<checkinstall|http://asic-linux.com.mx/~izto/checkinstall/>
 
 =cut
 
