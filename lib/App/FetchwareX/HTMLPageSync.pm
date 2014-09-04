@@ -879,17 +879,10 @@ App::FetchwareX::HTMLPageSync "subclasses" App::Fetchware.
 
 Uninstalls App::FetchwareX::HTMLPageSync by recursivly deleting the
 C<destination_directory> where it stores the wallpapers or whatever you
-specified it to download for you.
-
-=over
-NOTICE: uninstalling your App::FetchwareX::HTMLPageSync packagw B<will> B<delete>
-the contents of that package's associated C<destination_directory>! If you would
-like to keep your contents of your C<destination_directory> then either manually
-delete the pacakge you want to delete from your fetchware database directory, or
-just recursively copy the contents of your C<destination_directory> to a backup
-directory somewhere else.
-
-=back
+specified it to download for you. If you would like to keep your
+C<destination_directory>, then set the C<keep_destination_directory> to true in
+your Fetchwarefile, and Fetchware will I<not> delete you
+C<destination_directory>, when you uninstall your Fetchware package.
 
 =cut
 
@@ -1108,31 +1101,31 @@ App::Fetchware extension comes in.
 
 =head1 DESCRIPTION
 
-App::FetchwareX::HTMLPageSync as you can tell from its name is an example
-App::Fetchware extension. It's not a large extension, but instead is a simple one
-meant to show how easy it is extend App::Fetchware.
+App::FetchwareX::HTMLPageSync is an example App::Fetchware extension. It's not
+a large extension, but instead is a simple one meant to show how easy it is
+extend App::Fetchware.
 
 App::FetchwareX::HTMLPageSync parses the Web page you specify to create a list of
 download links. Then it downloads those links, and installs them to your
 C<destination_directory>.
 
 In order to use App::FetchwareX::HTMLPageSync to help you mirror the download
-links on a HTML page you need to
-L<create a App::FetchwareX::HTMLPageSync Fetchwarefile.|/"CREATING A App::FetchwareX::HTMLPageSync FETCHWAREFILE">
+links on a HTML page you need to create a App::FetchwareX::HTMLPageSync
+Fetchwarefile, you can do this easily by just running C<fetchware new>, and
+typing in C<HTMLPageSync> when it asks you what extension of Fetchwarefile you
+want to create.
+L<Or create a Fetchwarefile manually.|/"MANUALLY CREATING A App::FetchwareX::HTMLPageSync FETCHWAREFILE">
 Then you'll need to
 L<learn how to use that Fetchwarefile with fetchware.|/"USING YOUR App::FetchwareX::HTMLPageSync FETCHWAREFILE WITH FETCHWARE">
 
 =cut
 
 
-=head1 CREATING A App::FetchwareX::HTMLPageSync FETCHWAREFILE
+=head1 MANUALLY CREATING A App::FetchwareX::HTMLPageSync FETCHWAREFILEN
 
 In order to use App::FetchwareX::HTMLPageSync you must first create a
-Fetchwarefile to use it. In a future release I intend to expand App::Fetchware's
-simple API to incude the ability for App::Fetchware extensions to extend
-fetchware's simple new command, which will simply ask you a few questions and
-create a new Fetchwarefile for you. Till then, you'll have to create one
-manually.
+Fetchwarefile to use it. You can use C<fetchware new> as explain above, or
+create one manually in your text editor.
 
 =over
 
@@ -1148,8 +1141,6 @@ what program or behavior this Fetchwarefile manages.
 
     use App::FetchwareX::HTMLPageSync;
 
-    # [page_name] - explain what [page_name] does.
-
     page_name '[page_name]';
 
 Fetchwarefiles are actually small, well structured, Perl programs that can
@@ -1159,8 +1150,6 @@ this case) configuration options. Below is my filled in example
 App::FetchwareX::HTMLPageSync fetchwarefile.
 
     use App::FetchwareX::HTMLPageSync;
-
-    # Cool Wallpapers - Downloads cool wall papers.
 
     page_name 'Cool Wallpapers';
 
@@ -1326,6 +1315,11 @@ likely action for when one of fetchware's behaviors are executed.
 
 =over
 
+=item B<new>
+
+A C<fetchware new> will cause HTMLPageSync to ask the user a bunch of questons,
+and help them create a new HTMLPageSync Fetchwarefile.
+
 =item B<install>
 
 A C<fetchware install> while using a HTMLPageSync Fetchwarefile causes fetchware
@@ -1335,8 +1329,11 @@ Fetchwarefile.
 
 =item B<upgrade>
 
-A C<fetchware upgrade> while using a HTMLPageSync Fetchwarefile will simply run
-the same thing as install all over again.
+A C<fetchware upgrade> will redownload the C<html_page_url>, parse it, and
+compare the corresponding list of files to the list of files already downloaded,
+and if any new files have been added, then they will be downloaded. New versions
+of existing files is not supported. No timestamp checking is implemented
+currently.
 
 =item B<uninstall>
 
@@ -1365,9 +1362,21 @@ extension. If not, you don't need to know these details.
 
 =head2 App::Fetchware API Subroutines
 
-HTMLPageSync is a App::Fetchware extension, which just means that it properly
-implements  and exports App::Fetchware's API. See
-L<something I haven't written yet for more details>
+=head3 new()
+
+HTMLPageSync overrides new(), and implements its own Q&A wizard interface
+helping users create HTMLPageSync Fetchwarefiles.
+
+=head3 new_install()
+
+HTMLPageSync just inherits App::Fetchware's new_install(), which just asks the
+user if they would like Fetchware to instell the already generated
+Fetchwarefile.
+
+=head3 check_syntax()
+
+check_syntax() is also overridden to check HTMLPageSync's own Fetchware-level
+syntax.
 
 =head3 start() and end()
 
@@ -1392,24 +1401,33 @@ verify() is overridden to do nothing.
 
 =head3 unarchive()
 
-unarchive() takes its argument, which is an arrayref of of the paths of the
+verify() is overridden to do nothing.
+
+=head3 build()
+
+build() is overridden to do nothing.
+
+=head3 install()
+
+install() takes its argument, which is an arrayref of of the paths of the
 files that were downloaded to the tempdir created by start(), and copies them to
 the user's provided C<destination_directory>.
-
-=head3 build() and install()
-
-Both are overridden to do nothing.
-
-=head3 uninstall()
-
-uninstall() recursively deletes your C<destination_directory> where it stores
-whatever links you choose to download.
 
 =head3 end() and start()
 
 HTMLPageSync just imports end() and start() from App::Fetchware to take
 advantage of their ability to manage a temporary directory.
 
+=head3 uninstall()
+
+uninstall() recursively deletes your C<destination_directory> where it stores
+whatever links you choose to download unless of course the
+C<keep_destination_directory> configuration option is set to true.
+
+=head3 upgrade()
+
+Determines if any looked up URLs have not been downloaded yet, and returns true
+if that is the case.
 
 =head2 App::FetchwareX::HTMLPageSync's Configuration Subroutines
 
@@ -1497,15 +1515,3 @@ limited to optional callbacks that are not needed for most uses. These features
 are the C<html_treebuilder_callback> and C<download_links_callback> callbacks.
 
 =cut
-
-
-
-##TODO##=head1 DIAGNOSTICS
-##TODO##
-##TODO##App::Fetchware throws many exceptions. These exceptions are not listed below,
-##TODO##because I have not yet added additional information explaining them. This is
-##TODO##because fetchware throws very verbose error messages that don't need extra
-##TODO##explanation. This section is reserved for when I have to actually add further
-##TODO##information regarding one of these exceptions.
-##TODO##
-##TODO##=cut
