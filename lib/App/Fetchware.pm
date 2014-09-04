@@ -490,7 +490,9 @@ user. The algorithm is dead stupid:
 
 new() uses Term::UI, which in turn uses Term::ReadLine to implement the
 character based question and anwser wizard interface. A Term::ReadLine/Term::UI
-object is passed to new() as its first argument.
+object is passed to new() as its first argument. new() also uses
+L<App::Fetchware::Fetchwarefile> to help create and help generate the
+Fetchwarefile for the user.
 
 new()'s argument is the program name that the user has specified on the command
 line. It will be undef if the user did not specify one on the command line.
@@ -7160,6 +7162,29 @@ only in your test suite.
 
 =back
 
+=item L<App::Fetchware::Fetchwarefile>
+
+Helper OO class for new() API subroutine. Allows you to programatically build a
+Fetchwarefile for the user using a small API instead of manually concatenating
+tons of strings constantly worrying about wordwrap and whitespace.
+
+=over
+
+=item L<new() constructor|App::Fetchware::Fetchwarefile/new()> -
+App::Fetchware::Fetchwarefile is actually Object-oriented unlike the rest of
+Fetchware's internals, so new() is its constructor.
+
+=item L<config_options()|App::Fetchware::Fetchwarefile/config_options()> - Used
+to add the actual configuration options and their values to the Fetchwarefile
+object.
+
+=item L<generate()|App::Fetchware::Fetchwarefile/generate()> - Returns the
+"generated" Fetchwarefile. This method does all of the string concatenation for
+you in order to create the Fetchwarefile specfied in your new() and
+config_options() calls.
+
+=back
+
 
 =item L<App::Fetchware's OVERRIDE_* export tags.|FETCHWAREFILE API SUBROUTINES>
 
@@ -7407,6 +7432,7 @@ tests that all users will run at the end of your test file.
 
 =back
 
+
 =head2 Share it on CPAN
 
 Fetchware has no Web site or any other place to share fetchware extensions. But
@@ -7416,6 +7442,32 @@ documentation. L<perlnewmod> shows how to create new Perl modules, and how to
 upload them to CPAN. See L<Module::Starter> for a simple way to create a
 skeleton for a new Perl module, and L<dzil|http://dzil.org/index.html> is beyond
 amazing, but has insane dependencies and a significant learning curve.
+
+
+=head2 Fetchware Extension Best Practices
+
+Below are a few points to keep in mind when creating a Fetchware extension that
+the documentation itself fails to mention prominently or that otherwise slip
+through the cracks, but are still important to keep in mind while designing and
+implementing a Fetchware extension.
+
+=over
+
+=item * Actually implement the new() API subroutine to help your Fetchware
+extension's users create new Fetchwarefiles for your Fetchware extension. And
+use L<App::Fetchware::Fetchwarefile> to help you generate the Fetchwarefile.
+
+=item * Only use L<run_prog()|App::Fetchware::Util/run_prog()> to execute
+external programs, because it supports Fetchware's verbose (-v) and quiet (-q)
+options. If you really do need something else, then checkout run_prog()'s
+documentation for how to see if verbose or quiet options are enabled.
+
+=item * Use L<App::Fetchware::Util>'s logging subroutines msg() and vmsg() to
+print messages out to your user to tell them what you are doing. I recommened a
+msg() or two in each or of your main API subroutines, and then at least one
+vmsg() in each and any helper subroutines you may write and use.
+
+=back
 
 =cut
 
@@ -7593,15 +7645,6 @@ instead of the vague one liner that perl's own errors give.
 
 ###BUGALERT### Actually implement croak or more likely confess() support!!!
 
-##TODO##=head1 DIAGNOSTICS
-##TODO##
-##TODO##App::Fetchware throws many exceptions. These exceptions are not listed below,
-##TODO##because I have not yet added additional information explaining them. This is
-##TODO##because fetchware throws very verbose error messages that don't need extra
-##TODO##explanation. This section is reserved for when I have to actually add further
-##TODO##information regarding one of these exceptions.
-##TODO##
-##TODO##=cut
 
 
 =head1 BUGS 
