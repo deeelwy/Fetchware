@@ -30,10 +30,8 @@ more thuroughly.
 
 =head2 import()
 
-    # import() *must* be called in a BEGIN block, because it
-    # creates subroutines that have prototypes, and prototypes *must* be known
-    # about at compile time not run time! Typically this is just done using
-    # "use" as shown below.
+    # You don't actually call import() unless you're doing something weird.
+    # Instead, use calls import for you.
     use App::Fetchware::CreateConfigOptions
         ONE => [qw(
             page_name

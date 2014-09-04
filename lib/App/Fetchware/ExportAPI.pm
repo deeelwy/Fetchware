@@ -27,7 +27,7 @@ use 5.010001;
 
 App::Fetchware::ExportAPI (ExportAPI) has only one user-servicable part--it's
 import() method. It works just like L<Exporter>'s import() method except it
-takes arguments differently, and checks it's arguments more thuroughly.
+takes arguments differently, and checks it's arguments more thoroughly.
 
 It's import() method is what does the heavy lifting of actually importing any
 "inherited" Fetchware API subroutines from App::Fetchware, and also setting up
@@ -89,7 +89,7 @@ $callers_package_name. This is absolutely required, because when a user's
 Fetchwarefile is parsed it is the C<use App::Fetchware::[extensionname];> line
 that imports fetchware's API subrotines into fetchware's namespace so its
 internals can call the correct fetchware extension. This mechanism simply uses
-Exporter's import() method for the heavy lifting, so _export_api() B<must> also
+Exporter's import() method for the heavy lifting, so import() B<must> also
 ensure that its caller gets a proper import() method.
 
 If no import() method is in your fetchware extension, then fetchware will fail
@@ -210,9 +210,10 @@ __END__
 
 =head1 SYNOPSIS
 
-    use App::Fetchware::ExportAPI KEEP => [qw(start end)],
+    use App::Fetchware::ExportAPI KEEP => [qw(start end new_install)],
         OVERRIDE =>
-            [qw(lookup download verify unarchive build install uninstall)];
+            [qw(new lookup download verify unarchive build install uninstall
+            upgrade check_syntax)];
 
 =cut
 
@@ -231,18 +232,7 @@ extension.
 =head1 ERRORS
 
 As with the rest of App::Fetchware, App::Fetchware::ExportAPI does not return 
-ny error codes; instead, all errors are die()'d if it's Test::Fetchware's error,
+any error codes; instead, all errors are die()'d if it's Test::Fetchware's error,
 or croak()'d if its the caller's fault.
 
 =cut
-
-
-##TODO##=head1 DIAGNOSTICS
-##TODO##
-##TODO##App::Fetchware throws many exceptions. These exceptions are not listed below,
-##TODO##because I have not yet added additional information explaining them. This is
-##TODO##because fetchware throws very verbose error messages that don't need extra
-##TODO##explanation. This section is reserved for when I have to actually add further
-##TODO##information regarding one of these exceptions.
-##TODO##
-##TODO##=cut
