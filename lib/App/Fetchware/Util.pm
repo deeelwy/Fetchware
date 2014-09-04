@@ -309,7 +309,7 @@ B<== 1>, because Fetchware takes advantage of a cool feature in GetOpt::Long
 allowing the user to specify -v and -q more than once. This triggers either
 $fetchware::quiet or $fetchware::verbose to be greater than one, which would
 cause a direct C<== 1> test to fail even though the user is no asking for
-I<more> verbose messages. Internally Fetchware only supports on verbositly
+I<more> verbose messages. Internally Fetchware only supports one verbositly
 level.
 
 =cut
@@ -636,8 +636,7 @@ EOD
     my $file_listing = file_download_dirlist($local_lookup_url)
 
 Glob's provided $local_lookup_url, and builds a directory listing of all files
-in the provided directory. Then list_file_dirlist() returns a list of all of the
-files in the current directory.
+in the provided directory.
 
 =cut
 
@@ -1235,7 +1234,7 @@ up permissions on system directories.
 
 If you actually are some sort of security expert, please feel free to
 double-check if the list of stuff to check for is complete, and perhaps even the
-Perl implementation to see if the subroutien really does check if
+Perl implementation to see if the subroutine really does check if
 safe_open($file_to_check) is actually safe.
 
 
@@ -1913,9 +1912,7 @@ to determine if another fetchware process out there is currently using this
 temporary directory, and if it is not, the file is not currently locked with
 flock, then the entire directory is deleted using File::Path's remove_path()
 function. If the file is there and locked, then the directory is skipped by
-cmd_clean(). Note: you can call C<fetchware clean> with the -f or --force option
-to force fetchware to delete B<all> fetchware temporary directories even out
-from under the pants of any currently running fetchware process!
+cmd_clean().
 
 cleanup_tempdir() is responsible for unlocking the semaphore file that
 create_tempdir() creates. However, the coolest part of using flock is that if
@@ -1925,6 +1922,8 @@ handling, because the OS will do them for us!
 
 =cut
 
+###BUGALERT### Add support for the -f/--force option to force deleting fetchware
+#temp dirs even if locked.
 sub create_tempdir {
     my %opts = @_;
 
