@@ -6971,6 +6971,8 @@ An example for overriding lookup() is below.
 
 =back
 
+=back
+
 =head3 Use Fetchware's Own Libraries to Save Developement Time.
 
 Fetchware includes many libraries to save development time. These libraries are

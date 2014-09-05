@@ -967,6 +967,7 @@ used to check if any already downloaded files are I<newer> than the files in
 the C<destination_directory>.
 
 Returns false if $download_path is the same as C<destination_directory>.
+
 =over
 
 =item drop_privs() NOTES
