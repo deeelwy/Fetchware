@@ -2,6 +2,24 @@ Revison History for App::Fetchware
 
 {{$NEXT}}
 
+1.011     2014-09-05 00:59:30-04:00 America/New_York
+    - Added support for the new command to the Fetchware API, so Fetchware
+      extensions can now easily implement the new command to also help their
+      users easily make Fetchwarefiles.
+    - Also added check_syntax() to the Fetchware API providing Fetchware-level
+      Fetchwarefile syntax checking. No parsing of Perl is done as that's best
+      left to perl itself.
+    - The upgrade() subroutine was also added to the Fetchware API allowing
+      Fetchware extensions to easily change Fetchware's definition of when your
+      Fetchware package should be upgraded.
+    - Added support for these new API subroutines to Fetchware's example
+      Fetchware extension App::FetchwareX::HTMLPageSync.
+    - Added perl 5.10.1 as an "official" dependency. Each Perl file always had a
+      "use 5.010001;" line, but it was never declared in dist.ini.
+    - Many minor doc fixes and tweaks, and the Fetchware extension documentation
+      was updated to cover the new API subroutines new(), new_install(),
+      check_syntax(), and upgrade().
+
 1.010     2013-12-14 04:10:18 America/New_York
     - Fixed github#4 by added a more reliable checksum parser that should be
       generic enough to parse anything simple and reasonable.
