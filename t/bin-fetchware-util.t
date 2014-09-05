@@ -111,15 +111,8 @@ withdraw('install');
 EOS
 
     eval_ok(sub {parse_fetchwarefile(\$api_subs_exported)},
-        <<EOE, 'checked parse_fetchwarefile() failed to export api subs.');
-fetchware: The App::Fetchware module you choose in your fetchwarefile does not
-properly export the necessary subroutines fetchware needs it to. These include:
-start(), lookup(), download(), verify, unarchive(), build(), install(),
-uninstall(), and end().
-The missing subroutines are [install lookup].
-EOE
-
-
+        qr/fetchware: The App::Fetchware module you choose in your fetchwarefile does not/,
+        'checked parse_fetchwarefile() failed to export api subs.');
 };
 
 
