@@ -2,6 +2,12 @@ Revison History for App::Fetchware
 
 {{$NEXT}}
 
+1.012     2014-09-05 21:23:55-04:00 America/New_York
+    - Fixed botched use of $ENV{AUTOMATED_TESTING} to skip the interactive new
+      command tests.
+    - Fixed last of my use of smartmatch since its sadly been marked
+      experimental.
+
 1.011     2014-09-05 00:59:30-04:00 America/New_York
     - Added support for the new command to the Fetchware API, so Fetchware
       extensions can now easily implement the new command to also help their
