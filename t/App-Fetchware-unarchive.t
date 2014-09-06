@@ -72,7 +72,7 @@ subtest 'test list_files_tar()' => sub {
         LAYOUT
         configure
     )) {
-        ok(qr/$expected$/ ~~ @file_list,
+        ok(grep /$expected$/,  @file_list,
             "checked list_files_tar() success [$expected]");
     }
 
@@ -99,7 +99,7 @@ subtest 'test list_files_zip()' => sub {
         COPYING
         EXTENDING.html
     )) {
-        ok(qr/$expected$/ ~~ @file_list,
+        ok(grep /$expected$/, @file_list,
             "checked list_files_tar() success [$expected]");
     }
 
