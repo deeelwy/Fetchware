@@ -135,11 +135,8 @@ subtest 'test file_download_dirlist()' => sub {
 
     # Test file_download_dirlist()'s Exceptions.
     eval_ok(sub {file_download_dirlist('/akdjf983hfo3e4gghj-doesnotexist')},
-        <<EOE, 'checked file_download_dirlist() does not exist exception.');
-App-Fetchware-Util: The directory that fetchware is trying to use to determine
-if a new version of the software is available does not exist. This directory is
-[/akdjf983hfo3e4gghj-doesnotexist], and the OS error is [No such file or directory].
-EOE
+        qr/App-Fetchware-Util: The directory that fetchware is trying to use to determine/,
+        'checked file_download_dirlist() does not exist exception.');
     my $temp_dir = tempdir("fetchware-test-$$-XXXXXXXXX",
         CLEANUP => 1, TMPDIR => 1);
     eval_ok(sub {file_download_dirlist($temp_dir)},
