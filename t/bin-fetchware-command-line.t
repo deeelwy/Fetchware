@@ -7,7 +7,7 @@ use 5.010001;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '11'; #Update if this changes.
+use Test::More 0.98 tests => '13'; #Update if this changes.
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
