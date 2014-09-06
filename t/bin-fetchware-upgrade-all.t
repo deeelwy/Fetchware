@@ -8,7 +8,7 @@ use 5.010001;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '4'; #Update if this changes.
+use Test::More 0.98 tests => '5'; #Update if this changes.
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
@@ -43,6 +43,8 @@ BEGIN {
 # annoying.
 $ENV{FETCHWARE_DATABASE_PATH} = tempdir("fetchware-test-$$-XXXXXXXXXX",
     CLEANUP => 1, TMPDIR => 1); 
+ok(-e $ENV{FETCHWARE_DATABASE_PATH},
+    'Checked creating test FETCHWARE_DATABASE_PATH success.');
 
 subtest 'test cmd_upgrade_all() success' => sub {
     skip_all_unless_release_testing();

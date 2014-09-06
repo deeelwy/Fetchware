@@ -9,7 +9,7 @@ use 5.010001;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '3'; #Update if this changes.
+use Test::More 0.98 tests => '4'; #Update if this changes.
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
@@ -36,19 +36,22 @@ BEGIN {
     ok(defined $INC{$fetchware}, 'checked bin/fetchware loading and import')
 }
 
+# Set FETCHWARE_DATABASE_PATH to a tempdir, so that this test uses a different
+# path for your fetchware database than the one fetchware normally uses after it
+# is installed. This is to avoid any conflicts with already installed fetchware
+# packages, because if the actual fetchware database path is used for this test,
+# then this test will actually upgrade any installed fetchware packages. Early
+# in testing I found this acceptable, but now it's a massive bug. I've already
+# implemented the FETCHWARE_DATABASE_PATH evironment variable, so I may as well
+# take advantage of it.
+$ENV{FETCHWARE_DATABASE_PATH} = tempdir("fetchware-test-$$-XXXXXXXXXX",
+    CLEANUP => 1, TMPDIR => 1); 
+ok(-e $ENV{FETCHWARE_DATABASE_PATH},
+    'Checked creating test FETCHWARE_DATABASE_PATH success.');
+
 subtest 'test cmd_upgrade() success' => sub {
     skip_all_unless_release_testing();
 
-    # Delete all existing httpd fetchware packages in fetchware_database_path(),
-    # which will screw up the installation and upgrading of httpd below.
-    for my $fetchware_package (glob catfile(fetchware_database_path(), '*')) {
-        # Clean up $fetchware_package.
-        if ($fetchware_package =~ /httpd/) {
-            ok((unlink $fetchware_package),
-                'checked cmd_upgrade() clean up fetchware database path')
-                if -e $fetchware_package
-        }
-    }
     # Also delete Apache 2.2.22 from $ENV{FETCHWARE_LOCAL_UPGRADE_PATH}
     my $striped_upgrade_path = $ENV{FETCHWARE_LOCAL_UPGRADE_URL};
     $striped_upgrade_path =~ s!^file://!!;
