@@ -456,7 +456,7 @@ EOD
         }
     );
 
-    my $fetchwarefile = edit_manually($term, $fetchwarefile);
+    $fetchwarefile = edit_manually($term, $fetchwarefile);
     isa_ok($fetchwarefile, 'App::Fetchware::Fetchwarefile',
         'Test Fetchwarefile');
 
