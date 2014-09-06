@@ -21,6 +21,7 @@ use Perl::OSType 'is_os_type';
 use Fcntl ':flock';
 use URI::Split qw(uri_split uri_join);
 use App::Fetchware 'http_parse_filelist';
+use Config;
 
 # Set PATH to a known good value.
 $ENV{PATH} = '/usr/local/bin:/usr/bin:/bin';
@@ -734,13 +735,13 @@ subtest 'test run_prog()' => sub {
     # as system()'s return value.). And then it is tested if it ran successfully
     # in which case it would be 0, which means it ran successfully. See perldoc
     # system for more.
-    ok(run_prog("$^X", '-e print "Testing 1...2...3!!!\n"') >> 8 == 0,
+    ok(run_prog("$Config{perlpath}", '-e print "Testing 1...2...3!!!\n"') >> 8 == 0,
         'test run_prog() success');
 
     # Set bin/fetchware's $quiet to true.
     $fetchware::quiet = 1;
 
-    ok(run_prog("$^X", '-e print "Testing 1...2...3!!!\n"') >> 8 == 0,
+    ok(run_prog("$Config{perlpath}", '-e print "Testing 1...2...3!!!\n"') >> 8 == 0,
         'test run_prog() success');
 
     # Set bin/fetchware's $quiet to false.

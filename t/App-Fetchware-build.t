@@ -15,6 +15,7 @@ use File::Copy 'cp';
 use Path::Class;
 use File::Spec::Functions qw(rel2abs catfile);
 use Cwd 'cwd';
+use Config;
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
@@ -51,27 +52,27 @@ subtest 'test run_star_commands() success' => sub {
     # Just use the 'perl' command itself as the command to run that way we
     # don't need to use different commands for different platforms. But actually
     # we do, because of stupid file extensions. On Windows perl is not called
-    # perl, because it is called perl.exe instead. So, just use $^X, which is
+    # perl, because it is called perl.exe instead. So, just use $Config{perlpath}, which is
     # the path to the perl that is currently running this file, so this command
     # is pretty much guaranteed to exist.
 
     # Test just one simple command.
     # NOTE: run_star_commands() returns 0 on success, and nonzero on failure
     # just like commands on the command line do and perl's system() does too.
-    ok(run_star_commands(qq{$^X -e "1+1;"}) == 0,
+    ok(run_star_commands(qq{$Config{perlpath} -e "1+1;"}) == 0,
         'check run_star_commands() simple success.');
 
     # Now test if it can handle comma (,\s*) seperated commands.
-    ok((run_star_commands(qq{$^X -e "1+1;", $^X -e "1+1;"}) == 0),
+    ok((run_star_commands(qq{$Config{perlpath} -e "1+1;", $Config{perlpath} -e "1+1;"}) == 0),
         'check run_star_commands() double success.');
 
     # Now test if it can handle a list of single commands..
-    ok((run_star_commands(qq{$^X -e "1+1;"}, qq{$^X -e "1+1;"}) == 0),
+    ok((run_star_commands(qq{$Config{perlpath} -e "1+1;"}, qq{$Config{perlpath} -e "1+1;"}) == 0),
         'check run_star_commands() list success.');
 
     # Now test if it can handle a list of comma separated commands..
-    ok((run_star_commands(qq{$^X -e "1+1;", $^X -e "1+1;"},
-        qq{$^X -e "1+1;", $^X -e "1+1;"}) == 0),
+    ok((run_star_commands(qq{$Config{perlpath} -e "1+1;", $Config{perlpath} -e "1+1;"},
+        qq{$Config{perlpath} -e "1+1;", $Config{perlpath} -e "1+1;"}) == 0),
         'check run_star_commands() double list success.');
 };
 

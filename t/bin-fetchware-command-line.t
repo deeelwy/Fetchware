@@ -14,6 +14,7 @@ use Test::Fetchware ':TESTING';
 use File::Spec::Functions 'catfile';
 use File::Temp 'tempdir';
 use Cwd 'cwd';
+use Config;
 
 
 # Set PATH to a known good value.
@@ -359,7 +360,7 @@ subtest 'test command line default' => sub {
     ###BUGALERT### Only tests if bin/fetchware's exit value is 0, because
     #print_ok() cannot test a forked and execed processes' STDOUT only the
     #current processes STDOUT.
-    ok(run_perl($^X, 'bin/fetchware'),
+    ok(run_perl($Config{perlpath}, 'bin/fetchware'),
         'Checked command line @ARGV = help.');
 
 
@@ -419,12 +420,12 @@ subtest 'test command line command line options' => sub {
 # so is more robust than using this, but this is better than no_plan.
 #done_testing();
 
-# Like run_prog() but never prints anything extra, and includes the $^X and
+# Like run_prog() but never prints anything extra, and includes the $Config{perlpath} and
 # 'bin/fetchware' stuff all of these tests need. And it returns 
 sub run_perl {
-    my $retval = system($^X, 'bin/fetchware', @_);
+    my $retval = system($Config{perlpath}, 'bin/fetchware', @_);
     $retval == 0 or die <<EOD;
-system(\$^X, 'bin/fetchware', @_) failed. OS error [$!].
+system(\$Config{perlpath}, 'bin/fetchware', @_) failed. OS error [$!].
 EOD
     # system() returns 0 for success, but 0 is false in perl, so I have to turn
     # it into a normal true or false value for use with ok() or print_ok().
