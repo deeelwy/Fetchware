@@ -45,11 +45,11 @@ BEGIN {
 ##TODO##    # which most likely means we're running under a CPAN Tester's smoker, which
 ##TODO##    # may be chroot()ed or something else like LXC that might screw up having a
 ##TODO##    # functional terminal.
-##TODO##    if (not exists $ENV{AUTOMATED_TESTING}
+##TODO##    if (exists $ENV{AUTOMATED_TESTING}
 ##TODO##            and $ENV{AUTOMATED_TESTING}
-##TODO##            and not -t
+##TODO##            or not -t
 ##TODO##        ) {
-##TODO##        skip 'Not on a terminal', $how_many; 
+##TODO##        skip 'Not on a terminal or AUTOMATED_TESTING is set.', $how_many; 
 ##TODO##    }
 ##TODO##
 ##TODO##

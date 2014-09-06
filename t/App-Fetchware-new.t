@@ -67,7 +67,7 @@ SKIP: {
     # which most likely means we're running under a CPAN Tester's smoker, which
     # may be chroot()ed or something else like LXC that might screw up having a
     # functional terminal.
-    if (not exists $ENV{AUTOMATED_TESTING}
+    if (exists $ENV{AUTOMATED_TESTING}
             and $ENV{AUTOMATED_TESTING}
             or not -t
         ) {
