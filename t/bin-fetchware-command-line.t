@@ -86,6 +86,20 @@ subtest 'test command line uninstall' => sub {
 ##BROKEN##};
 
 
+# Set FETCHWARE_DATABASE_PATH to a tempdir, so that this test uses a different
+# path for your fetchware database than the one fetchware normally uses after it
+# is installed. This is to avoid any conflicts with already installed fetchware
+# packages, because if the actual fetchware database path is used for this test,
+# then this test will actually upgrade any installed fetchware packages. Early
+# in testing I found this acceptable, but now it's a massive bug. I've already
+# implemented the FETCHWARE_DATABASE_PATH evironment variable, so I may as well
+# take advantage of it.
+$ENV{FETCHWARE_DATABASE_PATH} = tempdir("fetchware-test-$$-XXXXXXXXXX",
+    CLEANUP => 1, TMPDIR => 1); 
+ok(-e $ENV{FETCHWARE_DATABASE_PATH},
+    'Checked creating upgrade test FETCHWARE_DATABASE_PATH success.');
+
+
 subtest 'test command line upgrade' => sub {
     # Actually test during user install!!!
     # Delete all existing httpd fetchware packages in fetchware_database_path(),
@@ -198,6 +212,8 @@ note("]");
 # annoying.
 $ENV{FETCHWARE_DATABASE_PATH} = tempdir("fetchware-test-$$-XXXXXXXXXX",
     CLEANUP => 1, TMPDIR => 1); 
+ok(-e $ENV{FETCHWARE_DATABASE_PATH},
+    'Checked creating upgrade-all test FETCHWARE_DATABASE_PATH success.');
 
 
 subtest 'test command line upgrade-all' => sub {
