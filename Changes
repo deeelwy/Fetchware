@@ -2,6 +2,19 @@ Revison History for App::Fetchware
 
 {{$NEXT}}
 
+1.013     2014-09-06 22:01:01-04:00 America/New_York
+    - Fixed dozens of CPAN Tester FAIL reports. These reports FAILed mostly
+      beause they were run under a smoker, which is a different environment, then
+      I test Fetchware under.
+        - Fixed the upgrade tests actually using the users own fetchware package
+          path. Now a temp file is used instead.
+        - Switch use of $^X to $Config{perlpath}, which solves some bugs in some
+          smoker configurations.
+        - Fixed a hilarious bug due to localizations. I used a direct string
+          comparison where $! was in the string, and I guess under different
+          locales you can get languages other than english to come from using $!
+          in a string.
+
 1.012     2014-09-05 21:23:55-04:00 America/New_York
     - Fixed botched use of $ENV{AUTOMATED_TESTING} to skip the interactive new
       command tests.
