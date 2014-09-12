@@ -9,7 +9,7 @@ use 5.010001;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '7'; #Update if this changes.
+use Test::More 0.98 tests => '8'; #Update if this changes.
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
@@ -17,6 +17,7 @@ use Cwd 'cwd';
 use File::Spec::Functions qw(catfile splitpath splitdir catdir catpath tmpdir);
 use Path::Class;
 use Perl::OSType 'is_os_type';
+use File::Temp 'tempdir';
 
 
 # Crank up security to 11.
@@ -38,6 +39,20 @@ BEGIN {
     fetchware->import(':TESTING');
     ok(defined $INC{$fetchware}, 'checked bin/fetchware loading and import')
 }
+
+
+# Set FETCHWARE_DATABASE_PATH to a tempdir, so that this test uses a different
+# path for your fetchware database than the one fetchware normally uses after it
+# is installed. This is to avoid any conflicts with already installed fetchware
+# packages, because if the actual fetchware database path is used for this test,
+# then this test will actually upgrade any installed fetchware packages. Early
+# in testing I found this acceptable, but now it's a massive bug. I've already
+# implemented the FETCHWARE_DATABASE_PATH evironment variable, so I may as well
+# take advantage of it.
+$ENV{FETCHWARE_DATABASE_PATH} = tempdir("fetchware-test-$$-XXXXXXXXXX",
+    CLEANUP => 1, TMPDIR => 1); 
+ok(-e $ENV{FETCHWARE_DATABASE_PATH},
+    'Checked creating upgrade test FETCHWARE_DATABASE_PATH success.');
 
 
 subtest 'test parse_fetchwarefile(Fetchwarefile)' => sub {
@@ -166,7 +181,8 @@ subtest 'check fetchware_database_path()' => sub {
                 'checked fetchware_database_path() as root');
         # else use a "user" directory.
         } else {
-            like(fetchware_database_path(), qr!Perl/dist/fetchware$!i,
+            like(fetchware_database_path(),
+                qr!Perl/dist/fetchware$|/tmp/fetchware-test!i,
                 'checked fetchware_database_path() as user');
         }
     } elsif ($^O eq "MSWin32") {
@@ -199,7 +215,7 @@ subtest 'check fetchware_database_path()' => sub {
     config_delete('fetchware_db_path');
 
     # Test FETCHWARE_DATABASE_PATH too.
-    $ENV{FETCHWARE_DATABASE_PATH} = cwd();
+    local $ENV{FETCHWARE_DATABASE_PATH} = cwd();
     is(fetchware_database_path(), cwd(),
         'check fetchware_database_path() ENV option success.');
 
