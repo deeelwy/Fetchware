@@ -118,6 +118,8 @@ subtest 'test fetchwarefile_name() success' => sub {
 
 
 subtest 'test fetchwarefile_name() prompt' => sub {
+    skip_all_unless_release_testing();
+
     plan(skip_all => 'Optional Test::Expect testing module not installed.')
         unless eval {require Test::Expect; Test::Expect->import(); 1;};
 
@@ -150,6 +152,8 @@ subtest 'test fetchwarefile_name() prompt' => sub {
 
 
 subtest 'test get_lookup_url() success' => sub {
+    skip_all_unless_release_testing();
+
     # Create test Term::UI object.
     my $term = Term::ReadLine->new('fetchware');
 
@@ -196,6 +200,8 @@ EOE
 
 
 subtest 'test prompt_for_other_options() success' => sub {
+    skip_all_unless_release_testing();
+
     plan(skip_all => 'Optional Test::Expect testing module not installed.')
         unless eval {require Test::Expect; Test::Expect->import(); 1;};
 
