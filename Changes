@@ -2,6 +2,20 @@ Revison History for App::Fetchware
 
 {{$NEXT}}
 
+1.014     2014-09-12 20:55:16-04:00 America/New_York
+    - Fixed more CPAN Tester FAIL reports.
+        - Added File::HomeDir version 0.93+ as a dependency, because that's the
+          first production release that supported the my_dist_data() method that
+          Fetchware uses to store non-root fetchware database path.
+        - Switched to pretty much always using a tempdir for the fetchware
+          database path instead of the real fetchware database path. This should
+          fix some upgrade CPAN Tester FAILs.
+        - Gave up trying to test using Test::Expect if its installed. That's
+          still in the code, but now skip_all_unless_relase_testing() is in
+          front of it, so pretty much just me is the only who is ever going to
+          test any of the Test::Expect stuff, which is probably a good thing,
+          since its test reliability seems iffy.
+
 1.013     2014-09-06 22:01:01-04:00 America/New_York
     - Fixed dozens of CPAN Tester FAIL reports. These reports FAILed mostly
       beause they were run under a smoker, which is a different environment, then
