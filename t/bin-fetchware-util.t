@@ -173,6 +173,13 @@ note("CFPsFPPFPPFPPFPP[$fetchwarefile]");
 
 
 subtest 'check fetchware_database_path()' => sub {
+    # Because $ENV{FETCHWARE_DATABASE_PATH} has been set to a temporary
+    # directory even when root on Unix, the local temporary directory will be
+    # used instead, which is obviously going to break the test below for
+    # '/var/log/fetchware'; therefore, delete # $ENV{FETCHWARE_DATABASE_PATH},
+    # but just for his subtest using local.
+    local $ENV{FETCHWARE_DATABASE_PATH};
+    delete $ENV{FETCHWARE_DATABASE_PATH};
 
     if (is_os_type('Unix', $^O)) {
         # If we're effectively root use a "system" directory.
