@@ -949,43 +949,32 @@ EOD
 
         msg 'Downloading and unarchiving specified distribution.';
 
-        ###BUGALERT### Fails to support looking up installed packages in fetchware
-        #database. This test will prevent them from running.
-        if (defined($filename) and -e $filename) {
+        my $download_url = lookup();
 
-            my $download_url = lookup();
+        my $package_path = download(cwd(), $download_url);
 
-            my $package_path = download(cwd(), $download_url);
+        ###BUGALERT### Add support for caching the key files gpg creates to
+        #the fetchwarefile, and for actually using them later on inside the
+        #fpkg.
+        verify($download_url, $package_path);
 
-            ###BUGALERT### Add support for caching the key files gpg creates to
-            #the fetchwarefile, and for actually using them later on inside the
-            #fpkg.
-            verify($download_url, $package_path);
+        my $build_path = unarchive($package_path);
 
-            my $build_path = unarchive($package_path);
+        # end() is *not* run, because the point of look is to lookup,
+        # download, and unarchive, and then actually "look" at the files,
+        # and running end() would delete them.
 
-            # end() is *not* run, because the point of look is to lookup,
-            # download, and unarchive, and then actually "look" at the files,
-            # and running end() would delete them.
-
-            $P_look_path =  catfile($temp_dir, $build_path);
-            msg <<EOM;
+        $P_look_path =  catfile($temp_dir, $build_path);
+        msg <<EOM;
 Your package's contents are at [$P_look_path]. Please run [fetchware clean] to
 delete these files and any other files fetchware may have left behind when you
 are finished looking inside this package.
 EOM
 
-            # Tell the parent, root, process the values of the variables the
-            # child calculated in this coderef, and write them across this pipe
-            # back to the parent
-            write_dropprivs_pipe($write_pipe, $P_look_path);
-        } else {
-            ###BUGALERT### Replace with warn for proposed for loop above to work?
-            die <<EOD;
-fetchware: You called fetchware look incorrectly. You must specify
-either a Fetchwarefile or a fetchware package that ends with [.fpkg].
-EOD
-        }
+        # Tell the parent, root, process the values of the variables the
+        # child calculated in this coderef, and write them across this pipe
+        # back to the parent
+        write_dropprivs_pipe($write_pipe, $P_look_path);
 
         # Does not need to execute anything as root, because cmd_look() does not
         # install anything or even call end(), because the suer is supposed to
