@@ -1550,8 +1550,13 @@ EOD
             # to drop privs, and it's also not really meant to be used by
             # fetchware extensions mostly just fetchware itself. Perhaps I
             # should move it back to bin/fetchware???
+            #
+            # Also also note, that CLEANUP option is *not* specified, because
+            # that can cause this directory in cases of errors, and you can't
+            # track down an error in a build script if the directory everything
+            # is in has been deleted.
             my $new_temp_dir = tempdir("fetchware-$$-XXXXXXXXXX",
-                DIR => cwd(), CLEANUP => 1);
+                DIR => cwd());
             # Determine /etc/passwd entry for the "effective" uid of the
             # current fetchware process. I should use the "effective" uid
             # instead of the "real" uid, because effective uid is used to
