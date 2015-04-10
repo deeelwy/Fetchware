@@ -315,20 +315,23 @@ EOD
         ($P_build_path)
             = read_dropprivs_pipe($output);
 
-        install($P_build_path);
+        my $installed_fetchware_package_path;
+        if (not config('no_install')) {
+            install($P_build_path);
 
-        vmsg "Creating Fetchware package from [@{[cwd()]}].";
-        my $fetchware_package_path
-            =
-            create_fetchware_package($fetchwarefile, cwd());
-        vmsg "Created fetchware package at [$fetchware_package_path].";
+            vmsg "Creating Fetchware package from [@{[cwd()]}].";
+            my $fetchware_package_path
+                =
+                create_fetchware_package($fetchwarefile, cwd());
+            vmsg "Created fetchware package at [$fetchware_package_path].";
 
-        vmsg 'Installing created fetchware package to fetchware database.';
-        my $installed_fetchware_package_path
-            = copy_fpkg_to_fpkg_database($fetchware_package_path);
-        vmsg <<EOM;
+            vmsg 'Installing created fetchware package to fetchware database.';
+            $installed_fetchware_package_path
+                = copy_fpkg_to_fpkg_database($fetchware_package_path);
+            vmsg <<EOM;
 Installed created fetchware package to [$installed_fetchware_package_path]
 EOM
+        }
 
         end();
 
@@ -1426,15 +1429,23 @@ sub create_fetchware_package {
         $unarchived_package_path,
         $dir_for_new_fpkg) = @_;
 
-    # chdir() to my cwd's parent directory, because my cwd is currently on linux
-    # /tmp/fetchware-kd883ejfe/program-1.2, and I need the program-1.2 part to
-    # be in the archive's @file_list.
-    my $previous_cwd = cwd();
-    my $new_dir = dir(cwd())->parent();
-    chdir($new_dir) or die <<EOD;
+    # Only chdir() to parent if fetchware has *not* dropped privs, because the
+    # drop_privs() code forks, and so only the new child process gets chdir() to
+    # the program-1.2 directory, while the parent is still in the
+    # fetchware-kd883ejfe directory; therefore, when fetchware drops privs it
+    # should not also do this chdir.
+    my $previous_cwd;
+    unless (config('stay_root') or (is_os_type('Unix') and ($< == 0 or $> == 0))) {
+        # chdir() to my cwd's parent directory, because my cwd is currently on linux
+        # /tmp/fetchware-kd883ejfe/program-1.2, and I need the program-1.2 part to
+        # be in the archive's @file_list.
+        $previous_cwd = cwd();
+        my $new_dir = dir(cwd())->parent();
+        chdir($new_dir) or die <<EOD;
 fetchware: run-time error. Fetchware failed to change it's working directory to
 [$new_dir] from [$previous_cwd]. The os error was [$!].
 EOD
+    }
 
 
     # Turn something like /tmp/fetchware-djdjkd8382/package-1.2/Fetchware (with
@@ -1501,11 +1512,14 @@ Archive::Tar error [@{[Archive::Tar->error()]}].
 EOD
 
 
-    # chdir() back to original directory.
-    chdir($previous_cwd) or die <<EOD;
+    # Only need to chdir() back when we do *not* drop privs.
+    unless (config('stay_root') or (is_os_type('Unix') and ($< == 0 or $> == 0))) {
+        # chdir() back to original directory.
+        chdir($previous_cwd) or die <<EOD;
 fetchware: run-time error. Fetchware failed to change its working directory from
 [@{[cwd()]}] to [$previous_cwd]. The os error was [$!].
 EOD
+    }
 
     # Return a fullpath version of $fetchware_package_name.
     return $fetchware_package_full_path;

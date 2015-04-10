@@ -127,7 +127,7 @@ subtest 'test test-dist.fpkg cmd_install' => sub {
 verbose_on();
 
     my $install_success = cmd_install($test_dist_path);
-    note("IS[$install_success");
+    note("IS[$install_success]");
 
     ok($install_success,
         'check test-dist.fpkg cmd_install');
