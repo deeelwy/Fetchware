@@ -6120,10 +6120,10 @@ downloaded file, and compares it with the one C<lookup> parses out.
                     }
     
                     # Find and save the $md5sum for the verify hook below.
-                    # It should be 3 elements over, so it should be the third index
-                    # in the @right array below (remember to start counting 2 0.).
+                    # It should be 6 elements over, so it should be the sixth index
+                    # in the @right array below (remember to start counting from 0.).
                     my @right = $h->right();
-                    my $md5_span_tag = $right[2];
+                    my $md5_span_tag = $right[5];
                     $md5sum = $md5_span_tag->as_text();
                     $md5sum =~ s/md5:\s+//; # Ditch md5 header.
                 }

@@ -137,9 +137,9 @@ EOF
 
 
 
-subtest 'test PHP Fetchwarefile success' => sub {
+#subtest 'test PHP Fetchwarefile success' => sub {
 
-    my $php_fetchwarefile = <<'EOF';
+#    my $php_fetchwarefile = <<'EOF';
 use App::Fetchware qw(
     :OVERRIDE_LOOKUP
     :OVERRIDE_DOWNLOAD
@@ -213,7 +213,17 @@ EOD
                 # It should be 3 elements over, so it should be the third index
                 # in the @right array below (remember to start counting 2 0.).
                 my @right = $h->right();
-                my $md5_span_tag = $right[2];
+# Left for the next time the page annoyingly, arbitrarily changes :)
+#local $Data::Dumper::Maxdepth = 3; # Only show 3 "levels" of crap.
+#use Test::More;
+#diag("RIGHT[");
+#for my $i (0..$#right) {
+#    diag("TAG#[$i]");
+#    diag explain \@right;
+#    diag("ENDTAG#[$i]");
+#}
+#diag("]");
+                my $md5_span_tag = $right[5];
                 $md5sum = $md5_span_tag->as_text();
                 $md5sum =~ s/md5:\s+//; # Ditch md5 header.
             }
@@ -342,7 +352,7 @@ EOF
     # apache.Fetchwarefile to test it.
     ok(run_prog(qw!perl -I lib bin/fetchware install!, $filename),
         'Checked PHP Fetchwarefile success.');
-};
+#};
 
 
 
