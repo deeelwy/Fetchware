@@ -67,6 +67,9 @@ note("LP[$look_path]");
     # And then test if cmd_look() was successful.
     like($look_path, qr/@{[config('filter')]}/,
         'check cmd_look(Fetchware) success.');
+
+    # Also check if the $look_path actually still exists on the filesystem!
+    ok(-e $look_path, 'check cmd_look(Fetchware) look path exists');
 };
 
 
@@ -87,6 +90,9 @@ note("LOOKPATH[$look_path]");
 
     like($look_path, qr/test-dist-1\.00/,
         'check cmd_look(test-dist) success.');
+
+    # Also check if the $look_path actually still exists on the filesystem!
+    ok(-e $look_path, 'check cmd_look(test-dist) look path exists');
 
     # Cleanup the test-dist crap.
     ok(unlink($test_dist_path, $test_dist_md5),
