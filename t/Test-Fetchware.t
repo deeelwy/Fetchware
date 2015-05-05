@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '8'; #Update if this changes.
+use Test::More 0.98 tests => '9'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir);
 use Path::Class;
@@ -30,6 +30,17 @@ BEGIN { use_ok('Test::Fetchware', ':TESTING'); }
 
 # Print the subroutines that App::Fetchware imported by default when I used it.
 note("App::Fetchware's default imports [@Test::Fetchware::EXPORT_OK]");
+
+
+# make_test_dist()'s test need access to bin/fetchware's cmd_install() to
+# actually fully test it, so import it as bin/fetchware's own test suite does.
+BEGIN {
+    my $fetchware = 'fetchware';
+    use lib 'bin';
+    require $fetchware;
+    fetchware->import(':TESTING');
+    ok(defined $INC{$fetchware}, 'checked bin/fetchware loading and import')
+}
 
 
 
@@ -84,20 +95,22 @@ subtest 'test make_test_dist()' => sub {
 
     my $file_name = 'test-dist';
     my $ver_num = '1.00';
-    my $retval = make_test_dist($file_name, $ver_num);
+    my $retval = make_test_dist(file_name => $file_name, ver_num => $ver_num);
     is(file($retval)->basename(), "$file_name-$ver_num.fpkg",
         'check make_test_dist() success.');
+    ok(-e $retval, 'check make_test_dist() existence.');
 
     ok(unlink $retval, 'checked make_test_dist() cleanup');
 
     # Test more than one call as used in t/bin-fetchware-upgrade-all.t
-    my @filenames = qw(test-dist test-dist);
+    my @filenames = qw(test-dist another-dist);
 
     my @retvals;
     for my $filename (@filenames) {
-        my $retval = make_test_dist($file_name, $ver_num);
+        my $retval = make_test_dist(file_name => $file_name, ver_num => $ver_num);
         is(file($retval)->basename(), "$file_name-$ver_num.fpkg",
             'check make_test_dist() 2 calls  success.');
+        ok(-e $retval, 'check make_test_dist() 2 calls existence.');
         push @retvals, $retval;
     }
 
@@ -105,9 +118,11 @@ subtest 'test make_test_dist()' => sub {
 
     # Test make_test_dist()'s second destination directory argument.
     my $name = 'test-dist';
-    my $return_val = make_test_dist($name, $ver_num, 't');
+    my $return_val = make_test_dist(file_name => $file_name, ver_num => $ver_num,
+        destination_directory => 't');
     is($return_val, rel2abs(catfile('t', "$name-$ver_num.fpkg")),
         'check make_test_dist() destination directory success.');
+    ok(-e $return_val, 'check make_test_dist() destination directory existence.');
 
     ok(unlink $return_val, 'checked make_test_dist() cleanup');
 
@@ -115,9 +130,11 @@ subtest 'test make_test_dist()' => sub {
     # Test make_test_dist()'s second destination directory argument in a
     # temp_dir.
     my $name2 = 'test-dist';
-    my $rv = make_test_dist($name2, $ver_num, tmpdir());
+    my $rv = make_test_dist(file_name => $name2, ver_num => $ver_num,
+        destination_directory => tmpdir());
     is(file($rv)->basename(), "$name2-$ver_num.fpkg",
         'check make_test_dist() temp_dir destination directory success.');
+    ok(-e $rv, 'check make_test_dist() temp_dir destination directory existence.');
 
     ok(unlink $rv, 'checked make_test_dist() cleanup');
 
@@ -125,10 +142,11 @@ subtest 'test make_test_dist()' => sub {
     # Test the Fetchwarefile optional named parameter.
     $name2 = 'test-dist';
     my $fetchwarefile = '# A useless testing Fetchwarefile.';
-    $rv = make_test_dist($name2, $ver_num, tmpdir(),
-        Fetchwarefile => $fetchwarefile);
+    $rv = make_test_dist(file_name => $name2, ver_num => $ver_num,
+        destination_directory => tmpdir(), fetchwarefile => $fetchwarefile);
     is(file($rv)->basename(), "$name2-$ver_num.fpkg",
-        'check make_test_dist() temp_dir destination directory success.');
+        'check make_test_dist() Fetchware temp_dir destination directory success.');
+    ok(-e $rv, 'check make_test_dist() Fetchware temp_dir destination directory existence.');
 
     ok(unlink $rv, 'checked make_test_dist() cleanup');
 
@@ -136,10 +154,11 @@ subtest 'test make_test_dist()' => sub {
     # Test the AppendOption optional named parameter.
     $name2 = 'test-dist';
     my $fetchwarefile_option = q{fetchware_option 'some value';};
-    $rv = make_test_dist($name2, $ver_num, tmpdir(),
-        AppendOption => $fetchwarefile_option);
+    $rv = make_test_dist(file_name => $name2, ver_num => $ver_num,
+        destination_directory => tmpdir(), append_option => $fetchwarefile_option);
     is(file($rv)->basename(), "$name2-$ver_num.fpkg",
         'check make_test_dist() temp_dir destination directory success.');
+    ok(-e $rv, 'check make_test_dist() existence.');
 
     ok(unlink $rv, 'checked make_test_dist() cleanup');
 };
@@ -148,9 +167,9 @@ subtest 'test make_test_dist()' => sub {
 subtest 'test md5sum_file()' => sub {
     ###HOWTOTEST### How do I test open(), close(), and Digest::MD5 failing?
 
-    my $filename = 'test-dist';
+    my $file_name = 'test-dist';
     my $ver_num = '1.00';
-    my $test_dist = make_test_dist($filename, $ver_num);
+    my $test_dist = make_test_dist(file_name => $file_name, ver_num => $ver_num);
     my $test_dist_md5 = md5sum_file($test_dist);
 
     ok(-e $test_dist_md5, 'checked md5sum_file() file creation');
@@ -228,7 +247,6 @@ subtest 'test fork_ok()' => sub {
             'checked fork_ok() failure.');
     }
 };
-
 
 # Remove this or comment it out, and specify the number of tests, because doing
 # so is more robust than using this, but this is better than no_plan.

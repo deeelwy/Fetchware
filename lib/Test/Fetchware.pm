@@ -381,56 +381,72 @@ $destination_directory.
 ###BUGALERT###Inflexible, and forces any fetchware extension writers to copy and
 #paste it and modify it, or come up with something else.. Not good :)
 sub make_test_dist {
-    my $file_name = shift;
-    my $ver_num = shift;
-    my $destination_directory = shift;
+    my %opts = @_;
 
+    # Validate options, and set defaults if they need to be set.
+    if (not defined $opts{file_name}) {
+        die <<EOD;
+Test-Fetchware: file_name named parameter is a mandatory options, and must be
+specified despite it pretty much always being just 'test-dist'. It is still
+mandatory.
+EOD
+    }
+    if (not defined $opts{ver_num}) {
+        die <<EOD;
+Test-Fetchware: ver_num named parameter is a mandatory options, and must be
+specified despite it pretty much always being just '1.00'. It is still
+mandatory.
+EOD
+    }
     # $destination_directory is a mandatory option, but if the caller does not
     # provide one, then simply use a tempdir().
-    if (not defined $destination_directory) {
-        $destination_directory
+    if (not defined $opts{destination_directory}) {
+        $opts{destination_directory}
             = tempdir("fetchware-test-$$-XXXXXXXXXXX", TMPDIR => 1, CLEANUP => 1);
         # Don't *only* create the tempdid $destination_directory, also, it must
         # be chmod()'d to 755, unless stay_root is set, so that the dropped priv
         # user can still access the directory make_test_dist() creates.
-        chmod 0755, $destination_directory or die <<EOD;
+        chmod 0755, $opts{destination_directory} or die <<EOD;
 Test-Fetchware: Fetchware failed to change the permissions of it's testing
-destination directory [$destination_directory] this shouldn't happen, and is
+destination directory [$opts{destination_directory}] this shouldn't happen, and is
 perhaps a bug. The OS error was [$!].
 EOD
-
     }
-
-    # Support other options such as Fetchwarefile and AppendOption.
-    my %opts = @_;
-
-    # Append $ver_num to $file_name to complete the dist's name.
-    my $dist_name = "$file_name-$ver_num";
-
-    $destination_directory = rel2abs($destination_directory);
-
-
-    my $test_dist_filename = catfile($destination_directory, "$dist_name.fpkg");
-
-    my $configure_path = catfile($dist_name, 'configure');
-    my %test_dist_files = (
-        './Fetchwarefile' => <<EOF
-# $file_name is a fake "test distribution" meant for testing fetchware's basic
+    # This %opts check must go before the code below sets fetchwarefile even if
+    # the user did not supply it. Perhaps separate things should stay separate,
+    # and %opts and %test_dist_files should both exist for this, but why bother
+    # duplicating the same information if only one options is annoyed?
+    if (defined $opts{fetchwarefile} and defined $opts{append_option}) {
+        die <<EOD;
+fetchware: Run-time error. make_test_dist() can only be called with the
+Fetchwarefile option *or* the AppendOption named parameters never both. Only
+specify one.
+EOD
+    }
+    if (not defined $opts{fetchwarefile}) {
+        $opts{fetchwarefile} = <<EOF;
+# $opts{file_name} is a fake "test distribution" meant for testing fetchware's basic
 # installing, upgrading, and so on functionality.
 use App::Fetchware;
 
-program '$file_name';
+program '$opts{file_name}';
+
+# Every Fetchwarefile needs a lookup_url...
+lookup_url 'file://$opts{destination_directory}';
+
+# ...and a mirror.
+mirror 'file://$opts{destination_directory}';
 
 # Need to filter out the cruft.
-filter '$file_name';
+filter '$opts{file_name}';
 
 # Just use MD5 to verify it.
 verify_method 'md5';
 
 EOF
-        ,
-
-        $configure_path => <<EOF 
+    }
+    if (not defined $opts{configure}) {
+        $opts{configure} = <<EOF;
 #!/bin/sh
 
 # A Test ./configure file for testing Fetchware's install, upgrade, and so on
@@ -438,8 +454,9 @@ EOF
 
 echo "fetchware: ./configure ran successfully!"
 EOF
-        ,
-        catfile($dist_name, 'Makefile') => <<EOF 
+    }
+    if (not defined $opts{makefile}) {
+        $opts{makefile} = <<EOF;
 # Makefile for test-dist, which is a "test distribution" for testing Fetchware's
 # install, upgrade, and so on functionality.
 
@@ -469,20 +486,18 @@ build-package:
 
 	sh -c 'md5sum test-dist-1.01.fpkg > test-dist-1.01.fpkg.md5'
 EOF
-        ,
-    );
+    }
+    if (defined $opts{append_option}) {
+        $opts{fetchware} .= "\n$opts{append_option}\n"
+    }
 
-    # Append the lookup_url customized based the the $destination_directory for
-    # this generated test dist.
-    $test_dist_files{'./Fetchwarefile'}
-        .= 
-        "lookup_url 'file://$destination_directory';\n";
 
-    # I must also add a mirror, which in make_test_dist()'s case is the same
-    # things as $destination_directory.
-    $test_dist_files{'./Fetchwarefile'}
-        .= 
-        "mirror 'file://$destination_directory';\n";
+    # Set up some variables used during test_dist creation.
+    # Append $ver_num to $file_name to complete the dist's name.
+    my $dist_name = "$opts{file_name}-$opts{ver_num}";
+    $opts{destination_directory} = rel2abs($opts{destination_directory});
+    my $test_dist_filename = catfile($opts{destination_directory}, "$dist_name.fpkg");
+    my $configure_path = catfile($dist_name, 'configure');
 
 
     # Be sure to add a prefix to the generated Fetchwarefile if fetchware is not
@@ -490,27 +505,15 @@ EOF
     add_prefix_if_nonroot(sub {
         my $prefix_dir = tempdir("fetchware-test-$$-XXXXXXXXXX",
             TMPDIR => 1, CLEANUP => 1);
-        $test_dist_files{'./Fetchwarefile'}
+        $opts{fetchwarefile}
             .= 
             "prefix '$prefix_dir';";
         }
     );
 
-    # You can only specify Fetchwarefile or AppendOption never both.
-    die <<EOD if exists $opts{Fetchwarefile} and exists $opts{AppendOption};
-fetchware: Run-time error. make_test_dist() can only be called with the
-Fetchwarefile option *or* the AppendOption named parameters never both. Only
-specify one.
-EOD
-    # Replace the default Fetchwarefile with the one the caller specified.
-    $test_dist_files{'./Fetchwarefile'} = $opts{Fetchwarefile}
-        if exists $opts{Fetchwarefile};
-    # Or append AppendOption onto the generated Fetchwarefile.
-    $test_dist_files{'./Fetchwarefile'} .= "\n$opts{AppendOption}\n"
-        if exists $opts{AppendOption};
 
-    # Create a temp dir to create or test-dist-1.$ver_num directory in.
-    # Must be done before original_cwd() is used to set $destination_directory,
+    # Create a temp dir to create or test-dist-1.$opts{ver_num} directory in.
+    # Must be done before original_cwd() is used to set $opts{destination_directory},
     # because original_cwd() is undef until create_tempdir() sets it.
     my $temp_dir = create_tempdir();
 
@@ -519,6 +522,12 @@ fetchware: Run-time error. Fetchware failed to create the directory
 [$dist_name] in the current directory of [$temp_dir]. The OS error was
 [$!].
 EOD
+
+    my %test_dist_files = (
+        './Fetchwarefile' => $opts{fetchwarefile},
+        $configure_path => $opts{configure},
+        catfile($dist_name, 'Makefile') => $opts{makefile},
+    );
 
     for my $file_to_create (keys %test_dist_files) {
         open(my $fh, '>', $file_to_create) or die <<EOD;
