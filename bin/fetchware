@@ -1191,21 +1191,18 @@ EOM
             for my $diag (@$err) {
                 my ($file, $message) = %$diag;
                 if ($file eq '') {
-                    msg "general error: $message\n";
+                    warn "general error: $message\n";
                 } else {
-                    ###BUGALERT### Make a wmsg() that does the same thing
-                    #msg()does except it prints the message to STDERR
-                    #instead of STDOUT.
-                    ###BUGALERT### Perhaps a wvmsg() too?
-                    msg "problem unlinking $file: $message\n";
+                    warn "problem unlinking $file: $message\n";
                 }
             }
         } else {
-            msg "No errors encountered\n";
+            vmsg "No errors encountered during removal of [$temp_dir]\n";
         }
 
         if (@$res) {
-            $num_remove_tree_successes = @$res;
+            # Keep track of each successfully removed directory.
+            $num_remove_tree_successes++;
             vmsg "unlinked [$_]" for @$res;
         }
     }
