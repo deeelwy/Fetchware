@@ -173,11 +173,16 @@ note("CFPsFPPFPPFPPFPP[$fetchwarefile]");
 
 
 subtest 'check fetchware_database_path()' => sub {
-    # Because $ENV{FETCHWARE_DATABASE_PATH} has been set to a temporary
-    # directory even when root on Unix, the local temporary directory will be
-    # used instead, which is obviously going to break the test below for
-    # '/var/log/fetchware'; therefore, delete # $ENV{FETCHWARE_DATABASE_PATH},
-    # but just for his subtest using local.
+    # $ENV{FETCHWARE_DATABASE_PATH} has been set to a temporary directory at the
+    # top of this file, so it applies to all of these tests too; however, the
+    # tests below do not read or write to the actual FETCHWARE_DATABASE_PATH;
+    # instead, they just return what it should be and test that the correct
+    # things are being returned. Because fetchware_database_path()'s normal
+    # behavior is needed to properly test this function even as root, we should
+    # local delete $ENV{FETCHWARE_DATABASE_PATH} just for this one function,
+    # fetchware_database_path(), because it needs "normal" behavior for proper
+    # testing, and such proper testing has no side effects like messing witht he
+    # filesystem.
     local $ENV{FETCHWARE_DATABASE_PATH};
     delete $ENV{FETCHWARE_DATABASE_PATH};
 
