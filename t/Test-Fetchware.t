@@ -7,13 +7,14 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '9'; #Update if this changes.
+use Test::More 0.98 tests => '10'; #Update if this changes.
 
-use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir);
+use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir catdir);
 use Path::Class;
 use URI::Split 'uri_split';
 use Cwd 'cwd';
-use File::Temp 'tempdir';
+use File::Temp qw(tempdir tempfile);
+use File::Path qw(remove_tree make_path);
 
 use App::Fetchware::Config ':CONFIG';
 
@@ -60,6 +61,7 @@ subtest 'TESTING export what they should' => sub {
         end_ok
         add_prefix_if_nonroot
         create_test_fetchwarefile
+        rmdashr_ok
     );
     # sort them to make the testing their equality very easy.
     @expected_testing_exports = sort @expected_testing_exports;
@@ -245,6 +247,60 @@ subtest 'test fork_ok()' => sub {
 
         fork_ok(sub { return 0 },
             'checked fork_ok() failure.');
+    }
+};
+
+
+subtest 'test rmdashr_ok()' => sub {
+    # rmdashr_ok() calls Test::More functions for me, so I can skip them here.
+    # Perhaps Test::Module testing stuff should be used for this instead?
+
+    my ($fh, $filename) = tempfile('fetchware-test-XXXXXXXXX', TMPDIR => 1);
+    close $filename; # Don't actually need $filname open.
+    ok(-e $filename, 'checked rmdashr_ok() test file existence.');
+    rmdashr_ok($filename, 'checked rmdashr_ok() test file unlink.');
+
+    ok((not -e $filename), 'checked rmdashr_ok() test file unlinked successfully.');
+
+    my $tempdir = tempdir('fetchware-test-XXXXXXXXXXXX', TMPDIR => 1);
+    ok(-e $tempdir, 'checked rmdashr_ok() test directory existence.');
+    rmdashr_ok($tempdir, 'checked rmdashr_ok() test directory delete.');
+    ok((not -e $tempdir), 'checked rmdashr_ok() test directory deleted successfully.');
+
+    # Test rmdashr on some "recursive" directories.
+    $tempdir = tempdir('fetchware-test-XXXXXXXXXXXX', DIR => tmpdir());
+
+    my @test_dirs = make_path(catdir($tempdir, qw(1 2 3 4 5 6 7 8 9 0)));
+
+    my @extra_test_dirs;
+    push @extra_test_dirs, make_path(catdir($_, qw(a b c d e )))
+        for @test_dirs;
+
+    my @extra_test_files;
+    for my $dir (@test_dirs) {
+        my $testfile = catdir($dir, 'testfile');
+        push @extra_test_files, $testfile;
+        open my $fh, '>', $testfile
+            or fail("Failed to create testdir [$testfile]: $!");
+        print $fh "Something instead of nothing\n";
+        close $fh;
+    }
+
+    rmdashr_ok($tempdir, 'checked rmdashr_ok() recursive delete success.');
+
+    # A simple noe -e $_bizarrely fails, so just try opening it with open
+    # failing being the actual "success" we're looking for.
+    ok((not -e $_), "Checked rmdashr_ok() recursive delete [$_]")
+        for @test_dirs, @extra_test_dirs, @extra_test_files;
+    #TODOAdd a test to cmd_look() using this!!!!!
+
+
+    # Abuse a TODO block to test rmdashr_ok() failure by turning that failure into
+    # success. When this test fails it succeeds, because it is testing failure.
+    TODO: {
+        todo_skip 'Turn failure into success.', 1;
+
+        rmdashr_ok('Nonexistantfile-' . int(rand(238393890293)));
     }
 };
 

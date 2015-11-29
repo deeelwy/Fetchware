@@ -11,10 +11,11 @@ use 5.010001;
 use Test::More 0.98 tests => '3'; #Update if this changes.
 
 use App::Fetchware::Config ':CONFIG';
+use App::Fetchware::Util 'original_cwd';
 use Test::Fetchware ':TESTING';
 use Cwd 'cwd';
 use File::Copy 'mv';
-use File::Spec::Functions qw(catfile splitpath);
+use File::Spec::Functions qw(catfile splitpath updir);
 use Path::Class;
 
 
@@ -70,6 +71,18 @@ note("LP[$look_path]");
 
     # Also check if the $look_path actually still exists on the filesystem!
     ok(-e $look_path, 'check cmd_look(Fetchware) look path exists');
+    # Remove $look_path's parent, which is the tempdir that cmd_look() used to
+    # store test-dist in. If I don't do this this tempdir will stick around,
+    # because cmd_look() does not have File::Test remove it, because this
+    # directory is supposed to stick around, so the user can look through it.
+    # Also, chdir back to original_cwd(), because my pwd is currently
+    # $parent_look_path, which I'm about to delete, because its my pwd, I can
+    # not delete it, so I'll have to go somewhere else first.
+    chdir(original_cwd())
+        or fail('Failed to chdir back to original_cwd().');
+    my $parent_look_path = dir($look_path)->parent;
+    rmdashr_ok($parent_look_path,
+        "check cmd_look() remove look path success[$parent_look_path]"); 
 };
 
 
@@ -82,7 +95,7 @@ __clear_CONFIG();
 
 
 subtest 'test cmd_look() test-dist success' => sub {
-    my $test_dist_path = make_test_dist('test-dist', '1.00');
+    my $test_dist_path = make_test_dist(file_name => 'test-dist', ver_num => '1.00');
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
     my $look_path = cmd_look($test_dist_path);
@@ -97,6 +110,18 @@ note("LOOKPATH[$look_path]");
     # Cleanup the test-dist crap.
     ok(unlink($test_dist_path, $test_dist_md5),
         'checked cmd_list() delete temp files.');
+    # Remove $look_path's parent, which is the tempdir that cmd_look() used to
+    # store test-dist in. If I don't do this this tempdir will stick around,
+    # because cmd_look() does not have File::Test remove it, because this
+    # directory is supposed to stick around, so the user can look through it.
+    # Also, chdir back to original_cwd(), because my pwd is currently
+    # $parent_look_path, which I'm about to delete, because its my pwd, I can
+    # not delete it, so I'll have to go somewhere else first.
+    chdir(original_cwd())
+        or fail('Failed to chdir back to original_cwd().');
+    my $parent_look_path = dir($look_path)->parent;
+    rmdashr_ok($parent_look_path,
+        "check cmd_look() remove look path success[$parent_look_path]"); 
 };
 
 

@@ -14,6 +14,7 @@ use Digest::MD5;
 use Fcntl qw(:flock :mode);
 use Perl::OSType 'is_os_type';
 use File::Temp 'tempfile';
+use File::Path 'remove_tree';
 
 use App::Fetchware::Util ':UTIL';
 use App::Fetchware::Config ':CONFIG';
@@ -49,6 +50,7 @@ our %EXPORT_TAGS = (
         end_ok
         add_prefix_if_nonroot
         create_test_fetchwarefile
+        rmdashr_ok
     )],
 );
 # *All* entries in @EXPORT_TAGS must also be in @EXPORT_OK.
@@ -861,6 +863,76 @@ EOD
     close $fh;
 
     return $fetchwarefile_path;
+}
+
+
+=head2 rmdashr_ok()
+
+    rmdashr_ok($dir_to_recursive_delete, $test_message)
+
+Recursively deletes the specified directory using L<File::Path>'s remove_tree()
+subroutine. Returns nothing, but does call L<Test::More>'s ok() for you with
+your $test_message if remove_tree() was successful.
+
+=over
+
+=item NOTE:
+
+rmdashr_ok() reports its test as PASS if I<any> number of files are successfully
+deleted. It only reports FAIL if I<no> directories were deleted. L<Test::More>'s
+note() is used to print out verbose info about exactly what files were deleted,
+any errors, and number or errors/warnings and successfully deleted files are
+printed using note(), which only shows the output if prove(1)'s C<-v> switch is
+used.
+
+=back
+
+=cut
+
+sub rmdashr_ok {
+    my ($dir_to_recursive_delete, $test_message) = @_;
+
+    # If $dir_to_recursive_delete is just a file, just unlink it.
+    if (not -d $dir_to_recursive_delete) {
+        unlink($dir_to_recursive_delete)
+            or fail("Failed to unlink([$dir_to_recursive_delete]): $!")
+    } else {
+        # Delete the whole $tempdir. Use error and result for File::Path's
+        # experimental error handling, and set safe to true to avoid borking the
+        # filesystem. This might be run as root, so it really could screw up
+        # your filesystem big time! So set safe to true to avoid doing so.
+        my $ok = remove_tree($dir_to_recursive_delete, {
+            error => \my $err,
+            result => \my $res,
+            safe => 1} );
+
+        # Parse remove_tree()'s insane error handling system. It's expirimental,
+        # but it's been experimental forever, so I can't see it changing.
+        if (@$err) {
+            for my $diag (@$err) {
+                my ($file, $message) = %$diag;
+                if ($file eq '') {
+                    warn "general error: $message\n";
+                } else {
+                    warn "problem unlinking $file: $message\n";
+                }
+            }
+        } else {
+            note("No errors encountered during removal of [$dir_to_recursive_delete]\n");
+        }
+
+
+        # Summarize success or failure for user, so he doesn't have to dig
+        # through a bunch of error messages to see if it worked right.
+        note <<EOM if @$err > 0;
+rmdashr_ok() had [@{[scalar @$err]}] files give errors.
+EOM
+        note <<EOM if @$res > 0;
+rmdashr_ok() successfully deleted [@{[scalar @$res]}] directories. 
+EOM
+
+        ok($ok > 0, $test_message);
+    }
 }
 
 
