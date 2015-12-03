@@ -425,7 +425,8 @@ subtest 'test download_file_url' => sub {
     skip_all_unless_release_testing();
 
     # Create test file to download.
-    my $test_dist_path = make_test_dist('test-dist', '1.00', rel2abs('t'));
+    my $test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.00', destination_directory => rel2abs('t'));
 
     my $filename = download_file_url('file://t/test-dist-1.00.fpkg');
 
@@ -565,7 +566,8 @@ EOS
 
 
 subtest 'test download_file(file://)' => sub {
-    my $test_dist_path = make_test_dist('test-dist', '1.00');
+    my $test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.00');
 
     # Test download_file() with a url.
     my $got_filename;

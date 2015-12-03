@@ -153,7 +153,7 @@ subtest 'test make_test_dist()' => sub {
     ok(unlink $rv, 'checked make_test_dist() cleanup');
 
 
-    # Test the AppendOption optional named parameter.
+    # Test the append_option optional named parameter.
     $name2 = 'test-dist';
     my $fetchwarefile_option = q{fetchware_option 'some value';};
     $rv = make_test_dist(file_name => $name2, ver_num => $ver_num,

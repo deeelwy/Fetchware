@@ -137,9 +137,9 @@ EOF
 
 
 
-#subtest 'test PHP Fetchwarefile success' => sub {
+subtest 'test PHP Fetchwarefile success' => sub {
 
-#    my $php_fetchwarefile = <<'EOF';
+    my $php_fetchwarefile = <<'EOF';
 use App::Fetchware qw(
     :OVERRIDE_LOOKUP
     :OVERRIDE_DOWNLOAD
@@ -311,7 +311,7 @@ hook verify => sub {
 
     msg "Verifying [$package_path] using md5.";
 
-    dir <<EOD if not defined $md5sum;
+    die <<EOD if not defined $md5sum;
 php.Fetchwarefile: lookup failed to figure out the md5sum for verify to use to
 verify that the php version [$package_path] matches the proper md5sum.
 The md5sum was [$md5sum].
@@ -352,7 +352,7 @@ EOF
     # apache.Fetchwarefile to test it.
     ok(run_prog(qw!perl -I lib bin/fetchware install!, $filename),
         'Checked PHP Fetchwarefile success.');
-#};
+};
 
 
 

@@ -329,8 +329,29 @@ EOF
 
 =head2 make_test_dist()
 
-    my $test_dist_path = make_test_dist($file_name, $ver_num, rel2abs($destination_directory));
+    my $test_dist_path = make_test_dist(
+        file_name => $file_name,
+        ver_num = $ver_num,
+        # These are all optional...
+        destination_directory => rel2abs($destination_directory),
+        fetchwarefile => $fetchwarefile,
+        # You can only specify fetchwarefile *or* append_option.
+        append_option => q{fetchware_option 'some value';},
+        configure => <<EOF,
+    #!/bin/sh
 
+    # A test ./configure for testing ./configure failure...it always fails.
+
+    echo "fetchware: ./configure failed!
+    # Return failure exit status to truly indicate failure.
+    exit 1
+    EOF
+        makefile => <<EOF,
+    # Test Makefile.
+    all:
+        sh -c 'echo "fetchware make failed!"'
+    EOF
+    );
 
 Makes a C<$filename-$ver_num.fpkg> fetchware package that can be used for
 testing fetchware's functionality without actually installing anything.
@@ -346,6 +367,21 @@ will just use tmpdir(), File::Spec's location for your system's temporary
 directory.
 
 Returns the full path to the created test-dist fetchwware package.
+
+make_test_dist() supports customizing the C<Fetchwarefile>, C<./configure>, and
+C<Makefile> of the generated make_test_dist():
+
+=over
+
+=item * C<fetchwarefile> - option takes a string that will be written to disk as that test dist's actual Fetchwarefile.
+
+=item * C<append_option> - option confilicts with fetchwarefile option, so only one or the other can be used at the same time. C<append_option> quite literally just appends a fetchware option (or any other string) to the default C<Fetchwarefile>
+
+=item * C<configure> - option takes a string that will completely replace the default ./configure file in your generated test dist. This file is expected to be a shell script by fetchware, but will probably transition into being a perl script file for better Windows support in the future.
+
+=item * C<makefile> - option takes a string that will completely replace the default Makefile that is placed in your generated test dist. This file is expected to actually be a real Makefile.
+
+=back
 
 =over
 
@@ -365,23 +401,6 @@ $destination_directory.
 ###BUGALERT### make_test_dist() only works properly on Unix, because of its
 #dependencies on the shell and make, just replace those commands with perl
 #itself, which we can pretty much guaranteed to be installed.
-###BUGALERT### 5 arguments!!! Just go full named parameters.
-###BUGALERT### Leave this undocumented, because I instead want to just take this
-#whole subroutine to use named parameters.
-###    # You can also specify a Fetchwarefile, but that makes specifying the
-###    # $destination_directory *mandatory*. This limitation will be fixed in a
-###    # later version by making all of this subroutines arguments named
-###    # parameters, but until then it's mandatory. If you don't want to customize
-###    # the $destination_directory, then just specify the default of
-###    # File::Spec::tmpdir().
-###    my $test_dist_path = make_test_dist($file_name, $ver_num,
-###        rel2abs($destination_directory), Fetchwarefile => $fetchwarefile);
-###    # Or specify AppendOption, but never both, and AppendOption also requires
-###    # that you specify the $destination_directory too.
-###    my $test_dist_path = make_test_dist($file_name, $ver_num,
-###        rel2abs($destination_directory), AppendOption => $config_option);
-###BUGALERT###Inflexible, and forces any fetchware extension writers to copy and
-#paste it and modify it, or come up with something else.. Not good :)
 sub make_test_dist {
     my %opts = @_;
 
@@ -421,7 +440,7 @@ EOD
     if (defined $opts{fetchwarefile} and defined $opts{append_option}) {
         die <<EOD;
 fetchware: Run-time error. make_test_dist() can only be called with the
-Fetchwarefile option *or* the AppendOption named parameters never both. Only
+Fetchwarefile option *or* the append_option named parameters never both. Only
 specify one.
 EOD
     }
@@ -980,7 +999,29 @@ __END__
 
     make_clean();
 
-    my $test_dist_path = make_test_dist($file_name, $ver_num, rel2abs($destination_directory));
+    my $test_dist_path = make_test_dist(
+        file_name => $file_name,
+        ver_num = $ver_num,
+        # These are all optional...
+        destination_directory => rel2abs($destination_directory),
+        fetchwarefile => $fetchwarefile,
+        # You can only specify fetchwarefile *or* append_option.
+        append_option => q{fetchware_option 'some value';},
+        configure => <<EOF,
+    #!/bin/sh
+
+    # A test ./configure for testing ./configure failure...it always fails.
+
+    echo "fetchware: ./configure failed!
+    # Return failure exit status to truly indicate failure.
+    exit 1
+    EOF
+        makefile => <<EOF,
+    # Test Makefile.
+    all:
+        sh -c 'echo "fetchware make failed!"'
+    EOF
+    );
 
     my $md5sum_fil_path = md5sum_file($archive_to_md5);
 

@@ -54,7 +54,8 @@ subtest 'test run() install' => sub {
     # if I parse more than one Fetchwarefile in a running of fetchware.
     __clear_CONFIG();
 
-    my $test_dist_path = make_test_dist('test-dist', '1.00');
+    my $test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.00');
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
     verbose_on();
@@ -78,7 +79,8 @@ subtest 'test run() install' => sub {
 
 
 subtest 'test run() uninstall' => sub {
-    my $test_dist_path = make_test_dist('test-dist', '1.00');
+    my $test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.00');
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
     # I obviously must install apache before I can test uninstalling it :)
@@ -139,8 +141,8 @@ EOF
 
 note("UPGRADETD[$upgrade_temp_dir]");
 
-    my $old_test_dist_path = make_test_dist('test-dist', '1.00',
-        $upgrade_temp_dir);
+    my $old_test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.00', destination_directory => $upgrade_temp_dir);
     
     my $old_test_dist_path_md5 = md5sum_file($old_test_dist_path);
 
@@ -177,8 +179,8 @@ note("INSTALLPATH[$old_test_dist_path]");
     sleep 2;
 
 
-    my $new_test_dist_path = make_test_dist('test-dist', '1.01',
-        $upgrade_temp_dir);
+    my $new_test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.01', destination_directory => $upgrade_temp_dir);
 
     my $new_test_dist_path_md5 = md5sum_file($new_test_dist_path);
 
@@ -236,8 +238,10 @@ subtest 'test run() upgrade-all' => sub {
 Failed to chmod(0755, [$upgrade_temp_dir])! This is probably a bug or something?
 EOF
 
-    my $old_test_dist_path = make_test_dist('test-dist', '1.00', $upgrade_temp_dir);
-    my $old_another_dist_path = make_test_dist('another-dist', '1.00', $upgrade_temp_dir);
+    my $old_test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.00', destination_directory => $upgrade_temp_dir);
+    my $old_another_dist_path = make_test_dist(file_name => 'another-dist',
+        ver_num => '1.00', destination_directory => $upgrade_temp_dir);
 
     my $old_test_dist_path_md5 = md5sum_file($old_test_dist_path);
     my $old_another_dist_path_md5 = md5sum_file($old_another_dist_path);
@@ -265,8 +269,10 @@ EOF
 
 
     # Create new test fpkgs and md5s in same dir for cmd_upgrade_all() to work.
-    my $new_test_dist_path = make_test_dist('test-dist', '1.01', $upgrade_temp_dir);
-    my $new_another_dist_path = make_test_dist('another-dist', '1.01', $upgrade_temp_dir);
+    my $new_test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.01', destination_directory => $upgrade_temp_dir);
+    my $new_another_dist_path = make_test_dist(file_name => 'another-dist',
+        ver_num => '1.01', destination_directory => $upgrade_temp_dir);
 
     my $new_test_dist_path_md5 = md5sum_file($new_test_dist_path);
     my $new_another_dist_path_md5 = md5sum_file($new_another_dist_path);
@@ -311,7 +317,8 @@ EOF
 subtest 'test run() list' => sub {
     # First install a test package to make sure there is something for cmd_list()
     # to find.
-    my $test_dist_path = make_test_dist('test-dist', '1.00');
+    my $test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.00');
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
     ok(cmd_install($test_dist_path),
@@ -339,7 +346,8 @@ __clear_CONFIG();
 
 
 subtest 'test run() look' => sub {
-    my $test_dist_path = make_test_dist('test-dist', '1.00');
+    my $test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.00');
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
     {

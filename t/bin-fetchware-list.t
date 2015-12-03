@@ -41,7 +41,8 @@ my $fetchware_package_path;
 subtest 'test cmd_list() success' => sub {
     # First install a test package to make sure there is something for cmd_list()
     # to find.
-    my $test_dist_path = make_test_dist('test-dist', '1.00');
+    my $test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.00');
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
     ok(cmd_install($test_dist_path),

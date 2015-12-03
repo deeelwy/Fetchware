@@ -169,8 +169,8 @@ EOF
 
 note("UPGRADETD[$upgrade_temp_dir]");
 
-    my $old_test_dist_path = make_test_dist('test-dist', '1.00',
-        $upgrade_temp_dir);
+    my $old_test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num =>'1.00', destination_directory => $upgrade_temp_dir);
     
     my $old_test_dist_path_md5 = md5sum_file($old_test_dist_path);
 
@@ -207,8 +207,8 @@ note("INSTALLPATH[$old_test_dist_path]");
     sleep 2;
 
 
-    my $new_test_dist_path = make_test_dist('test-dist', '1.01',
-        $upgrade_temp_dir);
+    my $new_test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.01', destination_directory => $upgrade_temp_dir);
 
     my $new_test_dist_path_md5 = md5sum_file($new_test_dist_path);
 

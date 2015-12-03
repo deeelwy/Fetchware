@@ -121,7 +121,8 @@ subtest 'test test-dist.fpkg cmd_install' => sub {
     # if I parse more than one Fetchwarefile in a running of fetchware.
     __clear_CONFIG();
 
-    my $test_dist_path = make_test_dist('test-dist', '1.00');
+    my $test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.00');
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
 verbose_on();

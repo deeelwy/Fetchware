@@ -101,7 +101,8 @@ subtest 'test download() local file success' => sub {
     my $cwd = cwd();
     config_replace('temp_dir', "$cwd");
 
-    my $test_dist_path = make_test_dist('test-dist', '1.00', 't');
+    my $test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.00', destination_directory => 't');
     my $test_dist_md5 = md5sum_file($test_dist_path);
     my $url = "file://$test_dist_path";
 

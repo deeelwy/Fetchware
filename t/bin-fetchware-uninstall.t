@@ -199,7 +199,8 @@ EOE
 __clear_CONFIG();
 
 subtest 'test cmd_uninstall() with test-dist.fpkg' => sub {
-    my $test_dist_path = make_test_dist('test-dist', '1.00');
+    my $test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.00');
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
     # I obviously must install apache before I can test uninstalling it :)
