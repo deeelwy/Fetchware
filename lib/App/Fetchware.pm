@@ -3957,7 +3957,8 @@ EOD
     ) {
 
         # Set up configure_options and prefix, and then run ./configure.
-        vmsg "Running configure with options [@{[config('configure_options')]}]";
+        vmsg "Running configure with options [@{[config('configure_options')]}]"
+            if defined config('configure_options');
         run_configure();
 
         # Next, make.
