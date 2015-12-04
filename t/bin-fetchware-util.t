@@ -194,7 +194,13 @@ subtest 'check fetchware_database_path()' => sub {
         # else use a "user" directory.
         } else {
             like(fetchware_database_path(),
-                qr!Perl/dist/fetchware$|/tmp/fetchware-test!i,
+                # Add a generic "fetchware-test", because ~/.local and /tmp are
+                # not the only possibilities especially among CPAN Testers, who
+                # often have tempdirs set to cwd(), or other weird paths ending
+                # up being used in the test suite. This should fix this.
+                # Specific CPAN Tester Report this fixes:
+                # http://www.cpantesters.org/cpan/report/3ac3bd5a-4f45-11e5-bcc7-9db5dfbfc7aa
+                qr!Perl/dist/fetchware$|/tmp/fetchware-test|fetchware-test!i,
                 'checked fetchware_database_path() as user');
         }
     } elsif ($^O eq "MSWin32") {
