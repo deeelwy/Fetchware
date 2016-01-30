@@ -99,12 +99,8 @@ EOS
     $ENV{FETCHWARE_FTP_LOOKUP_URL} =~ m!^(ftp://[-a-z,A-Z,0-9,\.]+)(/.*)?!;
     my $site = $1;
     eval_ok(sub {ftp_download_dirlist( "$site/doesntexist.ever")},
-        <<'EOS', 'check ftp_download_dirlist() Net::FTP->dir($path) failure');
-App-Fetchware: run-time error. fetchware failed to get a long directory listing
-of [/doesntexist.ever] on server [carroll.cac.psu.edu]. The ftp error was [Here comes the directory listing.
- Directory send OK.
-]. See man App::Fetchware.
-EOS
+        qr/App-Fetchware: run-time error. fetchware failed to get a long directory listing/,
+        'check ftp_download_dirlist() Net::FTP->dir($path) failure');
 
 };
 
@@ -381,14 +377,11 @@ EOS
     my ($scheme, $auth, $path, $query, $frag) =
         uri_split($ENV{FETCHWARE_FTP_DOWNLOAD_URL});
     eval_ok( sub {download_ftp_url("$scheme://$auth/doesnt/exist/anywhere")},
-        <<EOS, 'check download_ftp_url() failed to chdir');
-App-Fetchware: run-time error. fetchware failed to cwd() to [/doesnt/exist/anywhere] on site
-[carroll.cac.psu.edu]. The ftp error was [Failed to change directory.
-]. See perldoc App::Fetchware.
-EOS
+        qr!App-Fetchware: run-time error. fetchware failed to cwd\(\) to \[/doesnt/exist/a!,
+        'check download_ftp_url() failed to chdir');
 
     eval_ok(sub {download_ftp_url("$scheme://$auth/$path/filedoesntexist")},
-        qr!App-Fetchware: run-time error. fetchware failed to cwd\(\) to \[//pub/apache/httpd/httpd!,
+        qr!App-Fetchware: run-time error. fetchware failed to cwd\(\) to \[!,
         'checked download_ftp_url() cant Net::FTP->get() file');
     
 ##BUGALERT### Must add test for download_ftp_url() returning the $filename.
