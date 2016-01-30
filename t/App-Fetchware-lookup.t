@@ -172,8 +172,7 @@ subtest 'test parse_directory_listing()' => sub {
 # does not actually use them to download anything, so define a variable that
 # will contain a set string when the FETCHWARE_* env vars are undef during user
 # testing.
-my $test_lookup_url = $ENV{FETCHWARE_FTP_LOOKUP_URL}
-    // 'ftp://carroll.cac.psu.edu/pub/apache/httpd';
+my $test_lookup_url = $ENV{FETCHWARE_FTP_LOOKUP_URL};
 
 subtest 'test lookup_determine_downloadpath()' => sub {
     skip_all_unless_release_testing();
@@ -203,16 +202,16 @@ subtest 'test lookup_determine_downloadpath()' => sub {
         [ 'httpd-2.2.21.tar.gz', '999909121702' ],
         [ 'httpd-2.2.21.tar.gz.asc', '999909121702' ],
     ];
-    is(lookup_determine_downloadpath($current_file_list),
-        '/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+    like(lookup_determine_downloadpath($current_file_list),
+        qr!httpd-2\.2\.\d+?\.tar\.bz2!,
         'checked lookup_determine_downloadpath() success.');
 
         my $no_current_file_list;
         @$no_current_file_list =
             grep { $_->[0] !~ /^(:?latest|current)[_-]is(.*)$/i } @$current_file_list;
 
-    is(lookup_determine_downloadpath($no_current_file_list),
-        '/pub/apache/httpd/httpd-2.2.21.tar.bz2',
+    like(lookup_determine_downloadpath($no_current_file_list),
+        qr!httpd-2\.2\.\d+?.tar\.bz2!,
         'checked lookup_determine_downloadpath() success.');
 
     # The weird argument below needs to be a array of arrays.
@@ -349,7 +348,7 @@ subtest 'test determine_download_path()' => sub {
     my $filename_listing = parse_directory_listing($directory_listing);
     
     like(determine_download_path($filename_listing),
-        qr{/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
+        qr{httpd-2.2.\d+?.tar.bz2},
         'checked determine_download_path() success.');
     
     # Clear App::Fetchware's %CONFIG variable so I can test it with custom
@@ -372,7 +371,7 @@ subtest 'test determine_download_path()' => sub {
     $filename_listing = parse_directory_listing($directory_listing);
     
     like(determine_download_path($filename_listing),
-        qr{/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
+        qr{httpd-2.2.\d+?.tar.bz2},
         'checked determine_download_path() success.');
 
 };
@@ -396,7 +395,7 @@ subtest 'test lookup()' => sub {
     verify_failure_ok 'On';
 
     like(lookup(),
-        qr{/pub/apache/httpd/httpd-2.2.\d+?.tar.bz2},
+        qr{httpd-2.2.\d+?.tar.bz2},
         'checked lookup_determine_downloadurl() success.');
 
 };
