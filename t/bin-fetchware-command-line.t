@@ -7,7 +7,7 @@ use 5.010001;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '13'; #Update if this changes.
+use Test::More 0.98 tests => '12'; #Update if this changes.
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
@@ -34,14 +34,14 @@ BEGIN {
 }
 
 
-# Set FETCHWARE_DATABASE_PATH to a tempdir, so that this test uses a different
-# path for your fetchware database than the one fetchware normally uses after it
-# is installed. This is to avoid any conflicts with already installed fetchware
-# packages, because if the actual fetchware database path is used for this test,
-# then this test will actually upgrade any installed fetchware packages. Early
-# in testing I found this acceptable, but now it's a massive bug. I've already
-# implemented the FETCHWARE_DATABASE_PATH evironment variable, so I may as well
-# take advantage of it.
+# Set FETCHWARE_DATABASE_PATH to a tempdir, so that this entire test file uses a
+# different path for your fetchware database than the one fetchware normally
+# uses after it is installed. This is to avoid any conflicts with already
+# installed fetchware packages, because if the actual fetchware database path
+# is used for this test, then this test will actually upgrade any installed
+# fetchware packages. Early in testing I found this acceptable, but now it's a
+# massive bug. I've already implemented the FETCHWARE_DATABASE_PATH evironment
+# variable, so I may as well take advantage of it.
 $ENV{FETCHWARE_DATABASE_PATH} = tempdir("fetchware-test-$$-XXXXXXXXXX",
     CLEANUP => 1, TMPDIR => 1); 
 ok(-e $ENV{FETCHWARE_DATABASE_PATH},
@@ -206,18 +206,6 @@ note("]");
 };
 
 
-# Set FETCHWARE_DATABASE_PATH to a tempdir, so that this test uses a different
-# path for your fetchware database than the one fetchware normally uses after it
-# is installed. This is to avoid any conflicts--especially because this test
-# file upgrades everything in your fetchware database path, so we need to ensure
-# that there are just simple testing packages in ther, and not something more
-# annoying.
-$ENV{FETCHWARE_DATABASE_PATH} = tempdir("fetchware-test-$$-XXXXXXXXXX",
-    CLEANUP => 1, TMPDIR => 1); 
-ok(-e $ENV{FETCHWARE_DATABASE_PATH},
-    'Checked creating upgrade-all test FETCHWARE_DATABASE_PATH success.');
-
-
 subtest 'test command line upgrade-all' => sub {
     # Actually test during user install!!!
 
@@ -305,10 +293,6 @@ EOF
         'checked cmd_ugprade() delete useless test-dist from package database.');
 
 };
-
-
-# Clear FETCHWARE_DATABASE_PATH, because only upgrade-all needs it.
-delete $ENV{FETCHWARE_DATABASE_PATH};
 
 
 subtest 'test command line list' => sub {
