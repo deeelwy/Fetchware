@@ -76,7 +76,7 @@ subtest 'test command line uninstall' => sub {
         ver_num => '1.00');
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
-    # I obviously must install apache before I can test uninstalling it :)
+    # I obviously must install test-dist before I can test uninstalling it :)
     cmd_install($test_dist_path);
     # And then test if the install was successful.
     ok(grep /test-dist-1.00/, glob(catfile(fetchware_database_path(), '*')),
