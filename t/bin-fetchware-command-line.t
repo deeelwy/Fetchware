@@ -341,18 +341,26 @@ subtest 'test command line clean' => sub {
     # $cwd is needed multiple times so just store it in a variable.
     my $cwd = cwd();
 
+    # Create a "testing temporary directory", because when run as root inside a
+    # user directory like I do when testing root support during development,
+    # tempdir() complains, because root does not "own" the directory these
+    # directories are going to be created in. So, to avoid this issue without
+    # comprimising security, just use "another level" of temporary directory.
+    my $fetchware_base_tempdir = tempdir("fetchware-$$-XXXXXXXXX", TMPDIR => 1,
+        CLEANUP => 1);
+
     # Test cmd_clean()'s ability to delete temporary files that start with
     # fetchware-* or Fetchwarefile-*.
-    my $fetchware_tempdir = tempdir("fetchware-$$-XXXXXXXXX", DIR => $cwd,
-        CLEANUP => 1);
+    my $fetchware_tempdir = tempdir("fetchware-$$-XXXXXXXXX", DIR =>
+        $fetchware_base_tempdir, CLEANUP => 1);
     my $fetchwarefile_tempdir = tempdir("Fetchwarefile-$$-XXXXXXXXX",
-        DIR => $cwd, CLEANUP => 1);
+        DIR => $fetchware_base_tempdir, CLEANUP => 1);
 
     ok(-e $fetchware_tempdir, 'checked creating fetchware temporary directory.');
     ok(-e $fetchwarefile_tempdir, 'checked creating Fetchwarefile temporary directory.');
 
     # Delete newly created tempfiles.
-    ok(run_perl('clean', $cwd),
+    ok(run_perl('clean', $fetchware_base_tempdir),
         'checked command line clean success.');
 
     ok(! -e $fetchware_tempdir,
