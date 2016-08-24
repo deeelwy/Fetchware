@@ -1414,7 +1414,7 @@ Creates a fetchware package, ending in .fpkg, using $unarchived_package_path, as
 the directory to archive. Also, adds the C<Fetchwarefile> stored in the
 scalar $fetchwarefile argument to the fethware package that is created.
 
-You can specify an optional $dir_for_new_fpkg, which will be a directory where
+You can specify an optional $path_to_new_fpkg, which will be a directory where
 create_fetchware_package() will write the new fetchware package to.
 
 Returns the full pathname to the fetchware package that was created.

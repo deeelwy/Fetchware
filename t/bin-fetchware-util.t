@@ -137,7 +137,6 @@ subtest 'test create_fetchware_package()' => sub {
     #Also, I must actually add code for this in bin/fetchware.
 
     my $fetchwarefile = '# Fake Fetchwarefile for testing';
-note("CFPsFPPFPPFPPFPP[$fetchwarefile]");
 
     # Create a hopefully successful fetchware package using the current working
     # directory (my Fetchware git checkout) and the fake Fetchwarefile I created
@@ -145,7 +144,7 @@ note("CFPsFPPFPPFPPFPP[$fetchwarefile]");
     my $cwd = dir(cwd());
     my $cwd_parent = $cwd->parent();
     my $cwd_lastdir = $cwd->dir_list(-1, 1);
-    is(create_fetchware_package(\$fetchwarefile, cwd()),
+    is(create_fetchware_package(\$fetchwarefile, cwd(), $cwd_parent),
         catfile($cwd_parent, "$cwd_lastdir.fpkg"),
         'checked create_fetchware_package() success');
 
@@ -286,22 +285,18 @@ subtest 'check extract_fetchwarefile()' => sub {
     skip_all_unless_release_testing();
 
     my $fetchwarefile = '# Fake testing Fetchwarefile.';
-note("CEFsFPPFPPFPPFPPFPP[$fetchwarefile]");
 
-    my $pc = dir(cwd());
-    my $last_dir = $pc->dir_list(-1, 1);
-note("LASTDIR[$last_dir]");
+    my $cwd = dir(cwd());
+    my $last_dir = $cwd->dir_list(-1, 1);
 
-note("CWD[@{[cwd()]}]");
 
 
     # Create a test fetchware package to text extract_fetchwarefile().
     # Use a third arg to have the fpkg created in /tmp instead of cwd().
     my $fetchware_package_path
         =
-        create_fetchware_package(\$fetchwarefile, $last_dir, tmpdir());
+        create_fetchware_package(\$fetchwarefile, $cwd, tmpdir());
 
-note("TFPP[$fetchware_package_path]");
 
     is(${extract_fetchwarefile($fetchware_package_path)},
         $fetchwarefile, 'checked extract_fetchwarefile() success');
