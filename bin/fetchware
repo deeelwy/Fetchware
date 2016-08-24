@@ -1426,24 +1426,18 @@ sub create_fetchware_package {
         $unarchived_package_path,
         $dir_for_new_fpkg) = @_;
 
-    # Only chdir() to parent if fetchware has *not* dropped privs, because the
-    # drop_privs() code forks, and so only the new child process gets chdir() to
-    # the program-1.2 directory, while the parent is still in the
-    # fetchware-kd883ejfe directory; therefore, when fetchware drops privs it
-    # should not also do this chdir.
-    my $previous_cwd;
-    unless (config('stay_root') or (is_os_type('Unix') and ($< == 0 or $> == 0))) {
-        # chdir() to my cwd's parent directory, because my cwd is currently on linux
-        # /tmp/fetchware-kd883ejfe/program-1.2, and I need the program-1.2 part to
-        # be in the archive's @file_list.
-        $previous_cwd = cwd();
-        my $new_dir = dir(cwd())->parent();
-        chdir($new_dir) or die <<EOD;
-fetchware: run-time error. Fetchware failed to change it's working directory to
+    # chdir() to my cwd's parent directory, because my cwd is currently on linux
+    # /tmp/fetchware-kd883ejfe/program-1.2, and I need the program-1.2 part to
+    # be in the archive's @file_list. This needs to happen even when dropping
+    # privs, because drop_privs() chdir()'s before it forks putting both parent
+    # and child in the same directory.
+    my $previous_cwd = cwd();
+    my $new_dir = dir(cwd())->parent();
+    chdir($new_dir) or die <<EOD;
+fetchware: run-time error. Fetchware failed to change it's working
+directory to
 [$new_dir] from [$previous_cwd]. The os error was [$!].
 EOD
-    }
-
 
     # Turn something like /tmp/fetchware-djdjkd8382/package-1.2/Fetchware (with
     # the "Fetchwarefile" filename only sometimes being there) into just
@@ -1508,15 +1502,11 @@ fetchware: Failed to write Archive::Tar's in-memeory tar file to disk.
 Archive::Tar error [@{[Archive::Tar->error()]}].
 EOD
 
-
-    # Only need to chdir() back when we do *not* drop privs.
-    unless (config('stay_root') or (is_os_type('Unix') and ($< == 0 or $> == 0))) {
-        # chdir() back to original directory.
-        chdir($previous_cwd) or die <<EOD;
+    # chdir() back to original directory.
+    chdir($previous_cwd) or die <<EOD;
 fetchware: run-time error. Fetchware failed to change its working directory from
 [@{[cwd()]}] to [$previous_cwd]. The os error was [$!].
 EOD
-    }
 
     # Return a fullpath version of $fetchware_package_name.
     return $fetchware_package_full_path;
