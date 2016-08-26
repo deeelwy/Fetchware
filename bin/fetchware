@@ -967,7 +967,13 @@ EOD
         # download, and unarchive, and then actually "look" at the files,
         # and running end() would delete them.
 
-        $P_look_path =  catfile($temp_dir, $build_path);
+        # Compose the $P_look_path. A simple catfile($temp_dir, $build_path)
+        # should work, but don't forget about drop_privs() extra temporary
+        # directory when run as root! To avoid this problem of the $P_look_path
+        # being wrong when run as root due to the extra temporary directory;
+        # instead, of a simple catfile(...) replace the last file portion of
+        # $package_path, with $build_path.
+        $P_look_path = catfile(dir($package_path)->parent(), $build_path);
         msg <<EOM;
 Your package's contents are at [$P_look_path]. Please run [fetchware clean] to
 delete these files and any other files fetchware may have left behind when you

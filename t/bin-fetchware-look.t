@@ -65,6 +65,7 @@ note("FFP[$fetchwarefile_path]");
 
     my $look_path = cmd_look($fetchwarefile_path);
 note("LP[$look_path]");
+
     # And then test if cmd_look() was successful.
     like($look_path, qr/@{[config('filter')]}/,
         'check cmd_look(Fetchware) success.');
@@ -85,10 +86,6 @@ note("LP[$look_path]");
         "check cmd_look() remove look path success[$parent_look_path]"); 
 };
 
-
-# Chdir to $original_cwd so next tests run correctly.
-chdir $original_cwd 
-    or fail("Failed to chdir! Causing next subtest to fail!");
 
 # And clear CONFIG.
 __clear_CONFIG();
