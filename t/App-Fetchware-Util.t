@@ -84,11 +84,10 @@ subtest 'test ftp_download_dirlist()' => sub {
         'check ftp_download_dirlist() success');
 
     eval_ok(sub {ftp_download_dirlist('ftp://doesntexist.ever')},
-        <<EOS, 'checked determine_download_url() connect failure');
-App-Fetchware: run-time error. fetchware failed to connect to the ftp server at
-domain [doesntexist.ever]. The system error was [Net::FTP: Bad hostname 'doesntexist.ever'].
-See man App::Fetchware.
-EOS
+        qr/App-Fetchware: run-time error\. fetchware failed to connect to the ftp server at
+domain \[doesntexist\.ever\]\. The system error was \[Name or service not known|Net::FTP: Bad hostname 'doesntexist\.ever'\]\.
+See man App::Fetchware\./,
+        'checked determine_download_url() connect failure');
 
 ##HOWTOTEST##    eval_ok(sub #{ftp_download_dirlist('whatftpserverdoesntsupportanonymous&ispublic?');},
 ##HOWTOTEST##        <<EOS, 'checked ftp_download_dirlist() anonymous loginfailure');
@@ -359,11 +358,10 @@ subtest 'test download_ftp_url()' => sub {
 
 
     eval_ok(sub {download_ftp_url('ftp://doesntexist.ever')},
-        <<EOS, 'checked determine_download_url() connect failure');
-App-Fetchware: run-time error. fetchware failed to connect to the ftp server at
-domain [doesntexist.ever]. The system error was [Net::FTP: Bad hostname 'doesntexist.ever'].
-See man App::Fetchware.
-EOS
+        qr/App-Fetchware: run-time error\. fetchware failed to connect to the ftp server at
+domain \[doesntexist\.ever\]\. The system error was \[Name or service not known|Net::FTP: Bad hostname 'doesntexist\.ever'\]\.
+See man App::Fetchware\./,
+        'checked determine_download_url() connect failure');
 
 ##HOWTOTEST## How do I test the switching to binary mode error?  Can it even
 #fail?
