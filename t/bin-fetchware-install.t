@@ -8,11 +8,10 @@ use 5.010001;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '6'; #Update if this changes.
+use Test::More 0.98 tests => '7'; #Update if this changes.
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
-use App::Fetchware::Util 'original_cwd';
 use Cwd 'cwd';
 use File::Copy 'mv';
 use File::Spec::Functions qw(catfile splitpath tmpdir);
@@ -126,7 +125,6 @@ subtest 'test test-dist.fpkg cmd_install' => sub {
         ver_num => '1.00');
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
-verbose_on();
 
     my $install_success = cmd_install($test_dist_path);
     note("IS[$install_success]");
@@ -140,7 +138,16 @@ verbose_on();
 
     ok(unlink($test_dist_path, $test_dist_md5),
         'checked cmd_install() delete temp files.');
+};
 
+
+subtest 'test cmd_install() failure using fail-dist' => sub {
+	# Must skip this test unless release testing, because it leaves an orfaned
+    # fetchware directory sitting in your system temporary directory. I could
+    # have fetchware clean clean this directory up, or try to parse the output
+    # to determine the path this directory is in, but that's brittle and
+    # ridiculous.
+    skip_all_unless_release_testing();
     # Now test cmd_install() failure. Make use of make_test_dist()'s configure
     # option to create a test-dist whoose ./configure will always fail causing
     # build() to fail, which will allow me to test to see if the temp dir stays
@@ -150,20 +157,20 @@ verbose_on();
 # A test ./configure for testing cmd_install() failing
 
 echo "fetchware: ./configure failed!"
-# Return failrue exit status to truly indicate failure.
+# Return failure exit status to truly indicate failure.
 exit 1
 EOF
     my $fail_dist_md5 = md5sum_file($fail_test_dist);
 
-    eval_ok(sub {cmd_install($fail_test_dist)},
-        qr/fetchware: run-time error. Fetchware failed to execute the specified program/,
-        'checked cmd_install() failure.');
+	fork_not_ok(sub {cmd_install($fail_test_dist)},
 
-    is(dir(cwd())->basename(), 'fail-dist-1.00',
-        'checked cmd_install() failure cwd() is fail-dist');
+		'checked cmd_install() failure.');
 
-    ok(chdir(original_cwd()), 'checked cmd_install() failure fix working dir.');
-
+##CANTTEST### Can't test anymore, because fork_ok() forks and the child is the one
+##CANTTEST###that actually chdir()'s, so the parent is obviously still in the starting
+##CANTTEST###cwd().
+##CANTTEST##    is(dir(cwd())->basename(), 'fail-dist-1.00',
+##CANTTEST##        'checked cmd_install() failure cwd() is fail-dist');
 };
 
 

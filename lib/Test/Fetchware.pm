@@ -41,6 +41,7 @@ our %EXPORT_TAGS = (
         eval_ok
         print_ok
         fork_ok
+        fork_not_ok
         skip_all_unless_release_testing
         make_clean
         make_test_dist
@@ -246,7 +247,45 @@ sub fork_ok {
     }
 
     # And test that the child returned successfully.
-    ok($? == 0, $test_name);
+    ok(($? >> 8) == 0, $test_name);
+
+    return $?;
+}
+
+
+=head2 fork_not_ok()
+
+    fork_not_ok(&code_fork_should_do, $test_name);
+
+The exact same thing as fork_ok() except it expects failure and reports true
+when the provided coderef returns failure. If the provided coderef returns true,
+then it reports failure to the test suite.
+
+The same warnings and problems associated with fork_ok() apply to fork_not_ok().
+
+=cut
+
+sub fork_not_ok {
+    my $coderef = shift;
+    my $test_name = shift;
+
+
+    my $kid = fork;
+    die "Couldn't fork: $!\n" if not defined $kid;
+    # ... parent code here ...
+    if ( $kid ) {
+        # Block waiting for the child process ($kid) to exit.
+        waitpid($kid, 0);
+    }
+    # ... child code here ...
+    else {
+        # Run caller's code wihtout any args.
+        # And exit based on the success or failure of $coderef.
+        $coderef->() ? exit 0 : exit 1;
+    }
+
+    # Check that the child failed and returned nonzero.
+    ok(($? >> 8) != 0, $test_name);
 
     return $?;
 }

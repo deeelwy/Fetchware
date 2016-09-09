@@ -7,7 +7,7 @@ use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '10'; #Update if this changes.
+use Test::More 0.98 tests => '11'; #Update if this changes.
 
 use File::Spec::Functions qw(splitpath catfile rel2abs tmpdir catdir);
 use Path::Class;
@@ -51,6 +51,7 @@ subtest 'TESTING export what they should' => sub {
         eval_ok
         print_ok
         fork_ok
+        fork_not_ok
         skip_all_unless_release_testing
         make_clean
         make_test_dist
@@ -247,6 +248,21 @@ subtest 'test fork_ok()' => sub {
 
         fork_ok(sub { return 0 },
             'checked fork_ok() failure.');
+    }
+};
+
+
+subtest 'test fork_not_ok()' => sub {
+    fork_not_ok(sub {ok(0, 'successful fork_not_ok() test.')},
+        'checked fork_not_ok() success.');
+
+    # Abuse a TODO block to test fork_not_ok() failure by turning that failure into
+    # success. When this test fails it succeeds, because it is testing failure.
+    TODO: {
+        todo_skip 'Turn failure into success.', 1;
+
+        fork_not_ok(sub { return 1 },
+            'checked fork_not_ok() failure.');
     }
 };
 
