@@ -75,6 +75,10 @@ lookup_url '$ENV{FETCHWARE_LOCAL_UPGRADE_URL}';
 mirror '$ENV{FETCHWARE_LOCAL_UPGRADE_URL}';
 
 filter 'httpd-2.2';
+
+# user needed when root, because nobody won't haver permissions to access local
+# user's directory where the local files above for loookup_url and mirror are.
+user 'dly';
 EOF
 
 note('FETCHWAREFILE');
@@ -142,7 +146,7 @@ __clear_CONFIG();
 
 subtest 'test cmd_upgrade() test-dist' => sub {
     # Actually test during user install!!!
-    # Delete all existing httpd fetchware packages in fetchware_database_path(),
+    # Delete all existing test-dist fetchware packages in fetchware_database_path(),
     # which will screw up the installation and upgrading of httpd below.
     for my $fetchware_package (glob catfile(fetchware_database_path(), '*')) {
         # Clean up $fetchware_package.
@@ -170,7 +174,8 @@ EOF
 note("UPGRADETD[$upgrade_temp_dir]");
 
     my $old_test_dist_path = make_test_dist(file_name => 'test-dist',
-        ver_num =>'1.00', destination_directory => $upgrade_temp_dir);
+        ver_num =>'1.00', destination_directory => $upgrade_temp_dir,
+		append_option => qq{user => 'ENV{FETCHWARE_NONROOT_USER}';});
     
     my $old_test_dist_path_md5 = md5sum_file($old_test_dist_path);
 
@@ -208,7 +213,8 @@ note("INSTALLPATH[$old_test_dist_path]");
 
 
     my $new_test_dist_path = make_test_dist(file_name => 'test-dist',
-        ver_num => '1.01', destination_directory => $upgrade_temp_dir);
+        ver_num => '1.01', destination_directory => $upgrade_temp_dir,
+		append_option => qq{user => 'ENV{FETCHWARE_NONROOT_USER}';});
 
     my $new_test_dist_path_md5 = md5sum_file($new_test_dist_path);
 
