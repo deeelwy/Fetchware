@@ -1638,7 +1638,6 @@ EOD
 
                 # Just block waiting for the child to finish.
                 waitpid($kidpid, 0);
-
                 # If the child failed ($? >> 8 != 0), then the parent should
                 # fail as well, because the child only exists to drop privs with
                 # the ability to still at a later time execute something as root
@@ -1650,13 +1649,21 @@ EOD
                     # because if its printed always, it could confuse users.
                     # Because priv_drop()ing is the default, this error would be
                     # seen all the time making getting confused by it likely.
-                    vmsg <<EOD;
+                    vmsg <<EOM;
 App-Fetchware-Util: An error occured forcing fetchware to exit while fetchware
 has forked to drop its root priviledges to avoid downloading files and building
 programs as root. Root priviledges are only maintained to install the software
-in a system directory requiring root access. This error should have been
-previously printed out by fetchware's lower priviledged child process above.
-EOD
+in a system directory requiring root access. The error that caused the child to
+fail will have already been printed above by the child.
+EOM
+                    msg <<EOM;
+For help troublehsooting fetchware failed inside directory:
+@{[cwd()]}
+EOM
+                    # Keep all of fetchware's temporary files and directories
+                    # around so the user has access to them, so they can be
+                    # troubleshooted to see what caused the failure. 
+                    $File::Temp::KEEP_ALL = 1;
                     # Exit non-zero indicating failure, because whatever the
                     # child did failed, and the child's main eval {} in
                     # bin/fetchware caught that failure, printed it to the
