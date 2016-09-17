@@ -59,6 +59,10 @@ lookup_url '$ENV{FETCHWARE_LOCAL_UPGRADE_URL}';
 mirror '$ENV{FETCHWARE_LOCAL_UPGRADE_URL}';
 
 filter 'httpd-2.2';
+
+# user needed when root, because nobody won't haver permissions to access local
+# user's directory where the local files above for loookup_url and mirror are.
+user 'dly';
 EOF
 
 
@@ -75,6 +79,10 @@ filter 'ctags';
 
 # Disable verification, because ctags provides none.
 verify_failure_ok 'On';
+
+# user needed when root, because nobody won't haver permissions to access local
+# user's directory where the local files above for loookup_url and mirror are.
+user 'dly';
 EOF
 
     my @fetchware_packages;
@@ -184,9 +192,11 @@ Failed to chmod(0755, [$upgrade_temp_dir])! This is probably a bug or something?
 EOF
 
     my $old_test_dist_path = make_test_dist(file_name => 'test-dist',
-        ver_num => '1.00', destination_directory => $upgrade_temp_dir);
+        ver_num => '1.00', destination_directory => $upgrade_temp_dir,
+        append_option => qq{user '$ENV{FETCHWARE_NONROOT_USER}';});
     my $old_another_dist_path = make_test_dist(file_name => 'another-dist',
-        ver_num => '1.00', destination_directory => $upgrade_temp_dir);
+        ver_num => '1.00', destination_directory => $upgrade_temp_dir,
+        append_option => qq{user 'ENV{FETCHWARE_NONROOT_USER}';});
 
     my $old_test_dist_path_md5 = md5sum_file($old_test_dist_path);
     my $old_another_dist_path_md5 = md5sum_file($old_another_dist_path);
@@ -215,9 +225,11 @@ EOF
 
     # Create new test fpkgs and md5s in same dir for cmd_upgrade_all() to work.
     my $new_test_dist_path = make_test_dist(file_name => 'test-dist',
-        ver_num => '1.01', destination_directory => $upgrade_temp_dir);
+        ver_num => '1.01', destination_directory => $upgrade_temp_dir,
+        append_option => qq{user 'ENV{FETCHWARE_NONROOT_USER}';});
     my $new_another_dist_path = make_test_dist(file_name => 'another-dist',
-        ver_num => '1.01', destination_directory => $upgrade_temp_dir);
+        ver_num => '1.01', destination_directory => $upgrade_temp_dir,
+        append_option => qq{user 'ENV{FETCHWARE_NONROOT_USER}';});
 
     my $new_test_dist_path_md5 = md5sum_file($new_test_dist_path);
     my $new_another_dist_path_md5 = md5sum_file($new_another_dist_path);
