@@ -7609,6 +7609,22 @@ Or once just for this invocation of fetchware:
 See your OS's shell for more details regarding using and exporting environment
 variables.
 
+=head2 How do I get Fetchware to I<not> delete its temporary directory, so I can troubleshoot a fetchware failure.  
+
+Use fetchware's C<-v> (verbose) and C<--keep-temp> command-line options. C<-v>
+will turn on extra verbose messages that fetchware prints out detailing what its
+doing and why. These messages will also list where fetchware's temporary
+directory is. C<--keep-temp> tell fetchware to keep its temporary files and
+directories and I<not> delete them. This way you can examine them to help
+troubleshoot the problem, and see what's going on.
+
+C<--keep-temp> should not be needed when the installation or upgrade of a
+fetchware package or Fetchwarefile fails, because the temp file deletion code
+will not run after an error occurs before fetchware exits failure.
+
+Use C<fetchware clean> to delete this and any other left over fetchware
+temporary directories or files.
+
 =cut
 
 

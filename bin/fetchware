@@ -129,6 +129,9 @@ EOM
         'help|h|?' => \&cmd_help,
         'verbose|v' => \$verbose,
         'quiet|q' => \$quiet,
+        # Expose File::Temp's KEEP_ALL flag, and an easy feature to implement
+        # that lets users easily ensure the tempdir stays around when needed.
+        'keep-temp|K' => \$File::Temp::KEEP_ALL,
         ###BUGALERT### dry-run functionality is *not* implemented!!!
         #'dry-run|d' => \$dry_run,
     );
@@ -151,7 +154,7 @@ EOM
         # Also, add cmdline options to control what to do when this happens???
         vmsg 'Determining which command to run based on command line options.';
         my $command;
-        @ARGV ? ($command = shift @ARGV) : ($command = 0);
+        @ARGV ? ($command = shift @ARGV) : ($command = '');
         if ($command eq 'install') {
             cmd_install(@ARGV);
         } elsif ($command eq 'uninstall') {
@@ -181,8 +184,12 @@ EOM
     };
     # If a fatal error was thrown print it to STDERR and exit indicating failure.
     if ($@) {
+        # Set File::Temp's $KEEP_ALL so user can troubleshoot what happend
+        # without having to bother to use --keep-all.
+        $File::Temp::KEEP_ALL = 1;
         msg <<EOM;
 Fetchware threw an exception! Exiting with an exit status of 1 for failure.
+Fetchware failed inside directory [@{[cwd()]}].
 EOM
         warn $@;
         exit 1;

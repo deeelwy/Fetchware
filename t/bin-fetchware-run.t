@@ -9,7 +9,7 @@ use 5.010001;
 
 
 # Test::More version 0.98 is needed for proper subtest support.
-use Test::More 0.98 tests => '12'; #Update if this changes.
+use Test::More 0.98 tests => '13'; #Update if this changes.
 
 use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
@@ -68,6 +68,59 @@ subtest 'test run() install' => sub {
 
     ok(-e catfile(fetchware_database_path(), 'test-dist-1.00.fpkg'),
         'checked test-dist install copied to fetchware db.');
+
+    # Now uninstall the useless test dist.
+    ok(cmd_uninstall('test-dist-1.00'),
+        'checked cmd_install() clean up installed test-dist.');
+
+    ok(unlink($test_dist_path, $test_dist_md5),
+        'checked cmd_install() delete temp files.');
+};
+
+
+subtest 'test run() install with --keep-temp command line option.' => sub {
+    # Clear App::Fetchware's internal configuration information, which I must do
+    # if I parse more than one Fetchwarefile in a running of fetchware.
+    __clear_CONFIG();
+
+    # Since there is no way of knowing what path this specific tempdir is at, so
+    # instead of trying to parse it out the output, I just specify a local
+    # TMPDIR, and then the tempdir should be inside this path that I setup.
+    local $ENV{TMPDIR} = tempdir("fetchware-test-$$-XXXXXXXXXX",
+        CLEANUP => 1, TMPDIR => 1); 
+    ok(-e $ENV{TMPDIR},
+        'checked run() TMPDIR setup.');
+    # For some reason tempdir() ignores your umask, and just creates its
+    # tempfiles and tempdirs with 0700 perms, which in the case of drop_privs()
+    # when root blows up, because the regular user that fetchware drop privs too
+    # can't access a 0700 root only tempdir. So I must change the perms to 0755
+    # to let the regular user have access.
+    ok(chmod(0755, $ENV{TMPDIR}),
+        'checked run() TMPDIR chmod(755).');
+
+    my $test_dist_path = make_test_dist(file_name => 'test-dist',
+        ver_num => '1.00', append_option => q{stay_root 'On'});
+    ok(-e $test_dist_path, 'checked run() test-dist created.');
+    my $test_dist_md5 = md5sum_file($test_dist_path);
+    ok(-e $test_dist_md5, 'checked run() test-dist md5 created.');
+
+    verbose_on();
+
+    {
+        # Run with --keep-temp option.
+        local @ARGV = ('--keep-temp', 'install', $test_dist_path);
+        fork_ok(sub { print "TMP[$ENV{TMPDIR}]"; run() },
+        'Checked run() test-dist install success');
+    }
+
+    ok(-e catfile(fetchware_database_path(), 'test-dist-1.00.fpkg'),
+        'checked test-dist install copied to fetchware db.');
+
+    # Check that there's fetchware-test-$$ directory in TMPDIR.
+    ok(chdir("$ENV{TMPDIR}"),
+        'checked run() chdir()d to TMPDIR.');
+    ok(-e glob("fetchware-*"),
+        'checked run() glob()ed tempdir success.');
 
     # Now uninstall the useless test dist.
     ok(cmd_uninstall('test-dist-1.00'),
