@@ -163,14 +163,7 @@ EOF
     my $fail_dist_md5 = md5sum_file($fail_test_dist);
 
 	fork_not_ok(sub {cmd_install($fail_test_dist)},
-
 		'checked cmd_install() failure.');
-
-##CANTTEST### Can't test anymore, because fork_ok() forks and the child is the one
-##CANTTEST###that actually chdir()'s, so the parent is obviously still in the starting
-##CANTTEST###cwd().
-##CANTTEST##    is(dir(cwd())->basename(), 'fail-dist-1.00',
-##CANTTEST##        'checked cmd_install() failure cwd() is fail-dist');
 };
 
 
