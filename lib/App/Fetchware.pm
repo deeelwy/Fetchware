@@ -7383,6 +7383,7 @@ actually exist on your computer.
             export FETCHWARE_LOCAL_ZIP_URL='file:///home/dly/software/ctags-zip/ctags58.zip'
             export FETCHWARE_LOCAL_BUILD_URL='/home/dly/software/ctags-5.8.tar.gz'
             export FETCHWARE_LOCAL_UPGRADE_URL='file:///home/dly/software/fetchware-upgrade'
+            export FETCHWARE_NONROOT_USER='YOURUSERNAME'
             echo 'done.'
         else
             echo -n 'Deleting fetchware_release_testing environment variables...';
@@ -7397,6 +7398,7 @@ actually exist on your computer.
             unset FETCHWARE_LOCAL_ZIP_URL
             unset FETCHWARE_LOCAL_BUILD_URL
             unset FETCHWARE_LOCAL_UPGRADE_URL
+            unset FETCHWARE_NONROOT_USER
             echo 'done.'
         fi
     }

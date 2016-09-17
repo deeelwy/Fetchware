@@ -73,6 +73,10 @@ mirror '$lookup_url';
 filter 'ctags';
 ###BUGALERT### Add local verification for this.
 verify_failure_ok 'On';
+
+# FETCHWARE_LOCAL_URL is in a user's home directory, so drop_privs() default of
+# nobody has no access to this directory hence need for user config option.
+user '$ENV{FETCHWARE_NONROOT_USER}';
 EOF
 
 note('FETCHWAREFILE');
@@ -200,7 +204,8 @@ __clear_CONFIG();
 
 subtest 'test cmd_uninstall() with test-dist.fpkg' => sub {
     my $test_dist_path = make_test_dist(file_name => 'test-dist',
-        ver_num => '1.00');
+        ver_num => '1.00',
+        append_option => qq{user '$ENV{FETCHWARE_NONROOT_USER}';});
     my $test_dist_md5 = md5sum_file($test_dist_path);
 
     # I obviously must install apache before I can test uninstalling it :)
