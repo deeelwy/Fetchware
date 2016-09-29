@@ -4,7 +4,6 @@
 # fetchware package or Fetchwarefile.
 use strict;
 use warnings;
-use diagnostics;
 use 5.010001;
 
 
@@ -217,10 +216,6 @@ note("INSTALLPATH[$old_test_dist_path]");
 		append_option => qq{user => 'ENV{FETCHWARE_NONROOT_USER}';});
 
     my $new_test_dist_path_md5 = md5sum_file($new_test_dist_path);
-
-note("upgradepath[");
-system('ls', '-lh', $upgrade_temp_dir);
-note("]");
 
     # cmd_uninstall accepts a string that needs to be found in the fetchware
     # database. It does *not* take Fetchwarefiles or fetchware packages as

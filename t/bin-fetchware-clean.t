@@ -4,7 +4,6 @@
 # deletes left over unused fetchware temporary directories.
 use strict;
 use warnings;
-use diagnostics;
 use 5.010001;
 
 

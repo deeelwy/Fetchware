@@ -392,20 +392,7 @@ EOD
 
     # Set up our list of urls that we'll try to download the specified PATH or
     # URL from.
-    my @urls = config('mirror');
-    # Add lookup_url's hostname to @urls as a last resort for ftp:// and
-    # http:// URLs, and to allow file:// URLs to work, because oftentimes
-    # specifying a mirror when using a local file:// URL makes no sense, and
-    # requiring users to copy and paste the hostname of their lookup_url into a
-    # mirror option is silly.
-use Test::More;
-    my ($scheme, $auth, undef, undef, undef) =
-        uri_split(config('lookup_url'));
-    # Skip adding the "hostname" for local (file://) url's, because they don't
-    # have a hostname.
-    if ($scheme ne 'file') {
-        push @urls, uri_join($scheme, $auth, undef, undef, undef);
-    }
+    my @urls = config('mirror') if defined config('mirror');
     if (exists $opts{PATH}
         and defined $opts{PATH}
         and $opts{PATH}) {
@@ -433,6 +420,8 @@ use Test::More;
             # If the $mirror_url has no path...
                 my ($scheme, $auth, $path, $query, $frag) =
                     uri_split($mirror_url);
+            ###BUGALERT### Should check below also check for $query and $frag,
+            #and if the mirror has specified those to include those too???
             if ($path eq '') {
                 #...then append $url's path.
                 ###BUGALERT## As shown before I was using URI's much nicer
@@ -738,11 +727,15 @@ App-Fetchware-Util: You can only specify either PATH or URL never both. Only
 specify one or the other when you call download_file().
 EOD
     }
-
     # Ensure the user has specified a mirror, because otherwise download_file()
     # will try to just download a path, and that's not going to work.
     if (not config('mirror') and exists $opts{PATH}
-        and (config('lookup_url') !~ m!^file://!)) {
+        and
+    # Is lookup_url not a file://, true for undef and any other scheme.
+    defined config('lookup_url') ?
+    config('lookup_url') =~ m!^file://! ? 0 : 1
+    : 1
+    ) {
         die <<EOD ;
 App-Fetchware-Util: You only called download_file() with just a PATH parameter,
 but also failed to specify any mirrors in your configuration. Without any
@@ -753,10 +746,16 @@ EOD
 
     # Set up our list of urls that we'll try to download the specified PATH or
     # URL from.
-    my @urls = config('mirror');
+    my @urls = config('mirror') if defined config('mirror');
     # If we're called with a PATH option and the lookup_url is for a local file,
     # then we should just convert from a PATH into a $url.
-    if (exists $opts{PATH} and config('lookup_url') =~ m!^file://!) {
+    if (exists $opts{PATH}
+        and
+    # Is lookup_url not a file://, true for undef and any other scheme.
+    defined config('lookup_url') ?
+    config('lookup_url') =~ m!^file://! ? 0 : 1
+    : 1
+    ) {
         $url = "file://$opts{PATH}";
         delete $opts{PATH};
     # Otherwise, we should add lookup_url's hostname to the list of mirrors, but
@@ -1741,6 +1740,19 @@ that write_dropprivs_pipe() writes. This way you can include newline, and in
 fact anything that does not contain the magic number, which is obviously
 suitably unlikely.
 
+=over
+
+=item UNDEF AND EMPTY STRING WARNING 
+
+write_dropprivs_pipe() and read_dropprivs_pipe() both bizarely, accidentily
+I<preserve> undef. It's really a function of Perl's C<split> operators
+side-effect of returning undef when there is no data to actually return, but the
+seperator actually does exist. However, do B<not> depend on this so called
+"preservation", because C<''>, empty string, is converted into undef by
+read_dropprivs_pipe() preventing you from distinguishing between the two values.
+
+=back
+
 =cut
 
 { # Bareblock just for the $MAGIC_NUMBER.
@@ -1787,6 +1799,19 @@ EOD
 read_dropprivs_pipe() opens the scalar $output, and returns a list of $outputs
 parsed out variables split on the $MAGIC_NUMBER, which is randomly generated
 during each time you run Fetchware to avoid you every actually using it.
+
+=over
+
+=item UNDEF AND EMPTY STRING WARNING 
+
+write_dropprivs_pipe() and read_dropprivs_pipe() both bizarely, accidentily
+I<preserve> undef. It's really a function of Perl's C<split> operators
+side-effect of returning undef when there is no data to actually return, but the
+seperator actually does exist. However, do B<not> depend on this so called
+"preservation", because C<''>, empty string, is converted into undef by
+read_dropprivs_pipe() preventing you from distinguishing between the two values.
+
+=back
 
 =cut
 
@@ -1948,7 +1973,7 @@ sub create_tempdir {
     # Create the temp dir in the portable locations as returned by
     # File::Spec->tempdir() using the specified template (the weird $$ is this
     # processes process id), and cleaning up at program exit.
-    my $exception;
+    my $exception = '';
     my $temp_dir;
     eval {
         local $@;

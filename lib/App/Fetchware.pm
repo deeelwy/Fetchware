@@ -4380,6 +4380,19 @@ Returns false if $download_path is not newer than $fetchware_package_path.
 
 =over
 
+=item FETCHWARE EXTENSION WARNING 
+
+upgrade() B<must> return C<0> or C<''> B<not> C<undef>, because fetchware forks
+and drop priveleges, and the simple communication scheme between child and
+parent does B<not> support the Perl concept of undef as undef is special
+"perlness", and can't just be stored in a string as "undef", and then read back
+in and magically become a variable that define() says is undef. The string
+C<"undef"> is B<not> C<undef>.
+
+=back
+
+=over
+
 =item drop_privs() NOTES
 
 This section notes whatever problems you might come accross implementing and
@@ -4429,7 +4442,7 @@ EOM
     # they are return false indicating that this program should not be upgraded,
     # because the version available for upgrading is the same as the currently
     # installed version.
-    return if $upgrade_name_basename eq $download_path_basename;
+    return 0 if $upgrade_name_basename eq $download_path_basename;
 
         # Transform both competing filenames into a string of version numbers.
 
@@ -4454,7 +4467,7 @@ EOM
         # Currenlty installed version ($upgrade_name_basename) is equal to the
         # latest version available for download ($download_path_basename), so
         # return false indicating that we sould not upgrade.
-        return;
+        return 0;
     }
 }
 

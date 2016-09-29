@@ -6,7 +6,6 @@
 package fetchware;
 use strict;
 use warnings;
-use diagnostics;
 use 5.010001;
 
 use Fcntl ':mode';
@@ -64,7 +63,7 @@ subtest 'Do verify() prereqs.' => sub {
     # of apache instead of updating this manually.
     program 'httpd-2.2';
     lookup_url 'http://www.apache.org/dist/httpd';
-    mirror 'http://apache.mirrors.pair.com/';
+    mirror 'http://apache.mirrors.pair.com/httpd';
     filter 'httpd-2.2';
     $download_path = lookup();
     $package_path = download($temp_dir, $download_path);

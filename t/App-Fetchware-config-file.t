@@ -4,7 +4,6 @@
 
 use strict;
 use warnings;
-use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.

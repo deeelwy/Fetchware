@@ -3,7 +3,6 @@
 # lists your installed packages based on fetchware_database_path();
 use strict;
 use warnings;
-use diagnostics;
 use 5.010001;
 
 

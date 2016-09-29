@@ -4,7 +4,6 @@
 # is needed.
 use strict;
 use warnings;
-use diagnostics;
 use 5.010001;
 
 
@@ -236,10 +235,6 @@ note("INSTALLPATH[$old_test_dist_path]");
         ver_num => '1.01', destination_directory => $upgrade_temp_dir);
 
     my $new_test_dist_path_md5 = md5sum_file($new_test_dist_path);
-
-note("upgradepath[");
-system('ls', '-lh', $upgrade_temp_dir);
-note("]");
 
     {
         local @ARGV = ('upgrade', 'test-dist');

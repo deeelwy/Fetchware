@@ -233,11 +233,11 @@ sub cmd_install {
     #GetOpt::Long.
     ### Add this loop in run(), so there is just one loop to test.
     my $filename = shift;
-
-    msg "Starting fetchware install to install [$filename]";
     
     my $output;
     if (defined($filename) and -e $filename) {
+
+    msg "Starting fetchware install to install [$filename]";
 
     # If a fpkg extract out the Fetchwarefile into a scalar, and if not a
     # fetchware package to go ahead and open for reading only the Fetchware
@@ -653,27 +653,27 @@ well.
 sub cmd_upgrade {
     my $upgrade_name = shift;
 
-    my ($P_download_path,
-        $P_fetchware_package_path,
-        $P_upgrade,
-        $P_build_path);
+    my ($P_upgrade,
+        $P_build_path,
+        $P_download_path,
+        $P_fetchware_package_path);
 
     ###BUGALERT### the or --force cmdline option will skip the checking of
     #version numbers, and the one lookup() says to download will be installed
     #regardless.
     msg "Upgrading installed fetchware package [$upgrade_name].";
 
-    my $fetchware_package_path = determine_fetchware_package_path($upgrade_name);
+    $P_fetchware_package_path = determine_fetchware_package_path($upgrade_name);
     vmsg <<EOM;
-Determined already installed fetchware package's path to be [$fetchware_package_path].
+Determined already installed fetchware package's path to be [$P_fetchware_package_path].
 EOM
 
     # Parse out the Fetchwarefile from the fetchware package stored in the
     # fetchware database directory.
     my $fetchwarefile;
-    if ($fetchware_package_path =~ /\.fpkg$/) {
+    if ($P_fetchware_package_path =~ /\.fpkg$/) {
         $fetchwarefile
-            = extract_fetchwarefile($fetchware_package_path);            
+            = extract_fetchwarefile($P_fetchware_package_path);            
         vmsg "Extracted Fetchwarefile temporarily into [$fetchwarefile]";
     } else {
         die <<EOD;
@@ -707,52 +707,53 @@ EOD
         ###BUGALERT### Have lookup() replace the timestamp of what we should
         #download too to make upgrade() be able to use the lookup_by_timestamp
         #algorithm too, which is a better default anyway.
-        my $download_path = lookup();
+        $P_download_path = lookup();
 
         # Call upgrade() to determine if the currently available version
-        # ($download_path) is newer than the currenlty installed version
-        # ($fetchware_package_path).
-        $P_upgrade = upgrade($download_path, $fetchware_package_path);
+        # ($P_download_path) is newer than the currenlty installed version
+        # ($P_fetchware_package_path).
+        my $P_upgrade = upgrade($P_download_path, $P_fetchware_package_path);
 
         if ($P_upgrade) {
             msg 'New version available upgrading now.';
 
-            my $package_path = download($temp_dir, $download_path);
+            my $package_path = download($temp_dir, $P_download_path);
 
             ###BUGALERT### Add support for caching the key files gpg creates to the
             #fetchwarefile, and for actually using them later on inside the fpkg.
-            verify($download_path, $package_path);
+            verify($P_download_path, $package_path);
 
             $P_build_path = unarchive($package_path);
             build($P_build_path);
         } else {
             # If a new version is not available, then the child should do
             # nothing, and let the parent call end() to clean up below.
+
+            # Set $P_build_path to something that will fail, and give a decent
+            # error message just in case.
+            $P_build_path = 'Build Path not set because upgrade not needed.';
         }
 
         # Tell the parent, root, process the values of the variables the
         # child calculated in this coderef, and write them across this pipe
         # back to the parent
         write_dropprivs_pipe($write_pipe,
-            $P_download_path,
-            $P_fetchware_package_path,
             $P_upgrade,
-            $P_build_path);
+            $P_build_path,
+            $P_download_path,
+            $P_fetchware_package_path
+        );
     }, config('user')
     ); # End drop_privs()
-
 
     # Read from the pipe the child, the drop_privs()ed process, writes to to
     # read the necessary values that correspond to the variables that the
     # child must communicate back to the parent, so the parent can continue
     # processing as though no fork()ing or priv dropping took place.
-    #
-    # Uses and abuses Perl's list calling and and returning semantics to
-    # fakes support for writting an array (@file_listing)
-    ($P_download_path,
-    $P_fetchware_package_path,
-    $P_upgrade,
-    $P_build_path) = read_dropprivs_pipe($output);
+    ($P_upgrade,
+    $P_build_path,
+    $P_download_path,
+    $P_fetchware_package_path) = read_dropprivs_pipe($output);
 
     # Test if a new version is available again due to drop_priv() ending
     # half way through this if statement.
@@ -767,7 +768,7 @@ Created a new fetchware package for the newly installed upgraded fetchware
 package [$updated_fetchware_package_path].
 EOM
 
-        uninstall_fetchware_package_from_database($fetchware_package_path);
+        uninstall_fetchware_package_from_database($P_fetchware_package_path);
         vmsg 'Uninstalled the old fetchware package from the fetchware database.';
 
         my $installed_fetchware_package_path

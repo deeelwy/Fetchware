@@ -4,7 +4,6 @@
 # them as fetchware packages.
 use strict;
 use warnings;
-use diagnostics;
 use 5.010001;
 
 

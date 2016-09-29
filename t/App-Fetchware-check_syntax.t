@@ -3,7 +3,6 @@
 # tests if Fetchwarefiles have all of the mandatory configuration options specified.
 use strict;
 use warnings;
-use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.

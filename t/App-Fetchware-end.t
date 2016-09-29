@@ -3,7 +3,6 @@
 # determines if a new version of your program is available.
 use strict;
 use warnings;
-use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.

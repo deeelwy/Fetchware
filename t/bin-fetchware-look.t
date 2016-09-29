@@ -3,7 +3,6 @@
 # is fetchware's version of cpan's look command.
 use strict;
 use warnings;
-use diagnostics;
 use 5.010001;
 
 

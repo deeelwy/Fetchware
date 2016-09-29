@@ -3,7 +3,6 @@
 # provied helper functions such as logging and file & dirlist downloading.
 use strict;
 use warnings;
-use diagnostics;
 use 5.010001;
 
 # Test::More version 0.98 is needed for proper subtest support.
@@ -216,7 +215,7 @@ EOE
 App-Fetchware-Util: Failed to download the specifed URL [invalidscheme://fake.url] or path
 [] using the included hostname in the url you specifed or any
 mirrors. The mirrors are [invalidscheme://fake.url]. And the urls
-that fetchware tried to download were [invalidscheme://fake.url invalidscheme://fake.url ].
+that fetchware tried to download were [invalidscheme://fake.url invalidscheme://fake.url].
 EOS
     # Clear previous mirror.
     config_delete('mirror');

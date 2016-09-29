@@ -3,7 +3,6 @@
 # uninstalls fetchware packages and from a Fetchwarefile.
 use strict;
 use warnings;
-use diagnostics;
 use 5.010001;
 
 
@@ -49,8 +48,34 @@ $ENV{FETCHWARE_DATABASE_PATH} = tempdir("fetchware-test-$$-XXXXXXXXXX",
 ok(-e $ENV{FETCHWARE_DATABASE_PATH},
     'Checked creating upgrade test FETCHWARE_DATABASE_PATH success.');
 
+# Only those who run fetchware's own author tests will have
+# FETCHWARE_NONROOT_USER set when the test suite runs. So most users will get an
+# annoying uninitialized warning from this. Also, this will set the user config
+# file option to the empty string, which fetchware most likely considers similar
+# to undef so that probably doesn't cause any weird bugs. To deal with this
+# situation, I'll just set it here to nobody, which is otherwise the default
+# anyway.
+#
+# Other options are to have if statements everywhere FETCHWARE_NONROOT_USER is
+# used. Something like.
+#
+#    if (defined $ENV{FETCHWARE_NONROOT_USER}) {
+#    my $test_dist_path = make_test_dist(file_name => 'test-dist',
+#        ver_num => '1.00',
+#        append_option => qq{user '$ENV{FETCHWARE_NONROOT_USER}';});
+#    } else {
+#        my $test_dist_path = make_test_dist(file_name => 'test-dist',
+#            ver_num => '1.00');
+#    }
+# But that's fugly, and adds annoying code duplication. I know my test suite was
+# created with loads of copy and paste, but that doesn't mean this kind of
+# garbage code is okay. I'd kill for like a line oriented, smart (meaning fixes
+# obvious syntax errors for you) ifdef system where I could just if def this
+# argument, where only if FETCHWARE_NONROOT_USER was defined this stupid
+# argument would be added. Do Perl 6 macros do this???
+$ENV{FETCHWARE_NONROOT_USER} = 'nobody' if not defined $ENV{FETCHWARE_NONROOT_USER};
 
-#my $fetchware_package_path = '/var/log/fetchware/httpd-2.2.22.fpkg';
+
 my $fetchware_package_path;
 subtest 'test cmd_uninstall() success' => sub {
     skip_all_unless_release_testing();

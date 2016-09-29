@@ -3,7 +3,6 @@
 # number of real world example Fetchwarefiles.
 use strict;
 use warnings;
-use diagnostics;
 use 5.010001;
 
 use App::Fetchware::Util 'run_prog';
