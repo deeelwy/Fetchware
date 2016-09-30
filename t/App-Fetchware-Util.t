@@ -575,6 +575,7 @@ subtest 'test download_file(file://)' => sub {
     # Must specify a lookup_url(), so download_file() can detect that my
     # lookup_url is a local file:// one.
     config(lookup_url => "file://$test_dist_path");
+    config(mirror => "file://$test_dist_path");
     ok($got_filename = download_file(PATH => $test_dist_path),
         'checked download_file(file://) PATH success.');
     # Also delete the $got_filename, because download_file() will "download"

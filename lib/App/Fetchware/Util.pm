@@ -731,9 +731,9 @@ EOD
     # will try to just download a path, and that's not going to work.
     if (not config('mirror') and exists $opts{PATH}
         and
-    # Is lookup_url not a file://, true for undef and any other scheme.
+    # True if lookup_url is a file and if lookup_url is undef.
     defined config('lookup_url') ?
-    config('lookup_url') =~ m!^file://! ? 0 : 1
+    config('lookup_url') =~ m!^file://! ? 1 : 0
     : 1
     ) {
         die <<EOD ;
@@ -751,10 +751,10 @@ EOD
     # then we should just convert from a PATH into a $url.
     if (exists $opts{PATH}
         and
-    # Is lookup_url not a file://, true for undef and any other scheme.
-    defined config('lookup_url') ?
-    config('lookup_url') =~ m!^file://! ? 0 : 1
-    : 1
+        # Is lookup_url not a file://, true for undef and any other scheme.
+        defined config('lookup_url') ?
+        config('lookup_url') =~ m!^file://! ? 1 : 0
+        : 0
     ) {
         $url = "file://$opts{PATH}";
         delete $opts{PATH};

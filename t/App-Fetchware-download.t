@@ -112,7 +112,8 @@ subtest 'test download() local file success' => sub {
     #in parallel to speed up development.
     # I must create a lookup_url to tell download_file() that it's downloading a
     # local file.
-    config(lookup_url => "file://$test_dist_path");
+    config(lookup_url => $url);
+    config(mirror => uri_join($scheme, $auth, undef, undef, undef));
     is(download($cwd, $path), catfile($cwd, $filename),
         'checked download() local file success.');
 
