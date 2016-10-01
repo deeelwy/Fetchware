@@ -2,6 +2,43 @@ Revison History for App::Fetchware
 
 {{$NEXT}}
 
+1.015     2016-09-30 19:45:58-04:00 America/New_York
+    - Fixed many of fetchware author tests that were holding up development.
+        - Including many fixes for fetchware when fetchware is run as root.
+    * Behavior change! Now when fetchware fails due to error and returns nonzero
+      it will not clean up its tempdir so that you can more easily troubleshoot
+      a failed run of fetchware by examining its tempdir.
+        * Previously, when fetchware failed it deleted everything out from under
+          you with no way to keep it. This may cause some build up of annoying
+          fetchware directories in your temp dir (just fetchware clean them),
+          but thats better then not being able to troubleshoot failures when
+          they do happen, and you care about them.
+        * A --keep-temp command line option was added that uses File::Temp's
+          global, $File::Temp::KEEP_ALL, to turn off deleting any temporary
+          files and directores that had CLEANUP or UNLINK turned on.
+        * Fetchware's CTRL-C signal handler still cleans up after fetchware,
+          because when you type CTRL-C you typically just want the program dead
+          and gone without a directory you still have to cleanup. 
+    - Fixed github#5 in commit a3abee63 by making the regex more generic, but
+      still good enough to test what it needs to test.
+    - During testing all tests that add packages to your fetchware database
+      instead add them to a temporary database that is deleted during testing.
+      This avoids any problems of weird "testing" packages remaining in your
+      fetchware database due to a botched test or two.
+    - Fixed a bug that caused Fetchwarefiles with no_install turned on to avoid
+      installing your program, but they would still eroneously create and add a
+      fetchware package to your fetchware database, which cause any upgrade-all
+      runs to actually install this fetchware package. Now, no_install means no
+      install.
+    - Fixed all annoying "Use of uninitialized value" warnings in test suite,
+      and am commited to not let any more back in. I love taking advantage of
+      undef, but these warnings stink. Don't get too excited as some warnings
+      were left, because they happen mostly when exceptions get thrown or
+      directly because of how things are tested in the test suite. Furthermore, 
+      I took my training wheels off, and finally ditched use diagnostics in each
+      test file. I don't need it anymore, and it makes CPAN Tester reports extra
+      annoying.
+
 1.014     2014-09-12 20:55:16-04:00 America/New_York
     - Fixed more CPAN Tester FAIL reports.
         - Added File::HomeDir version 0.93+ as a dependency, because that's the
