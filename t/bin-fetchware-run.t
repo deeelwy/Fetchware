@@ -14,7 +14,6 @@ use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
 use File::Spec::Functions 'catfile';
 use File::Temp 'tempdir';
-use Cwd 'cwd';
 
 
 # Set PATH to a known good value.
@@ -411,22 +410,24 @@ subtest 'test run() look' => sub {
 
 
 subtest 'test run() clean' => sub {
-    # $cwd is needed multiple times so just store it in a variable.
-    my $cwd = cwd();
+    # Create a tempdir to create and test other tempdirs to test cmd_clean()
+    # deleteing them.
+    my $testing_tempdir = tempdir("fetchware-$$-XXXXXXXXXX", TMPDIR => 1,
+        CLEANUP => 1);
 
     # Test cmd_clean()'s ability to delete temporary files that start with
     # fetchware-* or Fetchwarefile-*.
-    my $fetchware_tempdir = tempdir("fetchware-$$-XXXXXXXXX", DIR => $cwd,
-        CLEANUP => 1);
+    my $fetchware_tempdir = tempdir("fetchware-$$-XXXXXXXXX",
+        DIR => $testing_tempdir, CLEANUP => 1);
     my $fetchwarefile_tempdir = tempdir("Fetchwarefile-$$-XXXXXXXXX",
-        DIR => $cwd, CLEANUP => 1);
+        DIR => $testing_tempdir, CLEANUP => 1);
 
     ok(-e $fetchware_tempdir, 'checked creating fetchware temporary directory.');
     ok(-e $fetchwarefile_tempdir, 'checked creating Fetchwarefile temporary directory.');
 
     # Delete newly created tempfiles.
     {
-        local @ARGV = ('clean', $cwd);
+        local @ARGV = ('clean', $testing_tempdir);
         fork_ok(sub {run()},
             'checked run() clean success.');
     }

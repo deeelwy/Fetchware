@@ -12,7 +12,6 @@ use App::Fetchware::Config ':CONFIG';
 use Test::Fetchware ':TESTING';
 use File::Spec::Functions 'catfile';
 use File::Temp 'tempdir';
-use Cwd 'cwd';
 use Config;
 
 
@@ -333,9 +332,6 @@ subtest 'test command line look' => sub {
 
 
 subtest 'test command line clean' => sub {
-    # $cwd is needed multiple times so just store it in a variable.
-    my $cwd = cwd();
-
     # Create a "testing temporary directory", because when run as root inside a
     # user directory like I do when testing root support during development,
     # tempdir() complains, because root does not "own" the directory these
