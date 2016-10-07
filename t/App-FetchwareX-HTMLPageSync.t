@@ -4,6 +4,12 @@ use strict;
 use warnings;
 use 5.010001;
 
+# Set a umask of 022 just like bin/fetchware does. Not all fetchware tests load
+# bin/fetchware, and so all fetchware tests must set a umask of 0022 to ensure
+# that any files fetchware creates during testing pass fetchware's safe_open()
+# security checks.
+umask 0022;
+
 # Test::More version 0.98 is needed for proper subtest support.
 use Test::More 0.98 tests => '17'; #Update if this changes.
 use App::Fetchware '!:DEFAULT';
