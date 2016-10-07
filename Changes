@@ -2,6 +2,17 @@ Revison History for App::Fetchware
 
 {{$NEXT}}
 
+1.016     2016-10-07 00:22:33-04:00 America/New_York
+    * BREAKING CHANGE: fetchware now manually changes its umask to 0022. This is
+      to prevent too lenient umasks from causing fetchware's test suite to fail
+      due to security checks failing.
+        * These security checks are important, because without them other users
+          in your group could modify your Fetchwarefiles or fetchware packages,
+          and change the Fetchwarefile in malicious ways.
+        * This should fix some CPAN Tester FAILs.
+    - Fixed t/bin-fetchware-clean.t's use of cwd() instead of a tempdir(). This
+      should fix some CPAN Tester FAILs.
+
 1.015     2016-09-30 19:45:58-04:00 America/New_York
     - Fixed many of fetchware author tests that were holding up development.
         - Including many fixes for fetchware when fetchware is run as root.
