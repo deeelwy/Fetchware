@@ -57,14 +57,14 @@ subtest 'test chdir_unless_already_at_path() success' => sub {
     ok(chdir(tmpdir()),
         'chdir()d to tmpdir()');
     chdir_unless_already_at_path($temp_dir);
-    ok(cwd() eq $temp_dir,
+    is(cwd(), $temp_dir,
         'checked chdir_unless_already_at_path() success.');
 
     # Now repeat the call to chdir_unless_already_at_path(), and this time it
     # should do basically nothing, because we're already at the correct path.
     # This is what happens when stay_root is in effect.
     chdir_unless_already_at_path($temp_dir);
-    ok(cwd() eq $temp_dir,
+    is(cwd(), $temp_dir,
         'checked chdir_unless_already_at_path() success.');
 
 
